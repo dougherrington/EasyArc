@@ -1,0 +1,3435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EasyArc</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@300;400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   EASYARC — HOLOGRAPHIC UI
+   All original JS preserved. Visual shell rebuilt.
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Original vars kept for JS compatibility */
+  --bg:#020509; --bg2:#040c18; --bg3:#071224; --panel:rgba(4,14,30,0.92); --border:rgba(0,240,255,0.22);
+  --accent:#ff2d6e; --cyan:#00f0ff; --yellow:#ffe600; --green:#00ffb3; --text:#cce8ff; --muted:#3d6080;
+  --glow-r:0 0 18px rgba(255,45,110,0.7); --glow-c:0 0 18px rgba(0,240,255,0.7); --glow-y:0 0 18px rgba(255,230,0,0.7);
+  /* New vars */
+  --cyan2:#0090ff;
+  --border2:rgba(0,144,255,0.35);
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+
+html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; }
+
+/* Deep space bg */
+body::before {
+  content:''; position:fixed; inset:0; z-index:0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,80,160,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 85% 80%, rgba(0,40,100,0.12) 0%, transparent 50%),
+    #020509;
+}
+
+/* Animated grid */
+body::after {
+  content:''; position:fixed; inset:0; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,240,255,0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,240,255,0.032) 1px, transparent 1px);
+  background-size:56px 56px;
+  animation:gridScroll 24s linear infinite;
+}
+@keyframes gridScroll { from{background-position:0 0} to{background-position:56px 56px} }
+
+/* Scanlines */
+#scanlines { position:fixed; inset:0; z-index:9998; pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.055) 3px,rgba(0,0,0,0.055) 4px); }
+
+/* ── SPLASH ── */
+#splashScreen {
+  position:fixed; inset:0; background:transparent;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  z-index:99999; transition:opacity 1s ease; opacity:0;
+  animation:splashFadeIn 0.8s ease 0.3s forwards;
+}
+@keyframes splashFadeIn { from{opacity:0} to{opacity:1} }
+#splashScreen.fade-out { opacity:0 !important; pointer-events:none; transition:opacity 1s ease; }
+#splashScreen img { max-width:380px; width:55%; filter:drop-shadow(0 0 40px rgba(0,240,255,0.6)); animation:splashPop 0.6s ease 0.3s both; }
+@keyframes splashPop { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+
+/* ── SHELL ── */
+.ea-shell { transition:filter 1s ease; }
+.ea-shell.dimmed { filter:brightness(0.4); }
+.ea-shell {
+  position:relative; z-index:10;
+  width:100vw; height:100vh;
+  display:grid;
+  grid-template-rows:54px 1fr 50px;
+}
+
+/* ── TOPBAR ── */
+.titlebar {
+  grid-column:1/-1;
+  display:flex; align-items:center; padding:0 24px; gap:16px;
+  background:linear-gradient(180deg,rgba(0,20,50,0.97) 0%,rgba(2,5,10,0.93) 100%);
+  border-bottom:1px solid var(--border);
+  position:relative; z-index:20; flex-shrink:0;
+}
+.titlebar::after {
+  content:''; position:absolute; bottom:-1px; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent 0%,var(--cyan) 30%,var(--cyan2) 70%,transparent 100%);
+  opacity:0.75;
+}
+.titlebar-logo {
+  font-family:'Orbitron',monospace; font-size:16px; font-weight:900;
+  letter-spacing:4px; color:var(--cyan); text-shadow:var(--glow-c); flex-shrink:0;
+}
+.titlebar-logo span { color:var(--accent); text-shadow:var(--glow-r); }
+
+.titlebar-nav { display:flex; gap:4px; margin-left:16px; }
+.nav-btn {
+  background:rgba(0,20,60,0.9); border:1px solid var(--border); color:#fff;
+  font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700;
+  letter-spacing:1.5px; text-transform:uppercase; padding:10px 22px;
+  cursor:pointer; border-radius:6px; transition:all 0.2s;
+}
+.nav-btn:hover { border-color:var(--cyan); box-shadow:0 0 18px rgba(0,240,255,0.4); transform:translateY(-1px); }
+.nav-btn.active {
+  color:var(--cyan); border-color:var(--cyan);
+  background:rgba(0,40,100,0.95);
+  box-shadow:0 0 18px rgba(0,240,255,0.4), inset 0 0 6px rgba(0,240,255,0.04);
+}
+
+.titlebar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.test-plan-btn {
+  background:var(--yellow); border:2px solid #ffaa00; color:#000;
+  font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:800;
+  padding:10px 28px; border-radius:6px; cursor:pointer; transition:all 0.2s;
+  text-transform:uppercase; letter-spacing:1px;
+  box-shadow:0 0 18px rgba(255,220,0,0.5);
+  margin: 0 16px;
+}
+.test-plan-btn:hover { background:#ffdd00; box-shadow:0 0 28px rgba(255,220,0,0.8); transform:translateY(-1px); }
+.sys-btn.gp-nav-active { opacity:0.4; }
+.status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.status-text { font-size:11px; color:var(--green); letter-spacing:1px; text-transform:uppercase; font-family:'Rajdhani',sans-serif; }
+
+/* Search in topbar */
+.search-box { position:relative; }
+.search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:14px; pointer-events:none; }
+.search-input {
+  background:rgba(0,20,50,0.7); border:1px solid var(--border); color:var(--text);
+  font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:400;
+  padding:7px 14px 7px 32px; border-radius:4px; width:200px; transition:all 0.2s; outline:none;
+}
+.search-input:focus { border-color:var(--cyan); box-shadow:0 0 12px rgba(0,240,255,0.2); width:240px; }
+.search-input::placeholder { color:var(--muted); }
+
+.scan-btn { display:none; }
+.action-btn {
+  background:rgba(0,20,60,0.9); border:1px solid var(--cyan); color:#fff;
+  font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700;
+  padding:10px 22px; border-radius:6px; cursor:pointer; transition:all 0.2s;
+  text-transform:uppercase; letter-spacing:1px;
+  box-shadow:0 0 12px rgba(0,240,255,0.2);
+}
+.action-btn:hover { background:rgba(0,40,100,0.95); border-color:var(--cyan); box-shadow:0 0 18px rgba(0,240,255,0.4); transform:translateY(-1px); }
+.action-btn.active { background:var(--green); color:#000; border-color:var(--green); box-shadow:0 0 18px rgba(0,255,136,0.4); }
+.action-btn.scanning { background:var(--green); color:#000; border-color:var(--green); box-shadow:0 0 18px rgba(0,255,136,0.4); }
+
+/* ── MAIN BODY ── */
+.main {
+  display:grid;
+  grid-template-columns:248px 1fr 288px;
+  overflow:hidden;
+  perspective:1600px;
+  padding:16px 20px;
+  gap:14px;
+  align-items:start;
+}
+
+/* ── SIDEBAR (left panel — 3D tilted) ── */
+.sidebar {
+  display:flex; flex-direction:column; gap:5px;
+  transform:rotateY(13deg) translateZ(-18px);
+  transform-origin:right center;
+  height:calc(100vh - 54px - 50px - 32px);
+  overflow-y:auto;
+  animation:slideInLeft 0.5s cubic-bezier(0.22,1,0.36,1) both;
+  padding-right:2px;
+}
+@keyframes slideInLeft { from{opacity:0;transform:rotateY(13deg) translateZ(-18px) translateX(-24px)} to{opacity:1;transform:rotateY(13deg) translateZ(-18px) translateX(0)} }
+.sidebar::-webkit-scrollbar { width:3px; }
+.sidebar::-webkit-scrollbar-thumb { background:var(--border); }
+
+.sidebar-section { display:contents; }
+
+.sidebar-label {
+  font-family:'Orbitron',monospace; font-size:7px; letter-spacing:3px;
+  color:var(--muted); text-transform:uppercase; padding:6px 10px 2px;
+}
+
+/* System buttons styled as holographic cards */
+.system-btn {
+  display:flex; align-items:center; gap:10px; width:100%;
+  background:linear-gradient(135deg,rgba(0,240,255,0.055) 0%,rgba(0,144,255,0.018) 100%);
+  border:1px solid rgba(0,240,255,0.2); border-radius:8px;
+  color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600;
+  padding:9px 12px; cursor:pointer; text-align:left; transition:all 0.16s;
+  position:relative; overflow:hidden;
+  box-shadow:0 0 8px rgba(0,240,255,0.07), inset 0 0 5px rgba(0,240,255,0.03);
+}
+.system-btn::before {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(110deg,rgba(0,240,255,0.09) 0%,transparent 50%);
+  opacity:0; transition:opacity 0.18s;
+}
+.system-btn:hover::before { opacity:1; }
+.system-btn:hover { color:var(--text); border-color:rgba(0,240,255,0.45); transform:translateX(3px); box-shadow:0 0 18px rgba(0,240,255,0.18), inset 0 0 8px rgba(0,240,255,0.05); }
+.system-btn.active {
+  color:var(--cyan); border-color:var(--cyan);
+  background:linear-gradient(135deg,rgba(0,240,255,0.11) 0%,rgba(0,144,255,0.05) 100%);
+  box-shadow:0 0 22px rgba(0,240,255,0.28), inset 0 0 10px rgba(0,240,255,0.07);
+}
+.system-btn.active::after {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--cyan); box-shadow:0 0 8px var(--cyan);
+}
+.system-btn.gp-nav-hover { color:var(--cyan); background:rgba(0,240,255,0.1); border-color:rgba(0,240,255,0.4); }
+.system-icon { font-size:16px; width:22px; text-align:center; flex-shrink:0; }
+.system-count {
+  margin-left:auto; font-size:10px; color:var(--muted);
+  background:var(--bg3); padding:1px 6px; border-radius:8px;
+  font-family:'Orbitron',monospace;
+}
+.system-btn.active .system-count { background:rgba(0,240,255,0.14); color:var(--cyan); }
+
+/* ── CENTER PANEL ── */
+.content {
+  display:flex; flex-direction:column; gap:12px;
+  height:calc(100vh - 54px - 50px - 32px);
+  overflow:hidden;
+  animation:fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.08s both;
+}
+@keyframes fadeInUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+/* Now Playing strip */
+.now-playing-strip {
+  display:flex; align-items:center; gap:14px;
+  padding:10px 16px;
+  background:linear-gradient(90deg,rgba(0,144,255,0.1),rgba(0,240,255,0.05),transparent);
+  border:1px solid var(--border2); border-radius:10px;
+  position:relative; overflow:hidden; flex-shrink:0;
+  box-shadow:0 0 24px rgba(0,144,255,0.15), inset 0 0 14px rgba(0,144,255,0.04);
+}
+.now-playing-strip::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan2),transparent);
+}
+.np-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 1.5s ease-in-out infinite; flex-shrink:0; }
+.np-label { font-family:'Orbitron',monospace; font-size:7px; letter-spacing:3px; color:var(--green); text-transform:uppercase; flex-shrink:0; }
+.np-title { font-size:14px; font-weight:700; color:#fff; }
+.np-sys-tag { font-size:11px; color:var(--muted); margin-left:6px; }
+.np-time { margin-left:auto; font-family:'Orbitron',monospace; font-size:10px; color:var(--cyan2); }
+
+/* Content header */
+.content-header {
+  display:flex; align-items:center; gap:12px; flex-shrink:0;
+  padding:0 2px;
+}
+.content-title {
+  font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px;
+  color:var(--cyan); text-shadow:var(--glow-c); text-transform:uppercase;
+}
+.game-count { font-size:12px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+
+/* Game grid */
+.game-grid-wrap {
+  flex:1; overflow-y:auto; padding-right:4px;
+}
+.game-grid-wrap::-webkit-scrollbar { width:3px; }
+.game-grid-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+.game-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+
+.game-card {
+  background:linear-gradient(145deg,rgba(6,18,40,0.96),rgba(3,10,24,0.98));
+  border:1px solid rgba(0,144,255,0.2); border-radius:10px; overflow:hidden;
+  cursor:pointer; transition:all 0.2s; position:relative;
+  animation:cardIn 0.3s ease both;
+}
+@keyframes cardIn { from{opacity:0;transform:scale(0.93) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
+
+.game-card::before {
+  content:''; position:absolute; inset:0; border-radius:inherit;
+  background:linear-gradient(135deg,rgba(0,240,255,0.055) 0%,transparent 50%);
+  opacity:0; transition:opacity 0.2s;
+}
+.game-card:hover::before { opacity:1; }
+.game-card:hover {
+  border-color:rgba(0,240,255,0.5);
+  box-shadow:0 4px 22px rgba(0,144,255,0.22), 0 0 0 1px rgba(0,240,255,0.1);
+  transform:translateY(-3px) scale(1.02);
+}
+.game-card.gp-selected {
+  border-color:var(--cyan);
+  box-shadow:0 4px 28px rgba(0,240,255,0.32), 0 0 0 1px rgba(0,240,255,0.18);
+  transform:translateY(-3px) scale(1.02);
+  z-index:10;
+}
+
+.card-art {
+  width:100%; aspect-ratio:3/4;
+  display:flex; align-items:center; justify-content:center; font-size:38px;
+  position:relative; overflow:hidden;
+}
+.card-art::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(to bottom,transparent 50%,rgba(3,10,24,0.85) 100%);
+}
+.card-play {
+  position:absolute; inset:0; background:rgba(0,0,0,0.55);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity 0.2s; z-index:2;
+}
+.play-icon {
+  width:46px; height:46px; background:var(--accent); border-radius:50%;
+  display:flex; align-items:center; justify-content:center; font-size:16px;
+  box-shadow:var(--glow-r);
+}
+.game-card:hover .card-play { opacity:1; }
+
+.card-info { padding:8px 10px; border-top:1px solid rgba(0,144,255,0.15); }
+.card-title { font-size:11px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.card-meta { font-size:9px; color:var(--muted); margin-top:2px; font-family:'Orbitron',monospace; letter-spacing:1px; text-transform:uppercase; }
+.card-badge { position:absolute; top:6px; right:6px; background:var(--accent); color:white; font-size:8px; font-weight:700; padding:2px 5px; border-radius:3px; text-transform:uppercase; z-index:3; }
+
+/* ── RIGHT PANEL (detail) — 3D tilted ── */
+.detail-panel {
+  transform:rotateY(-13deg) translateZ(-18px);
+  transform-origin:left center;
+  display:flex; flex-direction:column; gap:12px;
+  height:calc(100vh - 54px - 50px - 32px);
+  animation:slideInRight 0.5s cubic-bezier(0.22,1,0.36,1) 0.04s both;
+  flex-shrink:0;
+}
+@keyframes slideInRight { from{opacity:0;transform:rotateY(-13deg) translateZ(-18px) translateX(24px)} to{opacity:1;transform:rotateY(-13deg) translateZ(-18px) translateX(0)} }
+
+.detail-panel.hidden { display:none; }
+
+.detail-card {
+  background:linear-gradient(145deg,rgba(4,14,34,0.96),rgba(2,8,20,0.98));
+  border:1px solid var(--border2); border-radius:14px; padding:16px;
+  position:relative; overflow-y:auto;
+  box-shadow:0 0 36px rgba(0,144,255,0.14), inset 0 0 18px rgba(0,144,255,0.03);
+  flex:1; display:flex; flex-direction:column; gap:12px;
+}
+.detail-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan2),transparent); opacity:0.65;
+}
+
+.detail-art {
+  width:100%; aspect-ratio:16/9;
+  background:radial-gradient(circle at 30% 30%,#0a2040,#020810);
+  border-radius:10px; border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:64px;
+  box-shadow:0 0 28px rgba(0,144,255,0.18), inset 0 0 32px rgba(0,0,0,0.5);
+  position:relative; overflow:hidden;
+}
+.detail-art::after {
+  content:''; position:absolute; inset:0;
+  background:radial-gradient(circle at 70% 70%,transparent 40%,rgba(0,0,20,0.55) 100%);
+}
+
+.detail-body { display:flex; flex-direction:column; gap:8px; flex:1; overflow-y:auto; min-height:0; justify-content:space-between; }
+.detail-system { font-family:'Orbitron',monospace; font-size:8px; letter-spacing:2px; color:var(--cyan); text-transform:uppercase; }
+.detail-title { font-family:'Orbitron',monospace; font-size:10px; line-height:1.6; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
+.detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:6px; align-content:start; }
+.meta-item { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:7px 10px; }
+.meta-label { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px; }
+.meta-value { font-size:12px; font-weight:700; color:var(--text); font-family:'Rajdhani',sans-serif; }
+
+.launch-btn {
+  width:100%; background:linear-gradient(135deg,#0050c0 0%,#00c6ff 100%);
+  border:none; border-radius:8px; color:#fff;
+  font-family:'Orbitron',monospace; font-size:10px; font-weight:700;
+  letter-spacing:3px; text-transform:uppercase; padding:13px;
+  cursor:pointer;
+  box-shadow:0 0 22px rgba(0,144,255,0.45), 0 4px 14px rgba(0,0,0,0.4);
+  transition:all 0.2s; position:relative; overflow:hidden; margin-top:auto;
+}
+.launch-btn::before {
+  content:''; position:absolute; top:0; left:-100%; width:100%; height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.14),transparent);
+  transition:left 0.4s;
+}
+.launch-btn:hover::before { left:100%; }
+.launch-btn:hover { transform:translateY(-2px); box-shadow:0 0 36px rgba(0,200,255,0.55), 0 8px 22px rgba(0,0,0,0.4); }
+.launch-btn:focus { outline:none; transform:translateY(-2px); box-shadow:0 0 36px rgba(0,200,255,0.55), 0 0 0 2px rgba(0,240,255,0.4); }
+
+.secondary-btn {
+  width:100%; background:none; border:1px solid var(--border); color:var(--muted);
+  font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600;
+  padding:9px; border-radius:6px; cursor:pointer; transition:all 0.15s;
+  text-transform:uppercase; letter-spacing:1px;
+}
+.secondary-btn:hover { color:var(--cyan); border-color:var(--cyan); }
+
+/* ── CONTROLLER PANEL VIEW ── */
+.controller-panel { flex:1; overflow-y:auto; padding:24px; display:none; flex-direction:column; }
+.controller-panel.active { display:flex; }
+.ctrl-screen-header { display:flex; align-items:center; gap:16px; margin-bottom:24px; }
+.ctrl-screen-title { font-family:'Orbitron',monospace; font-size:11px; color:var(--yellow); text-shadow:var(--glow-y); }
+.ctrl-add-btn { background:none; border:1px solid var(--border); color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:600; padding:8px 16px; border-radius:6px; cursor:pointer; transition:all 0.15s; text-transform:uppercase; letter-spacing:1px; margin-left:auto; }
+.ctrl-add-btn:hover { color:var(--cyan); border-color:var(--cyan); }
+.ctrl-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:16px; color:var(--muted); }
+.ctrl-empty-icon { font-size:48px; }
+.ctrl-empty-text { font-family:'Orbitron',monospace; font-size:9px; line-height:2; text-align:center; }
+
+/* ── SETTINGS PANEL ── */
+.settings-panel { flex:1; overflow-y:auto; padding:24px; display:none; }
+.settings-panel.active { display:block; }
+.settings-section { margin-bottom:28px; }
+.settings-heading { font-family:'Orbitron',monospace; font-size:9px; color:var(--cyan); text-shadow:var(--glow-c); letter-spacing:2px; margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.setting-row { display:flex; align-items:center; padding:10px 0; border-bottom:1px solid rgba(0,144,255,0.1); }
+.setting-info { flex:1; }
+.setting-name { font-size:14px; font-weight:600; color:var(--text); margin-bottom:2px; font-family:'Rajdhani',sans-serif; }
+.setting-desc { font-size:11px; color:var(--muted); line-height:1.5; font-family:'Rajdhani',sans-serif; }
+.setting-control { margin-left:16px; }
+.toggle { position:relative; width:44px; height:24px; }
+.toggle input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; inset:0; background:var(--bg3); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:all 0.2s; }
+.toggle-slider::before { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:all 0.2s; }
+.toggle input:checked + .toggle-slider { background:rgba(0,255,179,0.15); border-color:var(--green); }
+.toggle input:checked + .toggle-slider::before { background:var(--green); transform:translateX(20px); box-shadow:0 0 8px var(--green); }
+.setting-select { background:var(--bg3); border:1px solid var(--border); color:var(--text); font-family:'Rajdhani',sans-serif; font-size:13px; padding:7px 30px 7px 10px; border-radius:6px; cursor:pointer; outline:none; appearance:none; min-width:140px; }
+.setting-select:focus { border-color:var(--cyan); }
+
+/* ── BOTTOM BAR ── */
+.ea-bottombar {
+  display:flex; align-items:center; padding:0 24px; gap:14px;
+  background:linear-gradient(0deg,rgba(0,20,50,0.97) 0%,rgba(2,5,10,0.93) 100%);
+  border-top:1px solid var(--border); position:relative; z-index:10;
+}
+.ea-bottombar::before {
+  content:''; position:absolute; top:-1px; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent 0%,var(--cyan2) 30%,var(--cyan) 70%,transparent 100%);
+  opacity:0.6;
+}
+.ctrl-hint { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+.ctrl-key { background:rgba(0,144,255,0.14); border:1px solid var(--border2); border-radius:3px; padding:1px 6px; font-family:'Orbitron',monospace; font-size:8px; color:var(--cyan2); }
+.bottombar-status { margin-left:auto; display:flex; align-items:center; gap:14px; font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+
+/* ── TOAST ── */
+.toast { position:fixed; bottom:66px; right:24px; background:var(--panel); border:1px solid var(--green); color:var(--green); font-family:'Orbitron',monospace; font-size:9px; padding:12px 18px; border-radius:6px; z-index:10000; transform:translateY(80px); opacity:0; transition:all 0.3s; pointer-events:none; letter-spacing:1px; line-height:1.8; }
+.toast.show { transform:translateY(0); opacity:1; }
+
+/* ── OVERLAYS & MODALS (existing styles preserved) ── */
+.frw-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:5000; display:flex; align-items:center; justify-content:center; animation:frwFadeIn 0.4s ease; }
+.frw-overlay.hidden { display:none; }
+@keyframes frwFadeIn { from{opacity:0} to{opacity:1} }
+.frw-box { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:44px; max-width:580px; width:90%; position:relative; box-shadow:0 0 60px rgba(0,240,255,0.1); }
+.frw-steps { display:flex; gap:6px; margin-bottom:36px; }
+.frw-step-dot { flex:1; height:3px; background:var(--border); border-radius:2px; transition:all 0.4s; }
+.frw-step-dot.done { background:var(--green); }
+.frw-step-dot.active { background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+.frw-icon { font-size:48px; margin-bottom:20px; display:block; }
+.frw-title { font-family:'Orbitron',monospace; font-size:13px; color:var(--cyan); text-shadow:0 0 18px rgba(0,240,255,0.55); line-height:1.8; margin-bottom:12px; }
+.frw-sub { font-size:14px; color:var(--muted); line-height:1.7; margin-bottom:28px; font-family:'Rajdhani',sans-serif; }
+.frw-status { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:16px 20px; margin-bottom:16px; font-size:13px; color:var(--text); display:flex; align-items:center; gap:12px; }
+.frw-status.success { border-color:var(--green); color:var(--green); background:rgba(0,255,179,0.05); }
+.frw-status.error { border-color:var(--accent); color:var(--accent); background:rgba(255,45,110,0.05); }
+.frw-status.loading { border-color:var(--cyan); color:var(--cyan); background:rgba(0,240,255,0.05); }
+.frw-spinner { animation:spin 1s linear infinite; display:inline-block; flex-shrink:0; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.frw-progress-wrap { background:var(--bg3); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:16px; height:8px; }
+.frw-progress-bar { height:100%; background:linear-gradient(90deg,var(--cyan),var(--green)); border-radius:8px; transition:width 0.3s ease; width:0%; box-shadow:0 0 10px var(--cyan); }
+.frw-results { margin-bottom:16px; max-height:240px; overflow-y:auto; }
+.frw-results::-webkit-scrollbar { width:4px; }
+.frw-results::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+.frw-result-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(0,144,255,0.12); }
+.frw-result-icon { font-size:20px; width:28px; text-align:center; flex-shrink:0; }
+.frw-result-name { flex:1; font-size:13px; color:var(--text); font-weight:600; font-family:'Rajdhani',sans-serif; }
+.frw-result-count { font-family:'Orbitron',monospace; font-size:10px; color:var(--cyan); }
+.frw-result-total { text-align:center; margin-top:14px; font-family:'Orbitron',monospace; font-size:9px; color:var(--yellow); text-shadow:0 0 18px rgba(255,230,0,0.55); }
+.frw-btn-row { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+.frw-btn { background:var(--accent); border:none; color:white; font-family:'Orbitron',monospace; font-size:9px; padding:13px 22px; border-radius:6px; cursor:pointer; letter-spacing:1px; box-shadow:0 0 18px rgba(255,45,110,0.55); transition:all 0.2s; }
+.frw-btn:hover { background:#ff4d80; transform:translateY(-1px); }
+.frw-btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+.frw-btn.ghost { background:none; border:1px solid var(--border); color:var(--muted); box-shadow:none; }
+.frw-btn.ghost:hover { color:var(--cyan); border-color:var(--cyan); transform:none; }
+.frw-choice-row { display:flex; gap:12px; margin-bottom:16px; }
+.frw-choice { flex:1; background:var(--bg3); border:2px solid var(--border); border-radius:10px; padding:20px; cursor:pointer; text-align:center; transition:all 0.2s; }
+.frw-choice:hover { border-color:var(--cyan); background:rgba(0,240,255,0.05); }
+.frw-choice.selected { border-color:var(--cyan); background:rgba(0,240,255,0.08); box-shadow:0 0 16px rgba(0,240,255,0.15); }
+.frw-choice-icon { font-size:32px; display:block; margin-bottom:10px; }
+.frw-choice-label { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; font-family:'Rajdhani',sans-serif; }
+.frw-choice-desc { font-size:11px; color:var(--muted); line-height:1.5; font-family:'Rajdhani',sans-serif; }
+.frw-folder-list { margin-bottom:16px; }
+.frw-folder-item { display:flex; align-items:center; gap:10px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:8px; font-size:12px; color:var(--text); font-family:'Rajdhani',sans-serif; }
+.frw-folder-item span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.frw-folder-remove { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:0 4px; transition:color 0.15s; }
+.frw-folder-remove:hover { color:var(--accent); }
+
+/* Controller modals */
+.ctrl-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:9500; display:flex; align-items:center; justify-content:center; animation:frwFadeIn 0.3s ease; }
+.ctrl-overlay.hidden { display:none; }
+.ctrl-box { background:var(--panel); border:2px solid var(--cyan); border-radius:20px; padding:48px; max-width:640px; width:92%; box-shadow:0 0 80px rgba(0,240,255,0.22), 0 0 160px rgba(0,240,255,0.07); }
+.ctrl-title { font-family:'Orbitron',monospace; font-size:11px; color:var(--cyan); text-shadow:var(--glow-c); margin-bottom:8px; line-height:1.8; }
+.ctrl-sub { font-size:13px; color:var(--muted); margin-bottom:24px; line-height:1.6; font-family:'Rajdhani',sans-serif; }
+.ctrl-player-list { margin-bottom:20px; }
+.ctrl-player-row { display:flex; align-items:center; gap:12px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:8px; transition:all 0.2s; }
+.ctrl-player-row.connected { border-color:var(--green); }
+.ctrl-player-row.unknown { border-color:var(--yellow); }
+.ctrl-player-num { font-family:'Orbitron',monospace; font-size:9px; color:var(--muted); width:60px; flex-shrink:0; }
+.ctrl-player-row.connected .ctrl-player-num { color:var(--green); }
+.ctrl-player-row.unknown .ctrl-player-num { color:var(--yellow); }
+.ctrl-player-icon { font-size:20px; flex-shrink:0; }
+.ctrl-player-info { flex:1; }
+.ctrl-player-name { font-size:13px; font-weight:600; color:var(--text); font-family:'Rajdhani',sans-serif; }
+.ctrl-player-status { font-size:11px; color:var(--muted); margin-top:2px; font-family:'Rajdhani',sans-serif; }
+.ctrl-player-row.connected .ctrl-player-status { color:var(--green); }
+.ctrl-player-row.unknown .ctrl-player-status { color:var(--yellow); }
+.ctrl-player-btn { background:none; border:1px solid var(--border); color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:600; padding:5px 10px; border-radius:4px; cursor:pointer; transition:all 0.15s; text-transform:uppercase; }
+.ctrl-player-btn:hover { color:var(--cyan); border-color:var(--cyan); }
+.ctrl-map-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:20px; max-height:280px; overflow-y:auto; }
+.ctrl-map-row { display:flex; align-items:center; background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px 12px; gap:10px; cursor:pointer; transition:all 0.15s; }
+.ctrl-map-row:hover { border-color:var(--cyan); }
+.ctrl-map-row.mapped { border-color:var(--green); }
+.ctrl-map-row.mapping { border-color:var(--yellow); background:rgba(255,230,0,0.05); animation:mappingPulse 0.8s ease-in-out infinite; }
+@keyframes mappingPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.ctrl-map-label { font-size:11px; font-weight:700; color:var(--yellow); width:80px; flex-shrink:0; }
+.ctrl-map-value { flex:1; font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+.ctrl-map-row.mapped .ctrl-map-value { color:var(--green); }
+.ctrl-map-row.mapping .ctrl-map-value { color:var(--yellow); }
+.ctrl-map-dot { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; }
+.ctrl-map-row.mapped .ctrl-map-dot { background:var(--green); box-shadow:0 0 6px var(--green); }
+.ctrl-btn-row { display:flex; gap:10px; justify-content:flex-end; }
+.ctrl-btn { background:var(--accent); border:none; color:white; font-family:'Orbitron',monospace; font-size:9px; padding:12px 20px; border-radius:6px; cursor:pointer; letter-spacing:1px; box-shadow:var(--glow-r); transition:all 0.2s; }
+.ctrl-btn:hover { background:#ff4d80; transform:translateY(-1px); }
+.ctrl-btn.ghost { background:none; border:1px solid var(--border); color:var(--muted); box-shadow:none; }
+.ctrl-btn.ghost:hover { color:var(--cyan); border-color:var(--cyan); transform:none; }
+.ctrl-detect-pulse { width:12px; height:12px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation:pulse 1.5s ease-in-out infinite; flex-shrink:0; }
+
+/* Controller test modal */
+.ctest-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:9500; display:flex; align-items:center; justify-content:center; animation:frwFadeIn 0.3s ease; }
+.ctest-overlay.hidden { display:none; }
+.ctest-box { background:var(--panel); border:1px solid var(--border); border-radius:20px; padding:48px; max-width:680px; width:92%; box-shadow:0 0 80px rgba(0,240,255,0.15); position:relative; }
+.ctest-title { font-family:'Orbitron',monospace; font-size:13px; color:var(--cyan); text-shadow:var(--glow-c); line-height:1.8; margin-bottom:8px; text-align:center; }
+.ctest-sub { font-size:14px; color:var(--muted); margin-bottom:32px; line-height:1.6; text-align:center; font-family:'Rajdhani',sans-serif; }
+.ctest-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:28px; }
+.ctest-btn { background:var(--bg3); border:2px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s; }
+.ctest-btn.waiting { border-color:var(--border); }
+.ctest-btn.testing { border-color:var(--yellow); background:rgba(255,230,0,0.05); animation:mappingPulse 0.8s ease-in-out infinite; }
+.ctest-btn.passed { border-color:var(--green); background:rgba(0,255,179,0.05); }
+.ctest-btn.failed { border-color:var(--accent); background:rgba(255,45,110,0.05); }
+.ctest-btn-icon { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; background:var(--bg2); border:1px solid var(--border); transition:all 0.2s; }
+.ctest-btn.testing .ctest-btn-icon { background:rgba(255,230,0,0.1); border-color:var(--yellow); }
+.ctest-btn.passed .ctest-btn-icon { background:rgba(0,255,179,0.15); border-color:var(--green); }
+.ctest-btn-info { flex:1; }
+.ctest-btn-label { font-size:13px; font-weight:600; color:var(--text); margin-bottom:2px; font-family:'Rajdhani',sans-serif; }
+.ctest-btn-status { font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+.ctest-btn.testing .ctest-btn-status { color:var(--yellow); }
+.ctest-btn.passed .ctest-btn-status { color:var(--green); }
+.ctest-btn.failed .ctest-btn-status { color:var(--accent); }
+.ctest-check { font-size:18px; margin-left:auto; opacity:0; transition:all 0.2s; }
+.ctest-btn.passed .ctest-check { opacity:1; }
+.ctest-sticks { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:28px; }
+.ctest-stick-wrap { background:var(--bg3); border:2px solid var(--border); border-radius:10px; padding:16px; text-align:center; transition:all 0.2s; }
+.ctest-stick-wrap.passed { border-color:var(--green); background:rgba(0,255,179,0.05); }
+.ctest-stick-wrap.testing { border-color:var(--yellow); }
+.ctest-stick-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; font-family:'Rajdhani',sans-serif; }
+.ctest-stick-wrap.passed .ctest-stick-label { color:var(--green); }
+.ctest-stick-zone { width:100px; height:100px; border-radius:50%; background:var(--bg2); border:2px solid var(--border); margin:0 auto 8px; position:relative; }
+.ctest-stick-dot { width:16px; height:16px; border-radius:50%; background:var(--cyan); box-shadow:var(--glow-c); position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); transition:top 0.05s, left 0.05s; }
+.ctest-stick-wrap.passed .ctest-stick-dot { background:var(--green); box-shadow:0 0 8px var(--green); }
+.ctest-stick-status { font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+.ctest-stick-wrap.passed .ctest-stick-status { color:var(--green); }
+.ctest-progress { display:flex; gap:6px; margin-bottom:24px; }
+.ctest-progress-dot { flex:1; height:3px; background:var(--border); border-radius:2px; transition:all 0.3s; }
+.ctest-progress-dot.done { background:var(--green); }
+.ctest-progress-dot.active { background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+.ctest-btn-row { display:flex; gap:10px; justify-content:center; }
+.ctest-action-btn { background:var(--accent); border:none; color:white; font-family:'Orbitron',monospace; font-size:9px; padding:14px 28px; border-radius:8px; cursor:pointer; letter-spacing:1px; box-shadow:var(--glow-r); transition:all 0.2s; }
+.ctest-action-btn:hover { background:#ff4d80; transform:translateY(-1px); }
+.ctest-action-btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+.ctest-action-btn.ghost { background:none; border:1px solid var(--border); color:var(--muted); box-shadow:none; }
+.ctest-action-btn.ghost:hover { color:var(--cyan); border-color:var(--cyan); transform:none; }
+.ctest-action-btn.green { background:var(--green); color:#000; box-shadow:0 0 18px rgba(0,255,179,0.4); }
+
+/* view-toggle (kept for compat) */
+.view-toggle { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.view-btn { background:none; border:none; color:var(--muted); padding:7px 10px; cursor:pointer; font-size:14px; transition:all 0.15s; }
+.view-btn.active { background:var(--bg3); color:var(--cyan); }
+</style>
+</head>
+<body>
+<div id="scanlines"></div>
+
+<!-- SPLASH SCREEN -->
+<div id="splashScreen">
+  <img src="easyarc_logo.webp" alt="EasyArc">
+</div>
+
+<!-- FIRST RUN WIZARD -->
+<div class="frw-overlay hidden" id="frwOverlay">
+  <div class="frw-box">
+    <div class="frw-steps" id="frwStepDots"></div>
+    <span class="frw-icon" id="frwIcon">&#127918;</span>
+    <div class="frw-title" id="frwTitle">WELCOME TO EASYARC</div>
+    <div class="frw-sub" id="frwSub"></div>
+    <div id="frwBody"></div>
+    <div class="frw-btn-row">
+      <button class="frw-btn ghost" id="frwSkipBtn" onclick="frwSkip()">Skip Setup</button>
+      <button class="frw-btn" id="frwNextBtn" onclick="frwNext()">GET STARTED &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<!-- CORE DOWNLOAD MODAL -->
+<div class="frw-overlay hidden" id="coreDownloadModal">
+  <div class="frw-box" style="max-width:480px">
+    <span class="frw-icon">&#128190;</span>
+    <div class="frw-title">PLUGIN REQUIRED</div>
+    <div class="frw-sub" id="coreDownloadStatus"></div>
+    <div class="frw-progress-wrap"><div class="frw-progress-bar" id="coreDownloadProgress"></div></div>
+    <div class="frw-btn-row">
+      <button class="frw-btn ghost" id="coreDownloadCancelBtn">Cancel</button>
+      <button class="frw-btn" id="coreDownloadBtn" style="display:none" autofocus>Download Now</button>
+    </div>
+  </div>
+</div>
+
+<div class="ea-shell dimmed" id="eaShell">
+
+  <!-- TOPBAR -->
+  <header class="titlebar">
+    <img src="easyarc_logo.webp" style="height:38px;width:auto;object-fit:contain;" alt="EasyArc">
+    <nav class="titlebar-nav">
+      <button class="nav-btn active" onclick="showView('library')">Library</button>
+      <button class="nav-btn" onclick="showView('wizard')">Setup</button>
+      <button class="nav-btn" onclick="showView('controller')">Controller</button>
+      <button class="nav-btn" onclick="showView('settings')">Settings</button>
+    </nav>
+    <div style="flex:1;display:flex;justify-content:center;">
+      <button class="test-plan-btn" id="testPlanBtn" onclick="showTestPlanModal()">📋 Instructions</button>
+    </div>
+    <div class="titlebar-right">
+      <button class="action-btn" id="rescanBtn" onclick="rescanLibrary()">⟳ Refresh Library</button>
+      <button class="action-btn" id="addGamesBtn" onclick="showAddGamesModal()">+ Add Games</button>
+      <button class="action-btn" id="getArtBtn" onclick="showGetArtModal()">🖼 Get Game Art</button>
+      <div class="status-dot"></div>
+      <span class="status-text" id="statusText">Checking...</span>
+    </div>
+  </header>
+
+  <!-- MAIN BODY -->
+  <div class="main" id="mainBody">
+
+    <!-- LEFT: Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Quick Access</div>
+        <div id="systemList">
+          <button class="system-btn" onclick="filterFavorites(this)" id="favBtn" style="color:var(--yellow)" data-sys="favorites">
+            <span class="system-icon">&#11088;</span>Favorites
+            <span class="system-count" id="count-fav">0</span>
+          </button>
+          <button class="system-btn" onclick="filterRecent(this)" id="recentBtn" style="color:var(--accent)" data-sys="recent">
+            <span class="system-icon">&#9201;</span>Recently Played
+            <span class="system-count" id="count-recent">0</span>
+          </button>
+          <button class="system-btn active" onclick="filterSystem('all',this)" data-sys="all">
+            <span class="system-icon">&#127918;</span>All Games
+            <span class="system-count" id="count-all">0</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER: Library view -->
+    <div class="content" id="library-view">
+
+      <!-- Now Playing strip (hidden until game launched) -->
+      <div class="now-playing-strip" id="nowPlayingStrip" style="display:none">
+        <div class="np-dot"></div>
+        <div class="np-label">Now Playing</div>
+        <div class="np-title" id="npTitle">—</div>
+        <span class="np-sys-tag" id="npSys"></span>
+        <div class="np-time" id="npTime"></div>
+      </div>
+
+      <div class="content-header">
+        <div class="content-title" id="system-title">All Games</div>
+        <span class="game-count" id="game-count">0 games</span>
+        <div style="display:flex;gap:8px;margin-left:auto;align-items:center;">
+          <div class="search-box">
+            <span class="search-icon">&#128269;</span>
+            <input class="search-input" type="text" placeholder="Search games..." id="searchInput" oninput="filterSearch(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="game-grid-wrap" id="gameGrid">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:'Orbitron',monospace;font-size:10px;line-height:2;text-align:center;">
+          NO ROMS LOADED<br><span style="font-size:9px;opacity:0.5">Run Setup to add your games</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Detail panel -->
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-card">
+        <div class="detail-art" id="detailArt"></div>
+        <div class="detail-body">
+          <div class="detail-system" id="detailSystem"></div>
+          <div class="detail-title" id="detailTitle"></div>
+          <div class="detail-meta" id="detailMeta"></div>
+          <button class="launch-btn" onclick="ctestMaybeLaunch(selectedGame)">&#9654; LAUNCH GAME</button>
+          <button class="secondary-btn" style="margin-top:8px" onclick="closeDetail()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controller panel (shown via showView) -->
+    <div class="controller-panel" id="controller-view" style="grid-column:1/-1">
+      <div class="ctrl-screen-header">
+        <div class="ctrl-screen-title">CONTROLLERS</div>
+        <button class="ctrl-add-btn" onclick="ctrlAddNew()">+ Add Controller</button>
+      </div>
+      <div id="ctrlScreenBody"></div>
+    </div>
+
+    <!-- Settings panel -->
+    <div class="settings-panel" id="settings-view" style="grid-column:1/-1">
+      <div class="settings-section">
+        <div class="settings-heading">LIBRARY</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Run Setup Wizard</div><div class="setting-desc">Add ROM folders or reconfigure EasyArc at any time.</div></div>
+          <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="frwShow()">Run Setup...</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Auto-download Box Art</div><div class="setting-desc">Fetches cover images from ScreenScraper when you add new games.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-heading">VIDEO</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Borderless Fullscreen</div><div class="setting-desc">Fills the screen without a window border.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Graphics Driver</div><div class="setting-desc">Metal is recommended on Mac for best performance.</div></div>
+          <div class="setting-control"><select class="setting-select"><option selected>Metal (Recommended)</option><option>OpenGL</option><option>Vulkan</option></select></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Integer Scaling</div><div class="setting-desc">Scales the image in exact pixel multiples.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Visual Filter</div><div class="setting-desc">Apply a shader to mimic old displays.</div></div>
+          <div class="setting-control"><select class="setting-select"><option>None</option><option selected>CRT Scanlines</option><option>LCD Grid</option><option>Sharp</option></select></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-heading">AUDIO</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Audio Driver</div><div class="setting-desc">CoreAudio is the standard macOS audio system.</div></div>
+          <div class="setting-control"><select class="setting-select"><option selected>CoreAudio (Recommended)</option><option>SDL2</option></select></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Audio Sync</div><div class="setting-desc">Keeps audio and video in sync.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-heading">CONTROLLERS</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Connected Controllers</div><div class="setting-desc">Controllers currently connected via Bluetooth or USB.</div></div>
+          <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="showView('controller')">Manage...</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Auto-configure Known Controllers</div><div class="setting-desc">Automatically set up DualShock, Switch Pro, and Xbox controllers.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked id="autoConfigToggle"><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Default Player Count</div><div class="setting-desc">How many players to configure when launching a game.</div></div>
+          <div class="setting-control"><select class="setting-select" id="defaultPlayerCount"><option selected>1 Player</option><option>2 Players</option><option>3 Players</option><option>4 Players</option></select></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
+          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value="dnherrington67"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
+          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Scrape Box Art</div>
+            <div class="setting-desc">Download box art for PS1, PS2, GameCube and Wii games. Runs in background at ~1 game/sec.</div>
+          </div>
+          <div class="setting-control">
+            <button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="startScrape()">Scrape Now...</button>
+          </div>
+        </div>
+        <div class="setting-row" id="scrapeProgressRow" style="display:none">
+          <div class="setting-info">
+            <div class="setting-name" id="scrapeProgressTitle">Scraping...</div>
+            <div class="setting-desc" id="scrapeProgressGame"></div>
+          </div>
+          <div class="setting-control">
+            <button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;color:var(--accent)" onclick="stopScrape()">Stop</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-heading">RETROARCH</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">RetroArch Location</div><div class="setting-desc">Path to the RetroArch application.</div></div>
+          <div class="setting-control"><button class="secondary-btn" id="retroarchPathBtn" style="min-width:160px;padding:8px 12px;font-size:12px;">Detecting...</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Launch Directly</div><div class="setting-desc">Launches games without showing the RetroArch menu.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .main -->
+
+  <!-- BOTTOM BAR -->
+  <footer class="ea-bottombar">
+    <div class="ctrl-hint"><span class="ctrl-key">D-PAD</span> Navigate</div>
+    <div class="ctrl-hint"><span class="ctrl-key">A</span> Select</div>
+    <div class="ctrl-hint"><span class="ctrl-key">B</span> Back</div>
+    <div class="ctrl-hint"><span class="ctrl-key">Y</span> Favorite</div>
+    <div class="ctrl-hint"><span class="ctrl-key">START</span> Menu</div>
+    <div class="bottombar-status" id="bottombarStatus">No controller detected</div>
+  </footer>
+
+</div><!-- end .ea-shell -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const systemNames = {
+  all:'All Games',
+  gbc:'Game Boy Color', gba:'Game Boy Advance',
+  snes:'Super Nintendo', nes:'NES', n64:'Nintendo 64',
+  gamecube:'GameCube',
+  dreamcast:'Sega Dreamcast',
+  jaguar:'Atari Jaguar', genesis:'Sega Genesis',
+  gamegear:'Game Gear', mastersystem:'Master System',
+  atari2600:'Atari 2600',
+  psx:'PlayStation', ps2:'PlayStation 2',
+  psp:'PlayStation Portable', ps3:'PlayStation 3',
+  saturn:'Sega Saturn',
+  wii:'Nintendo Wii',
+  wiiu:'Nintendo Wii U',
+  switch:'Nintendo Switch',
+};
+const systemColors = {
+  gbc:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
+  n64:'#2a2a1a', gamecube:'#1a2a2a', jaguar:'#0a0a0a', genesis:'#0a1a0a',
+  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a',
+  psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', ps3:'#0a0a1a',
+  saturn:'#2a0a0a',
+};
+const systemIcons = {
+  gbc:String.fromCodePoint(0x1F7E2),
+  gba:String.fromCodePoint(0x1F537),
+  snes:String.fromCodePoint(0x1F7E3),
+  nes:String.fromCodePoint(0x1F534),
+  n64:String.fromCodePoint(0x1F7E1),
+  jaguar:String.fromCodePoint(0x26AB),
+  genesis:String.fromCodePoint(0x1F535),
+  gamegear:String.fromCodePoint(0x1F7E4),
+  mastersystem:String.fromCodePoint(0x2B1C),
+  atari2600:String.fromCodePoint(0x1F7E0),
+  psx:String.fromCodePoint(0x25FD),
+  ps2:String.fromCodePoint(0x25FC),
+  psp:String.fromCodePoint(0x1F4F1),
+  ps3:String.fromCodePoint(0x1F5A5),
+  saturn:String.fromCodePoint(0x1FA90),
+  gamecube:String.fromCodePoint(0x1F3AE),
+  dreamcast:String.fromCodePoint(0x1F4BF),
+  wii:String.fromCodePoint(0x1F3AE),
+  wiiu:String.fromCodePoint(0x1F3AE),
+  switch:String.fromCodePoint(0x1F3AE),
+};
+
+function getArtUrl(game) {
+  return artworkCache[game.path] || null;
+}
+
+function cardArtHtml(g) {
+  const art = getArtUrl(g);
+  if (art) {
+    return '<div class="card-art" style="background:#000">' +
+      '<img src="' + art + '" style="width:100%;height:100%;object-fit:cover;display:block;">' +
+      '<div class="card-play"><div class="play-icon">&#9654;</div></div>' +
+      '</div>';
+  }
+  const bg = 'radial-gradient(ellipse,' + (systemColors[g.system]||'#1a1a2a') + 'aa 0%,#0a0a0f 100%)';
+  return '<div class="card-art" style="background:' + bg + '">' +
+    '<span style="font-size:36px">' + (systemIcons[g.system]||'&#127918;') + '</span>' +
+    '<div class="card-play"><div class="play-icon">&#9654;</div></div>' +
+    '</div>';
+}
+
+async function loadArtworkCache() {
+  if (!window.easyarc) return;
+  for (const g of games) {
+    if (artworkCache[g.path]) continue;
+    const exists = await window.easyarc.artworkExists(g);
+    if (exists) {
+      const p = await window.easyarc.getArtworkPath(g);
+      if (p) artworkCache[g.path] = encodeURI('file://' + p);
+      const meta = await window.easyarc.getMetadata(g);
+      if (meta) metadataCache[g.path] = meta;
+    }
+  }
+  renderGrid();
+}
+
+let games = [];
+let artworkCache = {}; // game.path -> file:// URL
+let metadataCache = {}; // game.path -> metadata object
+let currentSystem = 'all';
+let currentSearch = '';
+let selectedGame  = null;
+
+function renderGrid() {
+  const grid = document.getElementById('gameGrid');
+  const filtered = games.filter(g => {
+    const sysMatch = currentSystem === 'all' || g.system === currentSystem;
+    const searchMatch = !currentSearch || g.title.toLowerCase().includes(currentSearch.toLowerCase());
+    return sysMatch && searchMatch;
+  });
+  document.getElementById('game-count').textContent = filtered.length + ' games';
+  document.getElementById('system-title').textContent = systemNames[currentSystem] || 'All Games';
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO GAMES FOUND<br><span style="font-size:9px;opacity:0.5">Try a different filter or run Setup to add ROMs</span></div>';
+    return;
+  }
+  grid.innerHTML = '<div class="game-grid">' + filtered.map((g,i) =>
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')">' +
+    cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
+    '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
+  ).join('') + '</div>';
+}
+
+function updateCounts() {
+  const allEl = document.getElementById('count-all');
+  if (allEl) allEl.textContent = games.length;
+  const recentEl = document.getElementById('count-recent');
+  if (recentEl) {
+    const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+    recentEl.textContent = recent.length;
+  }
+  const favEl = document.getElementById('count-fav');
+  if (favEl) favEl.textContent = getFavorites().length;
+
+  // Build dynamic sidebar — only show systems that have games
+  const systemList = document.getElementById('systemList');
+  if (!systemList) return;
+
+  // Find which systems have games
+  const populated = {};
+  games.forEach(g => { populated[g.system] = (populated[g.system]||0) + 1; });
+
+  // Rebuild sidebar keeping the special buttons (Favorites, Recently Played, All Games)
+  const favBtn = document.getElementById('favBtn');
+  const recentBtn = document.getElementById('recentBtn');
+  const allBtn = document.getElementById('count-all') ? document.getElementById('count-all').closest('button') : systemList.querySelector('button:nth-child(3)');
+  systemList.innerHTML = '';
+  if (favBtn) systemList.appendChild(favBtn);
+  if (recentBtn) systemList.appendChild(recentBtn);
+  if (allBtn) systemList.appendChild(allBtn);
+
+  // Add one button per populated system in a defined order
+  const order = [
+    'gbc','gba','nes','snes','n64','gamecube',
+    'genesis','gamegear','mastersystem','saturn','dreamcast',
+    'atari2600','jaguar',
+    'psx','ps2','psp','ps3',
+    'wii',
+    'wiiu',
+    'switch',
+  ];
+  order.forEach(sys => {
+    if (!populated[sys]) return;
+    const btn = document.createElement('button');
+    btn.className = 'system-btn' + (currentSystem === sys ? ' active' : '');
+    btn.innerHTML =
+      '<span class="system-icon">' + (systemIcons[sys]||'&#127918;') + '</span>' +
+      (systemNames[sys]||sys) +
+      '<span class="system-count">' + populated[sys] + '</span>';
+    btn.dataset.sys = sys;
+    btn.onclick = function() { filterSystem(sys, this); };
+    systemList.appendChild(btn);
+  });
+
+  // Also update the All Games count
+  if (allEl) allEl.textContent = games.length;
+}
+
+function selectGame(id) {
+  const game = games.find(g => g.id === id);
+  if (!game) return;
+  selectedGame = game;
+  // Populate detail panel
+  const da = document.getElementById('detailArt');
+  const dt = document.getElementById('detailTitle');
+  const ds = document.getElementById('detailSystem');
+  const dm = document.getElementById('detailMeta');
+  const art = artworkCache[game.path];
+  if (da) da.innerHTML = art
+    ? '<img src="' + art + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">'
+    : '<span style="font-size:64px">' + (systemIcons[game.system]||'&#127918;') + '</span>';
+  if (ds) ds.textContent = systemNames[game.system] || game.system;
+  const lb = document.querySelector('.launch-btn');
+  if (lb) { lb.style.background = 'linear-gradient(135deg,#00a050 0%,#00ff88 100%)'; lb.style.boxShadow = '0 0 22px rgba(0,255,136,0.5), 0 4px 14px rgba(0,0,0,0.4)'; }
+  const meta = metadataCache[game.path];
+  const cleanTitle = game.title.replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs|nsp|xci)$/i, '');
+  if (dt) dt.textContent = (meta && meta.title) ? meta.title : cleanTitle;
+  if (dm) {
+    const rows = [];
+    if (meta && meta.genre)     rows.push('<div class="meta-item"><div class="meta-label">Genre</div><div class="meta-value">' + meta.genre + '</div></div>');
+    if (meta && meta.year)      rows.push('<div class="meta-item"><div class="meta-label">Year</div><div class="meta-value">' + meta.year + '</div></div>');
+    if (meta && meta.publisher) rows.push('<div class="meta-item"><div class="meta-label">Publisher</div><div class="meta-value">' + meta.publisher + '</div></div>');
+    if (meta && meta.players)   rows.push('<div class="meta-item"><div class="meta-label">Players</div><div class="meta-value">' + meta.players + '</div></div>');
+    if (meta && meta.synopsis)  rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:13px;font-weight:500;line-height:1.7;color:var(--text);">' + meta.synopsis + '</div></div>');
+    if (rows.length === 0)      rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
+    dm.innerHTML = rows.join('');
+  }
+  // Highlight selected card
+  document.querySelectorAll('.game-card').forEach(c => c.classList.remove('gp-selected'));
+  const cards = document.querySelectorAll('.game-card');
+  cards.forEach(c => { if (c.getAttribute('onclick') && c.getAttribute('onclick').includes(String(id))) c.classList.add('gp-selected'); });
+}
+
+function getFavorites() {
+  return JSON.parse(localStorage.getItem('easyarc_favorites') || '[]');
+}
+
+function toggleFavorite(game) {
+  const favs = getFavorites();
+  const existing = favs.findIndex(f => f.path === game.path);
+  if (existing >= 0) {
+    favs.splice(existing, 1);
+    showToast(game.title + ' removed from Favorites');
+  } else {
+    favs.unshift({ id: game.id, title: game.title, system: game.system, path: game.path });
+    showToast(game.title + ' added to Favorites!');
+  }
+  localStorage.setItem('easyarc_favorites', JSON.stringify(favs));
+  const favEl = document.getElementById('count-fav');
+  if (favEl) favEl.textContent = favs.length;
+}
+
+function isFavorite(game) {
+  return getFavorites().some(f => f.path === game.path);
+}
+
+function filterFavorites(btn) {
+  currentSystem = 'favorites';
+  document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  closeDetail();
+  const favs = getFavorites();
+  const grid = document.getElementById('gameGrid');
+  document.getElementById('game-count').textContent = favs.length + ' games';
+  document.getElementById('system-title').textContent = 'Favorites';
+  if (favs.length === 0) {
+    grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO FAVORITES YET<br><span style="font-size:9px;opacity:0.5">Press Y on a game to add it</span></div>';
+    return;
+  }
+  grid.innerHTML = '<div class="game-grid">' + favs.map((g, i) =>
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')">' +
+    cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
+    '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
+  ).join('') + '</div>';
+}
+
+function filterRecent(btn) {
+  currentSystem = 'recent';
+  document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  closeDetail();
+  const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+  const grid = document.getElementById('gameGrid');
+  document.getElementById('game-count').textContent = recent.length + ' games';
+  document.getElementById('system-title').textContent = 'Recently Played';
+  if (recent.length === 0) {
+    grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO RECENTLY PLAYED GAMES<br><span style="font-size:9px;opacity:0.5">Launch a game to get started</span></div>';
+    return;
+  }
+  grid.innerHTML = '<div class="game-grid">' + recent.map((g, i) =>
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')">' +
+    cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
+    '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
+  ).join('') + '</div>';
+}
+
+function filterSystem(sys, btn) {
+  currentSystem = sys;
+  document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  closeDetail();
+  renderGrid();
+}
+
+function filterSearch(val) { currentSearch = val; renderGrid(); }
+function closeDetail() {
+  selectedGame = null;
+  const da = document.getElementById('detailArt');
+  const dt = document.getElementById('detailTitle');
+  const ds = document.getElementById('detailSystem');
+  const dm = document.getElementById('detailMeta');
+  if (da) da.innerHTML = '<span style="font-size:48px;opacity:0.2">&#127918;</span>';
+  if (dt) dt.textContent = 'Select a game';
+  if (ds) ds.textContent = '';
+  if (dm) dm.innerHTML = '';
+  const lb = document.querySelector('.launch-btn');
+  if (lb) { lb.style.background = ''; lb.style.boxShadow = ''; }
+}
+
+async function coreDownloadAndLaunch(game) {
+  // Show download modal
+  const modal = document.getElementById('coreDownloadModal');
+  const status = document.getElementById('coreDownloadStatus');
+  const progress = document.getElementById('coreDownloadProgress');
+  modal.classList.remove('hidden');
+  status.textContent = 'Downloading core for ' + (systemNames[game.system] || game.system) + '...';
+  progress.style.width = '0%';
+
+  let fakeP = 0;
+  const ticker = setInterval(() => { fakeP = Math.min(fakeP + 2, 90); progress.style.width = fakeP + '%'; }, 100);
+
+  const result = await window.easyarc.installCore(game.system);
+  clearInterval(ticker);
+  progress.style.width = '100%';
+
+  if (result.success) {
+    status.textContent = 'Download complete! Launching...';
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      launchGame(game);
+    }, 800);
+  } else {
+    status.textContent = 'Download failed: ' + result.error;
+    document.getElementById('coreDownloadBtn').style.display = 'inline-block';
+  }
+}
+
+async function launchGame(game) {
+  const g = game || selectedGame;
+  if (!g) return;
+  selectedGame = g;
+  // Track recently played
+  const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+  const existing = recent.findIndex(r => r.path === g.path);
+  if (existing >= 0) recent.splice(existing, 1);
+  recent.unshift({ id: g.id, title: g.title, system: g.system, path: g.path });
+  if (recent.length > 20) recent.pop();
+  localStorage.setItem('easyarc_recent', JSON.stringify(recent));
+  const recentEl = document.getElementById('count-recent');
+  if (recentEl) recentEl.textContent = recent.length;
+  if (window.easyarc) {
+    const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    const p1id = gps.length > 0 ? gps[0].id : '';
+    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id });
+    showToast(result.success ? 'Launching ' + g.title + '...' : 'Error: ' + result.error);
+  } else {
+    showToast('Launching ' + g.title + '...');
+  }
+}
+
+function showView(name) {
+  document.getElementById('settings-view').classList.remove('active');
+  const sidebar = document.getElementById('sidebar');
+  const libraryView = document.getElementById('library-view');
+  if (name === 'library') {
+    sidebar.style.display = 'flex';
+    libraryView.style.display = 'flex';
+  } else {
+    sidebar.style.display = 'none';
+    libraryView.style.display = 'none';
+    if (name === 'settings') document.getElementById('settings-view').classList.add('active');
+  }
+  document.querySelectorAll('.nav-btn').forEach((btn,i) => {
+    btn.classList.toggle('active', ['library','wizard','controller','settings'][i] === name);
+  });
+}
+
+async function rescanLibrary() {
+  const folders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
+  if (folders.length === 0) { showToast('No folders set. Run Setup first.'); return; }
+  const btn = document.getElementById('rescanBtn');
+  if (btn) { btn.classList.add('active'); btn.textContent = '⟳ Refreshing...'; }
+  let newCount = 0;
+  for (const folder of folders) {
+    if (!window.easyarc) break;
+    const result = await window.easyarc.scanRoms(folder);
+    if (result.success) {
+      result.roms.forEach((rom,i) => {
+        if (!games.find(g => g.path === rom.path)) {
+          games.push({ id: Date.now()+i, title: rom.title, system: rom.system, path: rom.path });
+          newCount++;
+        }
+      });
+    }
+  }
+  updateCounts();
+  renderGrid();
+  if (btn) { btn.classList.remove('active'); btn.textContent = '⟳ Refresh Library'; }
+  showToast(newCount > 0 ? 'Found ' + newCount + ' new games!' : 'No new games found.');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── FIRST RUN WIZARD ────────────────────────────────────────────────────────
+const FRW_TOTAL_STEPS = 5;
+let frwCurrentStep = 0;
+let frwHasRoms     = null;
+let frwRomFolders  = [];
+let frwFoundGames  = [];
+
+function frwInit() {
+  if (!localStorage.getItem('easyarc_setup_done')) frwShow();
+}
+
+function frwShow() {
+  frwCurrentStep = 0;
+  frwHasRoms     = null;
+  frwRomFolders  = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
+  frwFoundGames  = [];
+  document.getElementById('frwOverlay').classList.remove('hidden');
+  frwRenderStep();
+}
+
+function frwHide() { document.getElementById('frwOverlay').classList.add('hidden'); }
+function frwSkip() { localStorage.setItem('easyarc_setup_done','1'); frwHide(); }
+
+function frwRenderDots() {
+  document.getElementById('frwStepDots').innerHTML = Array.from({length:FRW_TOTAL_STEPS},(_,i) => {
+    const cls = i < frwCurrentStep ? 'done' : i === frwCurrentStep ? 'active' : '';
+    return '<div class="frw-step-dot ' + cls + '"></div>';
+  }).join('');
+}
+
+function frwRenderStep() {
+  frwRenderDots();
+  const body  = document.getElementById('frwBody');
+  const sub   = document.getElementById('frwSub');
+  const title = document.getElementById('frwTitle');
+  const icon  = document.getElementById('frwIcon');
+  const next  = document.getElementById('frwNextBtn');
+  const skip  = document.getElementById('frwSkipBtn');
+  next.disabled = false;
+  skip.style.display = 'inline-block';
+
+  if (frwCurrentStep === 0) {
+    icon.textContent  = String.fromCodePoint(0x1F3AE);
+    title.textContent = 'WELCOME TO EASYARC';
+    sub.textContent   = "The easiest way to play your retro game collection. Let's get you set up in a few quick steps.";
+    body.innerHTML    = '';
+    next.textContent  = 'GET STARTED →';
+  }
+
+  else if (frwCurrentStep === 1) {
+    icon.textContent  = String.fromCodePoint(0x1F4E6);
+    title.textContent = 'YOUR GAME COLLECTION';
+    sub.textContent   = 'Do you already have ROM files on your computer or an external drive?';
+    next.disabled     = frwHasRoms === null;
+    next.textContent  = 'CONTINUE →';
+    body.innerHTML =
+      '<div class="frw-choice-row">' +
+        '<div class="frw-choice ' + (frwHasRoms === true ? 'selected' : '') + '" onclick="frwSetHasRoms(true)">' +
+          '<span class="frw-choice-icon">' + String.fromCodePoint(0x2705) + '</span>' +
+          '<div class="frw-choice-label">Yes, I have ROMs</div>' +
+          '<div class="frw-choice-desc">I have game files on my computer or an external drive</div>' +
+        '</div>' +
+        '<div class="frw-choice ' + (frwHasRoms === false ? 'selected' : '') + '" onclick="frwSetHasRoms(false)">' +
+          '<span class="frw-choice-icon">' + String.fromCodePoint(0x1F4C2) + '</span>' +
+          '<div class="frw-choice-label">No, create a folder</div>' +
+          '<div class="frw-choice-desc">Set up a Games folder where I can add ROMs later</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  else if (frwCurrentStep === 2) {
+    if (frwHasRoms) {
+      icon.textContent  = String.fromCodePoint(0x1F4C1);
+      title.textContent = 'FIND YOUR ROMS';
+      sub.textContent   = 'Select the folder (or folders) where your ROMs are stored. Subfolders are scanned automatically.';
+      next.disabled     = frwRomFolders.length === 0;
+      next.textContent  = 'SCAN FOR GAMES →';
+      const items = frwRomFolders.map((f,i) =>
+        '<div class="frw-folder-item"><span>' + String.fromCodePoint(0x1F4C1) + ' ' + f + '</span>' +
+        '<button class="frw-folder-remove" onclick="frwRemoveFolder(' + i + ')">x</button></div>'
+      ).join('');
+      body.innerHTML =
+        '<div class="frw-folder-list" id="frwFolderList">' + items + '</div>' +
+        '<button class="frw-btn ghost" style="width:100%" onclick="frwAddFolder()">+ Add Folder</button>';
+    } else {
+      icon.textContent  = String.fromCodePoint(0x1F4C2);
+      title.textContent = 'CREATE GAMES FOLDER';
+      sub.textContent   = "EasyArc will create a Games folder for you. You can choose where to put it.";
+      next.textContent  = 'CONTINUE →';
+      body.innerHTML =
+        '<div class="frw-status" id="frwCreateStatus">' + String.fromCodePoint(0x1F4C1) + ' A Games folder will be ready for your ROMs</div>' +
+        '<button class="frw-btn ghost" style="width:100%;margin-top:8px" onclick="frwChooseCreateLocation()">Choose Location...</button>';
+    }
+  }
+
+  else if (frwCurrentStep === 3) {
+    icon.textContent  = String.fromCodePoint(0x26A1);
+    title.textContent = 'SCANNING...';
+    sub.textContent   = 'Searching your folders for game files...';
+    skip.style.display = 'none';
+    next.disabled      = true;
+    next.textContent   = 'PLEASE WAIT...';
+    body.innerHTML =
+      '<div class="frw-progress-wrap"><div class="frw-progress-bar" id="frwProgressBar"></div></div>' +
+      '<div class="frw-status loading" id="frwScanStatus"><span class="frw-spinner">&#8635;</span>&nbsp;Starting scan...</div>';
+    frwRunScan();
+  }
+
+  else if (frwCurrentStep === 4) {
+    localStorage.setItem('easyarc_setup_done','1');
+    localStorage.setItem('easyarc_rom_folders', JSON.stringify(frwRomFolders));
+    skip.style.display = 'none';
+    icon.textContent   = String.fromCodePoint(0x1F3C6);
+    title.textContent  = 'ALL DONE!';
+    next.textContent   = 'GO TO LIBRARY →';
+    const total  = frwFoundGames.length;
+    const bySys  = {};
+    frwFoundGames.forEach(g => { bySys[g.system] = (bySys[g.system]||0)+1; });
+    const sNames = { gbc:'Game Boy Color', gba:'Game Boy Advance', snes:'Super Nintendo', nes:'NES', n64:'Nintendo 64', jaguar:'Atari Jaguar', psx:'PlayStation', genesis:'Genesis' };
+    const sIcons = { gbc:String.fromCodePoint(0x1F7E2), gba:String.fromCodePoint(0x1F537), snes:String.fromCodePoint(0x1F7E3), nes:String.fromCodePoint(0x1F534), n64:String.fromCodePoint(0x1F7E1), jaguar:String.fromCodePoint(0x26AB), psx:String.fromCodePoint(0x2B1C), genesis:String.fromCodePoint(0x1F535) };
+    if (total === 0) {
+      sub.textContent = 'No games found yet. Add ROM files to your folder and use Scan for New Games anytime.';
+      body.innerHTML  = '<div class="frw-status">Your Games folder is ready whenever you add ROMs.</div>';
+    } else {
+      sub.textContent = "Here is what EasyArc found in your collection:";
+      const rows = Object.entries(bySys).sort((a,b)=>b[1]-a[1]).map(([sys,count]) =>
+        '<div class="frw-result-row">' +
+        '<span class="frw-result-icon">' + (sIcons[sys]||String.fromCodePoint(0x1F3AE)) + '</span>' +
+        '<span class="frw-result-name">' + (sNames[sys]||sys) + '</span>' +
+        '<span class="frw-result-count">' + count + '</span></div>'
+      ).join('');
+      body.innerHTML =
+        '<div class="frw-results">' + rows + '</div>' +
+        '<div class="frw-result-total">' + total + ' GAMES READY TO PLAY</div>';
+    }
+  }
+}
+
+function frwSetHasRoms(val) {
+  frwHasRoms = val;
+  document.getElementById('frwNextBtn').disabled = false;
+  frwRenderStep();
+}
+
+async function frwAddFolder() {
+  if (window.easyarc) {
+    const folder = await window.easyarc.pickRomFolder();
+    if (!folder) return;
+    if (!frwRomFolders.includes(folder)) frwRomFolders.push(folder);
+  } else {
+    frwRomFolders.push('~/ROMs/Demo');
+  }
+  frwRenderStep();
+}
+
+function frwRemoveFolder(i) { frwRomFolders.splice(i,1); frwRenderStep(); }
+
+async function frwChooseCreateLocation() {
+  if (window.easyarc) {
+    const folder = await window.easyarc.pickRomFolder();
+    if (!folder) return;
+    const el = document.getElementById('frwCreateStatus');
+    if (el) { el.className = 'frw-status success'; el.textContent = String.fromCodePoint(0x2713) + ' Will create: ' + folder + '/EasyArc Games'; }
+  }
+}
+
+async function frwRunScan() {
+  const bar    = document.getElementById('frwProgressBar');
+  const status = document.getElementById('frwScanStatus');
+  let roms = [];
+  if (frwHasRoms && frwRomFolders.length > 0 && window.easyarc) {
+    let fakeP = 0;
+    const ticker = setInterval(() => { fakeP = Math.min(fakeP+1,85); if(bar) bar.style.width=fakeP+'%'; }, 80);
+    for (const folder of frwRomFolders) {
+      if (status) status.innerHTML = '<span class="frw-spinner">&#8635;</span>&nbsp;Scanning ' + folder + '...';
+      const result = await window.easyarc.scanRoms(folder);
+      if (result.success) roms = roms.concat(result.roms);
+    }
+    clearInterval(ticker);
+  } else {
+    let fakeP = 0;
+    const ticker = setInterval(() => { fakeP = Math.min(fakeP+3,85); if(bar) bar.style.width=fakeP+'%'; }, 60);
+    await new Promise(r => setTimeout(r,2000));
+    clearInterval(ticker);
+  }
+  if (bar) bar.style.width = '100%';
+  frwFoundGames = roms;
+  roms.forEach((rom,i) => {
+    if (!games.find(g => g.path === rom.path)) {
+      games.push({ id: Date.now()+i, title:rom.title, system:rom.system, path:rom.path });
+    }
+  });
+  updateCounts();
+  renderGrid();
+  if (status) { status.className='frw-status success'; status.innerHTML = String.fromCodePoint(0x2713) + ' Found ' + roms.length + ' games'; }
+  setTimeout(() => frwNext(), 700);
+}
+
+function frwNext() {
+  if (frwCurrentStep === 2 && !frwHasRoms) { frwCurrentStep = 4; frwRenderStep(); return; }
+  if (frwCurrentStep < FRW_TOTAL_STEPS - 1) { frwCurrentStep++; frwRenderStep(); }
+  else { frwHide(); showView('library'); }
+}
+
+window.frwShow = frwShow;
+
+// ── STARTUP ─────────────────────────────────────────────────────────────────
+renderGrid();
+updateCounts();
+
+if (window.easyarc) {
+  window.easyarc.findRetroArch().then(result => {
+    const dot = document.querySelector('.status-dot');
+    const txt = document.getElementById('statusText');
+    if (result.found) {
+      txt.textContent = 'RetroArch Connected';
+      const btn = document.getElementById('retroarchPathBtn');
+      if (btn) btn.textContent = result.path;
+    } else {
+      txt.textContent = 'RetroArch Not Found';
+      dot.style.background = '#ff3c6e';
+      dot.style.boxShadow  = '0 0 8px #ff3c6e';
+    }
+  });
+  // Restore saved games from previous sessions
+  const savedFolders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
+  if (savedFolders.length > 0 && localStorage.getItem('easyarc_setup_done')) {
+    savedFolders.forEach(async (folder, fi) => {
+      const result = await window.easyarc.scanRoms(folder);
+      if (result.success) {
+        result.roms.forEach((rom,i) => {
+          if (!games.find(g => g.path === rom.path)) {
+            games.push({ id: fi*10000+i, title:rom.title, system:rom.system, path:rom.path });
+          }
+        });
+        updateCounts();
+        renderGrid();
+        loadArtworkCache();
+      }
+    });
+  }
+} else {
+  document.getElementById('statusText').textContent = 'Browser Preview';
+}
+
+frwInit();
+
+// Splash screen — logo fades in over dimmed UI, then reveals
+const splash = document.getElementById('splashScreen');
+const shell = document.getElementById('eaShell');
+if (splash && shell) {
+  // Step 1: After 3 seconds, fade out splash and brighten UI
+  setTimeout(() => {
+    splash.classList.add('fade-out');
+    shell.classList.remove('dimmed');
+    // Step 2: After splash fade completes (1s), remove it
+    setTimeout(() => {
+      splash.remove();
+      // Step 3: Wait 2 more seconds then show controller modal
+      setTimeout(() => {
+        ctrlShowStartupModal();
+      }, 2000);
+    }, 1000);
+  }, 3000);
+} else {
+  ctrlShowStartupModal();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLLER SYSTEM — Clean rewrite
+// ═══════════════════════════════════════════════════════════════════════════
+
+const KNOWN_CONTROLLERS = {
+  'nintendo switch pro controller': { name:'Switch Pro Controller', icon:'&#127918;', type:'switch' },
+  'pro controller':                 { name:'Switch Pro Controller', icon:'&#127918;', type:'switch' },
+  'dualshock 4':                    { name:'DualShock 4',           icon:'&#127918;', type:'ds4' },
+  'dualsense':                      { name:'DualSense',             icon:'&#127918;', type:'dualsense' },
+  'dualshock 3':                    { name:'DualShock 3',           icon:'&#127918;', type:'ds3' },
+  'xbox':                           { name:'Xbox Controller',       icon:'&#127918;', type:'xbox' },
+  'xinput':                         { name:'Xbox Controller',       icon:'&#127918;', type:'xbox' },
+  'vendor: 057e product: 2009':         { name:'Teknogame GC Controller', icon:'&#127918;', type:'gc_clone', buttonRemap:{0:1, 1:0, 2:3, 3:2} },
+};
+
+const BUTTON_MAP_DEFS = [
+  { id:'b_a',     label:'Button A' },
+  { id:'b_b',     label:'Button B' },
+  { id:'b_x',     label:'Button X' },
+  { id:'b_y',     label:'Button Y' },
+  { id:'b_up',    label:'D-Pad Up' },
+  { id:'b_down',  label:'D-Pad Down' },
+  { id:'b_left',  label:'D-Pad Left' },
+  { id:'b_right', label:'D-Pad Right' },
+  { id:'b_l1',    label:'Left Bumper' },
+  { id:'b_r1',    label:'Right Bumper' },
+  { id:'b_l2',    label:'Left Trigger' },
+  { id:'b_r2',    label:'Right Trigger' },
+  { id:'b_start', label:'Start / Options' },
+  { id:'b_select',label:'Select / Share' },
+  { id:'b_l3',    label:'Left Stick Click' },
+  { id:'b_r3',    label:'Right Stick Click' },
+];
+
+let connectedControllers = {};
+let ctrlMappings = JSON.parse(localStorage.getItem('easyarc_ctrl_mappings') || '{}');
+let ctrlMappingController = null;
+let ctrlMappingButtonIndex = 0;
+let ctrlStartupMode = false; // suppress regular modal during startup detection
+
+function ctrlGetProfile(id) {
+  const lower = id.toLowerCase();
+  // Sort by key length descending so more specific keys match first
+  const entries = Object.entries(KNOWN_CONTROLLERS).sort((a,b) => b[0].length - a[0].length);
+  for (const [key, profile] of entries) {
+    if (lower.includes(key)) return profile;
+  }
+  return null;
+}
+
+function ctrlShowStartupModal() {
+  const modal = document.getElementById("ctrlModal");
+  const title = document.getElementById("ctrlModalTitle");
+  const sub   = document.getElementById("ctrlModalSub");
+  const body  = document.getElementById("ctrlModalBody");
+  const btn   = document.getElementById("ctrlModalBtn");
+
+  ctrlStartupMode = true;
+  modal.classList.remove("hidden");
+
+  const textStyle = "font-size:18px;color:#fff;line-height:1.8;text-align:center;";
+  let assignedControllers = [];
+  let currentAssigning = 0;
+  let allGPs = [];
+
+  function showWaiting() {
+    title.textContent = "CONTROLLER SETUP";
+    sub.textContent = "";
+    body.innerHTML =
+      "<div style='" + textStyle + "padding:24px 0'>" +
+      "Connect your controller(s) and press a button<br>or SPACE to use the keyboard." +
+      "</div>";
+    btn.textContent = "USE KEYBOARD (Space)";
+    btn.onclick = () => { ctrlModalDismiss(); setTimeout(() => { ctrlStartupMode = false; }, 800); };
+
+    function onSpace(e) {
+      if (e.key === " ") {
+        document.removeEventListener("keydown", onSpace);
+        ctrlModalDismiss();
+        setTimeout(() => { ctrlStartupMode = false; }, 800);
+      }
+    }
+    document.addEventListener("keydown", onSpace);
+  }
+
+  function showSingleDetected(gp) {
+    const profile = ctrlGetProfile(gp.id) || { name: gp.id.split("(")[0].trim(), icon: "&#127918;" };
+    title.textContent = "CONTROLLER DETECTED";
+    sub.textContent = "";
+    body.innerHTML =
+      "<div style='" + textStyle + "padding:16px 0'>" +
+      "Controller detected.<br><br>" +
+      "<span style='color:var(--green);font-size:20px;font-weight:bold'>" + profile.name + "</span><br><br>" +
+      "Press a button to confirm or press SPACE to use the keyboard." +
+      "</div>";
+    btn.textContent = "CONFIRM (Enter)";
+    btn.onclick = () => { confirmAndEnter(); };
+
+    function onKey(e) {
+      if (e.key === "Enter" || e.key === " ") {
+        document.removeEventListener("keydown", onKey);
+        if (e.key === " ") { ctrlModalDismiss(); setTimeout(() => { ctrlStartupMode = false; }, 800); }
+        else confirmAndEnter();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+
+    const poll = setInterval(() => {
+      const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+      const g = gps.find(x => x.index === gp.index);
+      if (g && g.buttons.some(b => b.pressed)) {
+        clearInterval(poll);
+        confirmAndEnter();
+      }
+    }, 100);
+  }
+
+  function showAssignPlayer(playerNum) {
+    title.textContent = "ASSIGN CONTROLLERS";
+    sub.textContent = "";
+    body.innerHTML =
+      "<div style='" + textStyle + "padding:16px 0'>" +
+      "Select the Player " + playerNum + " controller.<br><br>" +
+      "Press any button on the controller<br>you want to assign to Player " + playerNum + "." +
+      "</div>" +
+      "<div class='ctrl-player-list' id='assignList'>" +
+      allGPs.map((gp, i) => {
+        const profile = ctrlGetProfile(gp.id) || { name: gp.id.split("(")[0].trim(), icon: "&#127918;" };
+        const isAssigned = assignedControllers.find(a => a.gpIndex === gp.index);
+        const cls = isAssigned ? "connected" : "";
+        const status = isAssigned ? "Assigned to P" + isAssigned.player : "Press a button to select";
+        return "<div class='ctrl-player-row " + cls + "' id='assignRow" + gp.index + "'>" +
+          "<span class='ctrl-player-icon'>" + profile.icon + "</span>" +
+          "<div class='ctrl-player-info'>" +
+          "<div class='ctrl-player-name' style='font-size:16px'>" + profile.name + "</div>" +
+          "<div class='ctrl-player-status' style='font-size:14px'>" + status + "</div>" +
+          "</div></div>";
+      }).join("") +
+      "</div>";
+    btn.style.display = "none";
+
+    const poll = setInterval(() => {
+      const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+      for (const gp of gps) {
+        if (assignedControllers.find(a => a.gpIndex === gp.index)) continue;
+        if (gp.buttons.some(b => b.pressed)) {
+          clearInterval(poll);
+          assignedControllers.push({ player: playerNum, gpIndex: gp.index, gp });
+          console.log('Assigned P' + playerNum + ', total assigned:', assignedControllers.length, 'total controllers:', allGPs.length);
+          if (assignedControllers.length < allGPs.length) {
+            setTimeout(() => showAssignPlayer(playerNum + 1), 600);
+          } else {
+            setTimeout(() => showConfirm(), 600);
+          }
+          break;
+        }
+      }
+    }, 100);
+  }
+
+  function showConfirm() {
+    title.textContent = "CONFIRM SETUP";
+    sub.textContent = "";
+    btn.style.display = "inline-block";
+    body.innerHTML =
+      "<div style='" + textStyle + "padding:8px 0;margin-bottom:16px'>" +
+      "Is this correct?" +
+      "</div>" +
+      "<div class='ctrl-player-list'>" +
+      assignedControllers.map(a => {
+        const profile = ctrlGetProfile(a.gp.id) || { name: a.gp.id.split("(")[0].trim(), icon: "&#127918;" };
+        return "<div class='ctrl-player-row connected'>" +
+          "<div class='ctrl-player-num' style='font-size:16px'>P" + a.player + "</div>" +
+          "<span class='ctrl-player-icon'>" + profile.icon + "</span>" +
+          "<div class='ctrl-player-info'>" +
+          "<div class='ctrl-player-name' style='font-size:16px'>" + profile.name + "</div>" +
+          "</div></div>";
+      }).join("") +
+      "</div>";
+    btn.textContent = "YES →";
+    btn.onclick = confirmAndEnter;
+
+    // No button
+    const noBtn = document.getElementById("ctrlModalSkipBtn");
+    if (noBtn) { noBtn.style.display = "inline-block"; noBtn.textContent = "NO"; noBtn.onclick = () => { assignedControllers = []; setTimeout(() => showAssignPlayer(1), 600); }; }
+  }
+
+  function confirmAndEnter() {
+    // Apply controller assignments
+    assignedControllers.forEach(a => {
+      if (connectedControllers[a.gpIndex]) {
+        connectedControllers[a.gpIndex].slot = a.player;
+      }
+    });
+    ctrlModalDismiss();
+    setTimeout(() => { ctrlStartupMode = false; }, 800);
+  }
+
+  showWaiting();
+
+  const poll = setInterval(() => {
+    const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    if (gps.length > 0) {
+      clearInterval(poll);
+      allGPs = gps;
+      gps.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
+      if (gps.length === 1) {
+        setTimeout(() => showSingleDetected(gps[0]), 600);
+      } else {
+        setTimeout(() => showAssignPlayer(1), 600);
+      }
+    }
+  }, 200);
+
+  window.addEventListener("gamepadconnected", function onGPConnect(e) {
+    window.removeEventListener("gamepadconnected", onGPConnect);
+    allGPs = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    allGPs.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
+    if (allGPs.length === 1) {
+      setTimeout(() => showSingleDetected(allGPs[0]), 600);
+    } else {
+      setTimeout(() => showAssignPlayer(1), 600);
+    }
+  });
+}
+
+function ctrlInit() {
+  window.addEventListener('gamepadconnected', e => { if (!ctrlStartupMode) ctrlHandleConnect(e.gamepad); });
+  window.addEventListener('gamepaddisconnected', e => ctrlHandleDisconnect(e.gamepad));
+
+  // Scan for gamepads
+  function scanGamepads() {
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const gp of gps) {
+      if (gp && !connectedControllers[gp.index]) ctrlHandleConnect(gp);
+    }
+  }
+
+  // Also scan on any click or keypress — guarantees detection after focus
+  // Skip during startup modal to avoid bypassing controller setup
+  function scanGamepadsIfReady() { if (!ctrlStartupMode) scanGamepads(); }
+  document.addEventListener('click', scanGamepadsIfReady);
+  document.addEventListener('keydown', scanGamepadsIfReady);
+  window.addEventListener('focus', scanGamepadsIfReady);
+
+  // Poll rapidly for 4 seconds after startup — but not during startup modal
+  let polls = 0;
+  const poll = setInterval(() => { if (!ctrlStartupMode) scanGamepads(); if (++polls > 20) clearInterval(poll); }, 200);
+
+  // After 500ms, show the startup controller status modal
+  setTimeout(() => {
+    // Startup modal triggered by splash sequence
+  }, 500);
+}
+
+function ctrlHandleConnect(gp) {
+  if (!gp) return;
+  const profile = ctrlGetProfile(gp.id) || { name: gp.id.split('(')[0].trim(), icon:'&#127918;', type:'generic' };
+  const slot = Object.keys(connectedControllers).length + 1;
+  connectedControllers[gp.index] = { gp, profile, slot, isKnown: !!ctrlGetProfile(gp.id) };
+  ctrlUpdateScreen();
+
+  const hasMapping = ctrlMappings[gp.id];
+  if (ctrlStartupMode) return; // startup modal handles this
+  if (!hasMapping) {
+    if (connectedControllers[gp.index].isKnown) {
+      ctrlShowModal(
+        'CONTROLLER READY',
+        profile.name + ' connected and configured automatically.',
+        profile,
+        'GOT IT',
+        () => { ctrlMappings[gp.id] = { auto: true }; localStorage.setItem('easyarc_ctrl_mappings', JSON.stringify(ctrlMappings)); ctrlModalDismiss(); }
+      );
+    } else {
+      ctrlShowModal(
+        'NEW CONTROLLER DETECTED',
+        "EasyArc doesn't recognise this controller. Map the buttons now for the best experience.",
+        profile,
+        'MAP BUTTONS →',
+        () => { ctrlModalDismiss(); ctrlStartMapping(gp); }
+      );
+    }
+  } else {
+    showToast(profile.name + ' connected');
+  }
+}
+
+function ctrlHandleDisconnect(gp) {
+  if (!gp) return;
+  const ctrl = connectedControllers[gp.index];
+  delete connectedControllers[gp.index];
+  ctrlUpdateScreen();
+  if (ctrl) showToast(ctrl.profile.name + ' disconnected');
+}
+
+function ctrlShowModal(title, sub, profile, btnLabel, btnAction) {
+  document.getElementById('ctrlModal').classList.remove('hidden');
+  document.getElementById('ctrlModalTitle').textContent = title;
+  document.getElementById('ctrlModalSub').textContent = sub;
+  document.getElementById('ctrlModalBody').innerHTML =
+    '<div class="ctrl-player-row connected" style="margin-bottom:16px">' +
+    '<span class="ctrl-player-icon">' + profile.icon + '</span>' +
+    '<div class="ctrl-player-info"><div class="ctrl-player-name">' + profile.name + '</div></div></div>';
+  const btn = document.getElementById('ctrlModalBtn');
+  btn.textContent = btnLabel;
+  btn.onclick = btnAction;
+}
+
+function ctrlModalDismiss() { document.getElementById('ctrlModal').classList.add('hidden'); }
+
+function ctrlAddNew() {
+  document.getElementById('ctrlModal').classList.remove('hidden');
+  document.getElementById('ctrlModalTitle').textContent = 'ADD CONTROLLER';
+  document.getElementById('ctrlModalSub').textContent = 'Turn on your controller now. EasyArc will detect it automatically.';
+  document.getElementById('ctrlModalBody').innerHTML =
+    '<div class="ctrl-player-row" style="margin-bottom:16px;justify-content:center;">' +
+    '<div class="ctrl-detect-pulse"></div>' +
+    '<span style="font-size:13px;color:var(--cyan);margin-left:12px;">Waiting for controller...</span></div>';
+  document.getElementById('ctrlModalBtn').textContent = 'CANCEL';
+  document.getElementById('ctrlModalBtn').onclick = ctrlModalDismiss;
+}
+
+function ctrlUpdateScreen() {
+  const body = document.getElementById('ctrlScreenBody');
+  if (!body) return;
+  const ctrls = Object.values(connectedControllers);
+  if (ctrls.length === 0) {
+    body.innerHTML =
+      '<div class="ctrl-empty"><span class="ctrl-empty-icon">&#127918;</span>' +
+      '<div class="ctrl-empty-text">NO CONTROLLERS DETECTED<br>' +
+      '<span style="font-size:8px;opacity:0.5">Turn on a controller to get started</span></div></div>';
+    return;
+  }
+  body.innerHTML = '<div class="ctrl-player-list">' + ctrls.map(ctrl => {
+    const mapped = ctrlMappings[ctrl.gp.id];
+    const status = mapped ? (mapped.auto ? 'Auto-configured' : 'Mapped') : 'Needs mapping';
+    const cls = mapped ? 'connected' : 'unknown';
+    return '<div class="ctrl-player-row ' + cls + '">' +
+      '<div class="ctrl-player-num">P' + ctrl.slot + '</div>' +
+      '<span class="ctrl-player-icon">' + ctrl.profile.icon + '</span>' +
+      '<div class="ctrl-player-info">' +
+      '<div class="ctrl-player-name">' + ctrl.profile.name + '</div>' +
+      '<div class="ctrl-player-status">' + status + '</div></div>' +
+      '<button class="ctrl-player-btn" onclick="ctrlStartMappingByIndex(' + ctrl.gp.index + ')">Remap</button>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+function ctrlStartMappingByIndex(idx) {
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  if (gps[idx]) ctrlStartMapping(gps[idx]);
+}
+
+function ctrlStartMapping(gp) {
+  ctrlMappingController = gp;
+  ctrlMappingButtonIndex = 0;
+  if (!ctrlMappings[gp.id] || ctrlMappings[gp.id].auto) ctrlMappings[gp.id] = {};
+  document.getElementById('ctrlMapModal').classList.remove('hidden');
+  document.getElementById('ctrlMapTitle').textContent = 'MAP: ' + (ctrlGetProfile(gp.id) || {name:gp.id.split('(')[0].trim()}).name.toUpperCase();
+  ctrlRenderMapGrid();
+  ctrlListenForButton();
+}
+
+function ctrlRenderMapGrid() {
+  const mapping = ctrlMappings[ctrlMappingController?.id] || {};
+  document.getElementById('ctrlMapGrid').innerHTML = BUTTON_MAP_DEFS.map((btn, i) => {
+    const mapped = mapping[btn.id];
+    const isActive = i === ctrlMappingButtonIndex;
+    const cls = isActive ? 'mapping' : mapped !== undefined ? 'mapped' : '';
+    const val = isActive ? 'Press now...' : mapped !== undefined ? 'Button ' + mapped : 'Not mapped';
+    return '<div class="ctrl-map-row ' + cls + '" onclick="ctrlSetMappingIndex(' + i + ')">' +
+      '<span class="ctrl-map-label">' + btn.label + '</span>' +
+      '<span class="ctrl-map-value">' + val + '</span>' +
+      '<span class="ctrl-map-dot"></span></div>';
+  }).join('');
+}
+
+function ctrlSetMappingIndex(i) {
+  ctrlMappingButtonIndex = i;
+  ctrlRenderMapGrid();
+  ctrlListenForButton();
+}
+
+function ctrlListenForButton() {
+  if (!ctrlMappingController) return;
+  const btn = BUTTON_MAP_DEFS[ctrlMappingButtonIndex];
+  if (!btn) return;
+  let listening = true;
+  const poll = setInterval(() => {
+    if (!listening) { clearInterval(poll); return; }
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    const gp = gps[ctrlMappingController.index];
+    if (!gp) return;
+    for (let i = 0; i < gp.buttons.length; i++) {
+      if (gp.buttons[i].pressed) {
+        listening = false;
+        clearInterval(poll);
+        ctrlMappings[ctrlMappingController.id][btn.id] = i;
+        if (ctrlMappingButtonIndex < BUTTON_MAP_DEFS.length - 1) ctrlMappingButtonIndex++;
+        ctrlRenderMapGrid();
+        setTimeout(() => ctrlListenForButton(), 300);
+        break;
+      }
+    }
+  }, 50);
+}
+
+function ctrlMapDismiss() {
+  document.getElementById('ctrlMapModal').classList.add('hidden');
+  ctrlMappingController = null;
+}
+
+function ctrlMapSave() {
+  if (ctrlMappingController) {
+    localStorage.setItem('easyarc_ctrl_mappings', JSON.stringify(ctrlMappings));
+    // Write autoconfig file via bridge if available
+    if (window.easyarc) {
+      window.easyarc.saveMapping({
+        id: ctrlMappingController.id,
+        mapping: ctrlMappings[ctrlMappingController.id],
+      });
+    }
+    showToast('Controller mapping saved!');
+  }
+  document.getElementById('ctrlMapModal').classList.add('hidden');
+  ctrlMappingController = null;
+  ctrlUpdateScreen();
+}
+
+// Initialise controller system on load
+ctrlInit();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLLER TEST SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CTEST_STEPS = 4; // Welcome, DPad+Buttons, Sticks, Results
+let ctestSystem = null;
+let ctestGamepad = null;
+let ctestStep = 0;
+let ctestPollInterval = null;
+let ctestResults = {};
+let ctestPendingLaunch = null;
+
+// Systems that need analog stick testing
+const ANALOG_SYSTEMS = ['psx', 'ps2', 'psp', 'n64', 'gba', 'snes', 'genesis', 'gamecube', 'dreamcast'];
+
+// Already tested systems (saved per system)
+function ctestAlreadyTested(system) {
+  const tested = JSON.parse(localStorage.getItem('easyarc_ctrl_tested') || '{}');
+  return tested[system] === true;
+}
+
+function ctestMarkTested(system) {
+  const tested = JSON.parse(localStorage.getItem('easyarc_ctrl_tested') || '{}');
+  tested[system] = true;
+  localStorage.setItem('easyarc_ctrl_tested', JSON.stringify(tested));
+}
+
+function ctestShouldTest(system) {
+  return !ctestAlreadyTested(system);
+}
+
+// Call this before launching a game — intercepts if test needed
+async function ctestMaybeLaunch(game) {
+  if (!game) return;
+  if (ctrlStartupMode) return;
+
+  // Step 1 — check if core is installed, offer download if not
+  // Skip for systems that use standalone emulators
+  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'ps2', 'ps3', 'xbox', 'xbox360'];
+  if (window.easyarc && !standaloneEmulators.includes(game.system)) {
+    const exists = await window.easyarc.coreExists(game.system);
+    if (!exists) {
+      const modal = document.getElementById('coreDownloadModal');
+      const status = document.getElementById('coreDownloadStatus');
+      modal.classList.remove('hidden');
+      status.textContent = (systemNames[game.system] || game.system) + ' needs a plugin to run. Download it now?';
+      const dlBtn = document.getElementById('coreDownloadBtn');
+      const cancelBtn = document.getElementById('coreDownloadCancelBtn');
+      const newDlBtn = dlBtn.cloneNode(true);
+      dlBtn.parentNode.replaceChild(newDlBtn, dlBtn);
+      newDlBtn.style.display = 'inline-block';
+      setTimeout(() => newDlBtn.focus(), 50);
+      newDlBtn.addEventListener('click', () => {
+        newDlBtn.style.display = 'none';
+        coreDownloadAndLaunch(game);
+      });
+      const newCancelBtn = cancelBtn.cloneNode(true);
+      cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+      newCancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
+      return;
+    }
+  }
+
+  // Controller test disabled — launch directly
+  launchGame(game);
+}
+
+function ctestStart(system, gp) {
+  ctestSystem = system;
+  ctestGamepad = gp;
+  ctestStep = 0;
+  ctestResults = {};
+  document.getElementById('ctestOverlay').classList.remove('hidden');
+  ctestRenderStep();
+}
+
+function ctestRenderProgress() {
+  document.getElementById('ctestProgress').innerHTML = Array.from({length: CTEST_STEPS}, (_, i) => {
+    const cls = i < ctestStep ? 'done' : i === ctestStep ? 'active' : '';
+    return '<div class="ctest-progress-dot ' + cls + '"></div>';
+  }).join('');
+}
+
+function ctestRenderStep() {
+  ctestRenderProgress();
+  const title  = document.getElementById('ctestTitle');
+  const sub    = document.getElementById('ctestSub');
+  const body   = document.getElementById('ctestBody');
+  const nextBtn = document.getElementById('ctestNextBtn');
+  const sysName = systemNames[ctestSystem] || ctestSystem;
+
+  if (ctestPollInterval) { clearInterval(ctestPollInterval); ctestPollInterval = null; }
+
+  // ── STEP 0: Welcome ────────────────────────────────────────────────────
+  if (ctestStep === 0) {
+    title.textContent = 'CONTROLLER TEST';
+    sub.textContent = "Before launching your first " + sysName + " game, let's make sure your controller is set up correctly. This only takes 30 seconds.";
+    const ctrl = ctestGamepad ? (ctestGetProfile(ctestGamepad.id) || {name: ctestGamepad.id.split('(')[0].trim()}) : {name:'Controller'};
+    body.innerHTML =
+      '<div class="ctrl-player-row connected" style="margin-bottom:16px;justify-content:center;">' +
+      '<span class="ctrl-player-icon">&#127918;</span>' +
+      '<div class="ctrl-player-info">' +
+      '<div class="ctrl-player-name">' + ctrl.name + '</div>' +
+      '<div class="ctrl-player-status">Ready to test</div>' +
+      '</div></div>';
+    nextBtn.textContent = 'START TEST →';
+    nextBtn.disabled = false;
+    nextBtn.className = 'ctest-action-btn';
+  }
+
+  // ── STEP 1: D-Pad and Buttons ──────────────────────────────────────────
+  else if (ctestStep === 1) {
+    title.textContent = 'PRESS EACH BUTTON';
+    sub.textContent = 'Press every button shown below. Each one will light up green when detected.';
+    nextBtn.textContent = 'NEXT →';
+    nextBtn.disabled = true;
+    nextBtn.className = 'ctest-action-btn';
+
+    const buttons = [
+      { id:'up',     label:'D-Pad Up',      icon:'↑', indices:[12] },
+      { id:'down',   label:'D-Pad Down',    icon:'↓', indices:[13] },
+      { id:'left',   label:'D-Pad Left',    icon:'←', indices:[14] },
+      { id:'right',  label:'D-Pad Right',   icon:'→', indices:[15] },
+      { id:'a',      label:'Button A',      icon:'A',      indices:[0] },
+      { id:'b',      label:'Button B',      icon:'B',      indices:[1] },
+      { id:'x',      label:'Button X',      icon:'X',      indices:[2] },
+      { id:'y',      label:'Button Y',      icon:'Y',      indices:[3] },
+      { id:'l1',     label:'Left Bumper',   icon:'L1',     indices:[4] },
+      { id:'r1',     label:'Right Bumper',  icon:'R1',     indices:[5] },
+      { id:'l2',     label:'Left Trigger',  icon:'L2',     indices:[6] },
+      { id:'r2',     label:'Right Trigger', icon:'R2',     indices:[7] },
+      { id:'start',  label:'Start',         icon:'▶', indices:[9] },
+      { id:'select', label:'Select',        icon:'■', indices:[8] },
+    ];
+
+    body.innerHTML = '<div class="ctest-grid">' + buttons.map(btn =>
+      '<div class="ctest-btn waiting" id="ctest-btn-' + btn.id + '">' +
+      '<div class="ctest-btn-icon">' + btn.icon + '</div>' +
+      '<div class="ctest-btn-info">' +
+      '<div class="ctest-btn-label">' + btn.label + '</div>' +
+      '<div class="ctest-btn-status">Press this button</div>' +
+      '</div>' +
+      '<div class="ctest-check">✓</div>' +
+      '</div>'
+    ).join('') + '</div>';
+
+    const pressed = new Set();
+    ctestPollInterval = setInterval(() => {
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      const gp = gps[ctestGamepad.index];
+      if (!gp) return;
+      buttons.forEach(btn => {
+        const isPressed = btn.indices.some(i => gp.buttons[i] && gp.buttons[i].pressed);
+        if (isPressed && !pressed.has(btn.id)) {
+          pressed.add(btn.id);
+          const el = document.getElementById('ctest-btn-' + btn.id);
+          if (el) {
+            el.className = 'ctest-btn passed';
+            el.querySelector('.ctest-btn-status').textContent = 'Detected!';
+          }
+          ctestResults['btn_' + btn.id] = true;
+          // Enable next when all buttons pressed
+          if (pressed.size >= buttons.length) {
+            nextBtn.disabled = false;
+            nextBtn.className = 'ctest-action-btn green';
+            nextBtn.textContent = 'ALL BUTTONS WORK! →';
+          }
+        }
+      });
+    }, 50);
+  }
+
+  // ── STEP 2: Analog Sticks ──────────────────────────────────────────────
+  else if (ctestStep === 2) {
+    const needsAnalog = ANALOG_SYSTEMS.includes(ctestSystem);
+    if (!needsAnalog) { ctestStep++; ctestRenderStep(); return; }
+
+    title.textContent = 'TEST ANALOG STICKS';
+    sub.textContent = 'Move both analog sticks in full circles. The dots below will follow your movement.';
+    nextBtn.textContent = 'NEXT →';
+    nextBtn.disabled = true;
+    nextBtn.className = 'ctest-action-btn';
+
+    body.innerHTML =
+      '<div class="ctest-sticks">' +
+      '<div class="ctest-stick-wrap testing" id="ctest-stick-left">' +
+      '<div class="ctest-stick-label">Left Stick</div>' +
+      '<div class="ctest-stick-zone"><div class="ctest-stick-dot" id="ctest-dot-left"></div></div>' +
+      '<div class="ctest-stick-status" id="ctest-stick-left-status">Move the left stick</div>' +
+      '</div>' +
+      '<div class="ctest-stick-wrap testing" id="ctest-stick-right">' +
+      '<div class="ctest-stick-label">Right Stick</div>' +
+      '<div class="ctest-stick-zone"><div class="ctest-stick-dot" id="ctest-dot-right"></div></div>' +
+      '<div class="ctest-stick-status" id="ctest-stick-right-status">Move the right stick</div>' +
+      '</div>' +
+      '</div>' +
+      '<div style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:8px">If a stick is not responding, click Skip to continue without it.</div>';
+
+    let leftMoved = false, rightMoved = false;
+    const DEADZONE = 0.3;
+
+    ctestPollInterval = setInterval(() => {
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      const gp = gps[ctestGamepad.index];
+      if (!gp) return;
+
+      // Left stick — axes 0, 1
+      const lx = gp.axes[0] || 0;
+      const ly = gp.axes[1] || 0;
+      const dotL = document.getElementById('ctest-dot-left');
+      if (dotL) {
+        const px = 50 + lx * 38;
+        const py = 50 + ly * 38;
+        dotL.style.left = px + '%';
+        dotL.style.top  = py + '%';
+      }
+      if ((Math.abs(lx) > DEADZONE || Math.abs(ly) > DEADZONE) && !leftMoved) {
+        leftMoved = true;
+        ctestResults['left_stick'] = true;
+        const wrap = document.getElementById('ctest-stick-left');
+        const stat = document.getElementById('ctest-stick-left-status');
+        if (wrap) wrap.className = 'ctest-stick-wrap passed';
+        if (stat) stat.textContent = 'Working!';
+      }
+
+      // Right stick — axes 2, 3
+      const rx = gp.axes[2] || 0;
+      const ry = gp.axes[3] || 0;
+      const dotR = document.getElementById('ctest-dot-right');
+      if (dotR) {
+        const px = 50 + rx * 38;
+        const py = 50 + ry * 38;
+        dotR.style.left = px + '%';
+        dotR.style.top  = py + '%';
+      }
+      if ((Math.abs(rx) > DEADZONE || Math.abs(ry) > DEADZONE) && !rightMoved) {
+        rightMoved = true;
+        ctestResults['right_stick'] = true;
+        const wrap = document.getElementById('ctest-stick-right');
+        const stat = document.getElementById('ctest-stick-right-status');
+        if (wrap) wrap.className = 'ctest-stick-wrap passed';
+        if (stat) stat.textContent = 'Working!';
+      }
+
+      if (leftMoved && rightMoved) {
+        nextBtn.disabled = false;
+        nextBtn.className = 'ctest-action-btn green';
+        nextBtn.textContent = 'BOTH STICKS WORK! →';
+      } else if (leftMoved || rightMoved) {
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'CONTINUE →';
+      }
+    }, 50);
+  }
+
+  // ── STEP 3: Results ────────────────────────────────────────────────────
+  else if (ctestStep === 3) {
+    if (ctestPollInterval) { clearInterval(ctestPollInterval); ctestPollInterval = null; }
+
+    const leftStickOk  = ctestResults['left_stick'];
+    const rightStickOk = ctestResults['right_stick'];
+    const needsAnalog  = ANALOG_SYSTEMS.includes(ctestSystem);
+    const allGood      = !needsAnalog || (leftStickOk && rightStickOk);
+
+    title.textContent = allGood ? 'ALL GOOD!' : 'ALMOST THERE';
+    sub.textContent = allGood
+      ? 'Your controller is fully configured for ' + (systemNames[ctestSystem]||ctestSystem) + '. This test will not run again for this system.'
+      : 'Some inputs did not respond. You can still play - just note that some features may not work.';
+
+    let rows = '';
+    if (ctestResults['btn_a']) rows += ctestResultRow('Buttons', 'All buttons detected', true);
+    if (needsAnalog) {
+      rows += ctestResultRow('Left Stick', leftStickOk ? 'Working correctly' : 'Not detected — try remapping', leftStickOk);
+      rows += ctestResultRow('Right Stick', rightStickOk ? 'Working correctly' : 'Not detected', rightStickOk);
+    }
+
+    body.innerHTML = '<div class="ctrl-player-list">' + rows + '</div>';
+
+    nextBtn.disabled = false;
+    nextBtn.className = 'ctest-action-btn' + (allGood ? ' green' : '');
+    nextBtn.textContent = ctestPendingLaunch ? 'LAUNCH GAME →' : 'DONE →';
+
+    // Save test result
+    ctestMarkTested(ctestSystem);
+
+    // Save axis mapping to localStorage for bridge to use
+    if (leftStickOk || rightStickOk) {
+      const axisMap = JSON.parse(localStorage.getItem('easyarc_axis_map') || '{}');
+      axisMap[ctestSystem] = { lx:0, ly:1, rx:2, ry:3 };
+      localStorage.setItem('easyarc_axis_map', JSON.stringify(axisMap));
+    }
+  }
+}
+
+function ctestResultRow(label, status, passed) {
+  return '<div class="ctrl-player-row ' + (passed ? 'connected' : 'unknown') + '">' +
+    '<span class="ctrl-player-icon">' + (passed ? '✓' : '⚠') + '</span>' +
+    '<div class="ctrl-player-info">' +
+    '<div class="ctrl-player-name">' + label + '</div>' +
+    '<div class="ctrl-player-status">' + status + '</div>' +
+    '</div></div>';
+}
+
+function ctestGetProfile(id) {
+  const lower = id.toLowerCase();
+  for (const [key, profile] of Object.entries(KNOWN_CONTROLLERS)) {
+    if (lower.includes(key)) return profile;
+  }
+  return null;
+}
+
+function ctestNext() {
+  if (ctestStep < CTEST_STEPS - 1) {
+    ctestStep++;
+    ctestRenderStep();
+  } else {
+    // Done — launch the pending game if there is one
+    document.getElementById('ctestOverlay').classList.add('hidden');
+    if (ctestPendingLaunch) {
+      const game = ctestPendingLaunch;
+      ctestPendingLaunch = null;
+      launchGame(game);
+    }
+  }
+}
+
+function ctestSkip() {
+  if (ctestPollInterval) { clearInterval(ctestPollInterval); ctestPollInterval = null; }
+  ctestMarkTested(ctestSystem);
+  document.getElementById('ctestOverlay').classList.add('hidden');
+  if (ctestPendingLaunch) {
+    const game = ctestPendingLaunch;
+    ctestPendingLaunch = null;
+    launchGame(game);
+  }
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GAMEPAD NAVIGATION — Clean rewrite
+// ═══════════════════════════════════════════════════════════════════════════
+
+const GP_NAV = {
+  deadzone:     0.4,
+  initDelay:    400,
+  repeatDelay:  150,
+  inSidebar:    false,
+  inTopNav:     false,
+  inToolbar:    false,
+  topNavIdx:    0,
+  toolbarIdx:   0,
+  sidebarIdx:   0,
+  gridIdx:      0,
+  active:       false,
+  holdStart:    {},
+  lastFire:     0,
+};
+
+// Standard gamepad button indices
+const GPB = { a:0, b:1, x:2, y:3, l1:4, r1:5, l2:6, r2:7, select:8, start:9, l3:10, r3:11, up:12, down:13, left:14, right:15 };
+
+function gpGetCards() {
+  return Array.from(document.querySelectorAll('#gameGrid .game-card'));
+}
+
+function gpGetSysBtns() {
+  return Array.from(document.querySelectorAll('#systemList .system-btn'));
+}
+
+// Find card directly above/below/left/right using actual screen positions
+function gpFindNeighbour(cards, fromIdx, dir) {
+  if (cards.length === 0) return -1;
+  const from = cards[fromIdx].getBoundingClientRect();
+  const cx = from.left + from.width / 2;
+  const cy = from.top + from.height / 2;
+
+  let best = -1;
+  let bestScore = Infinity;
+
+  cards.forEach((card, i) => {
+    if (i === fromIdx) return;
+    const r = card.getBoundingClientRect();
+    const tx = r.left + r.width / 2;
+    const ty = r.top + r.height / 2;
+    const dx = tx - cx;
+    const dy = ty - cy;
+
+    let valid = false;
+    if (dir === "up"    && dy < -10) valid = true;
+    if (dir === "down"  && dy >  10) valid = true;
+    if (dir === "left"  && dx < -10) valid = true;
+    if (dir === "right" && dx >  10) valid = true;
+
+    if (!valid) return;
+
+    // Score: prefer cards that are close in the primary axis and aligned in secondary
+    let score;
+    if (dir === "up"   || dir === "down")  score = Math.abs(dy) + Math.abs(dx) * 3;
+    if (dir === "left" || dir === "right") score = Math.abs(dx) + Math.abs(dy) * 3;
+
+    if (score < bestScore) { bestScore = score; best = i; }
+  });
+
+  return best;
+}
+
+function gpHighlightCard(idx) {
+  const cards = gpGetCards();
+  cards.forEach(c => c.classList.remove('gp-selected'));
+  if (cards[idx]) {
+    cards[idx].classList.add('gp-selected');
+    cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function gpHighlightSys(idx) {
+  const btns = gpGetSysBtns();
+  // Remove all navigation highlights
+  btns.forEach(b => {
+    b.classList.remove('gp-nav-hover');
+    b.classList.remove('gp-nav-active');
+  });
+  if (idx >= 0 && btns[idx]) {
+    // Add hover to current position
+    btns[idx].classList.add('gp-nav-hover');
+    // Dim the active item if it's different from current position
+    btns.forEach((b, i) => {
+      if (b.classList.contains('active') && i !== idx) {
+        b.classList.add('gp-nav-active');
+      }
+    });
+  }
+}
+
+function gpPreviewSystem(btn) {
+  if (!btn) return;
+  const sys = btn.dataset.sys || 'all';
+  if (sys === 'favorites') {
+    currentSystem = 'favorites';
+    filterFavorites(btn);
+  } else if (sys === 'recent') {
+    currentSystem = 'recent';
+    filterRecent(btn);
+  } else {
+    currentSystem = sys;
+    document.getElementById('system-title').textContent = systemNames[sys] || 'All Games';
+    renderGrid();
+  }
+}
+
+function gpEnterSidebar() {
+  GP_NAV.inSidebar = true;
+  const btns = gpGetSysBtns();
+  const activeIdx = btns.findIndex(b => b.classList.contains('active'));
+  GP_NAV.sidebarIdx = activeIdx >= 0 ? activeIdx : 0;
+  gpHighlightCard(-1);
+  gpHighlightSys(GP_NAV.sidebarIdx);
+  document.querySelectorAll('.game-card.gp-selected').forEach(c => c.classList.remove('gp-selected'));
+  // Sync the grid to whatever system is currently highlighted in sidebar
+  gpPreviewSystem(btns[GP_NAV.sidebarIdx]);
+}
+
+function gpExitSidebar() {
+  GP_NAV.inSidebar = false;
+  gpHighlightSys(-1);
+  gpHighlightCard(0);
+  GP_NAV.gridIdx = 0;
+}
+
+function gpActivate() {
+  if (!GP_NAV.active) {
+    GP_NAV.active = true;
+    gpEnterSidebar();
+  }
+}
+
+function gpShouldFire(key, isPressed) {
+  const now = Date.now();
+  if (!isPressed) { GP_NAV.holdStart[key] = 0; return false; }
+  if (!GP_NAV.holdStart[key]) {
+    GP_NAV.holdStart[key] = now;
+    GP_NAV.lastFire = now;
+    return true;
+  }
+  const held = now - GP_NAV.holdStart[key];
+  if (held < GP_NAV.initDelay) return false;
+  if (now - GP_NAV.lastFire < GP_NAV.repeatDelay) return false;
+  GP_NAV.lastFire = now;
+  return true;
+}
+
+function gpHandleInput(gp) {
+  const axes = gp.axes;
+  // Apply button remap if this controller has one
+  const profile = ctrlGetProfile(gp.id);
+  const remap = profile && profile.buttonRemap ? profile.buttonRemap : null;
+  const btns = remap ? gp.buttons.map((b, i) => {
+    const remappedIdx = Object.entries(remap).find(([k,v]) => v === i);
+    return remappedIdx ? gp.buttons[parseInt(remappedIdx[0])] : b;
+  }) : gp.buttons;
+
+  const up    = btns[GPB.up].pressed    || axes[1] < -GP_NAV.deadzone;
+  const down  = btns[GPB.down].pressed  || axes[1] >  GP_NAV.deadzone;
+  const left  = btns[GPB.left].pressed  || axes[0] < -GP_NAV.deadzone;
+  const right = btns[GPB.right].pressed || axes[0] >  GP_NAV.deadzone;
+  const aBtn  = btns[GPB.a].pressed;
+  const bBtn  = btns[GPB.b].pressed;
+  const l1    = btns[GPB.l1].pressed;
+  const r1    = btns[GPB.r1].pressed;
+  const start = btns[GPB.start].pressed;
+
+  if (up || down || left || right) gpActivate();
+
+  // ── Toolbar mode (Refresh Library, Add Games, Get Game Art) ─────────
+  if (GP_NAV.inToolbar) {
+    const instrBtn = document.getElementById('testPlanBtn');
+    const toolbarBtns = [
+      document.getElementById('rescanBtn'),
+      document.getElementById('addGamesBtn'),
+      document.getElementById('getArtBtn')
+    ];
+    // Helper to highlight correct button (-1 = Instructions, 0-2 = toolbar)
+    const highlightToolbar = (idx) => {
+      if (instrBtn) instrBtn.style.outline = idx === -1 ? "2px solid var(--cyan)" : "none";
+      toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === idx ? "2px solid var(--cyan)" : "none"; });
+    };
+    if (gpShouldFire("left", left)) {
+      if (GP_NAV.toolbarIdx === -1) {
+        // Left from Instructions — back to top nav
+        GP_NAV.inToolbar = false;
+        if (instrBtn) instrBtn.style.outline = "none";
+        GP_NAV.inTopNav = true;
+        GP_NAV.topNavIdx = Array.from(document.querySelectorAll(".nav-btn")).length - 1;
+        const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
+        navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+      } else if (GP_NAV.toolbarIdx === 0) {
+        // Left from first toolbar button — go to Instructions
+        GP_NAV.toolbarIdx = -1;
+        highlightToolbar(-1);
+      } else {
+        GP_NAV.toolbarIdx = Math.max(0, GP_NAV.toolbarIdx - 1);
+        highlightToolbar(GP_NAV.toolbarIdx);
+      }
+    }
+    if (gpShouldFire("right", right)) {
+      if (GP_NAV.toolbarIdx < toolbarBtns.length - 1) {
+        GP_NAV.toolbarIdx = GP_NAV.toolbarIdx + 1;
+        highlightToolbar(GP_NAV.toolbarIdx);
+      }
+    }
+    if (gpShouldFire("a", aBtn)) {
+      GP_NAV.inToolbar = false;
+      highlightToolbar(-99);
+      if (GP_NAV.toolbarIdx === -1 && instrBtn) instrBtn.click();
+      else if (toolbarBtns[GP_NAV.toolbarIdx]) toolbarBtns[GP_NAV.toolbarIdx].click();
+    }
+    if (gpShouldFire("down", down) || gpShouldFire("b", bBtn)) {
+      GP_NAV.inToolbar = false;
+      highlightToolbar(-99);
+      GP_NAV.inTopNav = true;
+      const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
+      navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+    }
+    return;
+  }
+
+  // ── Top nav mode (Library, Setup, Controller, Settings) ──────────────
+  if (GP_NAV.inTopNav) {
+    const views = ["library", "wizard", "controller", "settings"];
+    const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
+    if (gpShouldFire("left", left)) {
+      GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
+      navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+    }
+    if (gpShouldFire("right", right)) {
+      if (GP_NAV.topNavIdx === navBtns.length - 1) {
+        // At rightmost nav button — move to Instructions then toolbar
+        navBtns.forEach(b => b.style.outline = "none");
+        GP_NAV.inTopNav = false;
+        GP_NAV.inToolbar = true;
+        GP_NAV.toolbarIdx = -1; // -1 = Instructions button
+        const instrBtn = document.getElementById('testPlanBtn');
+        const toolbarBtns = [
+          document.getElementById('rescanBtn'),
+          document.getElementById('addGamesBtn'),
+          document.getElementById('getArtBtn')
+        ];
+        if (instrBtn) instrBtn.style.outline = "2px solid var(--cyan)";
+        toolbarBtns.forEach(b => { if(b) b.style.outline = "none"; });
+      } else {
+        GP_NAV.topNavIdx = Math.min(navBtns.length - 1, GP_NAV.topNavIdx + 1);
+        navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+      }
+    }
+    if (gpShouldFire("up", up)) {
+      // Up from top nav → toolbar
+      GP_NAV.inTopNav = false;
+      navBtns.forEach(b => b.style.outline = "none");
+      GP_NAV.inToolbar = true;
+      GP_NAV.toolbarIdx = 0;
+      const toolbarBtns = [
+        document.getElementById('rescanBtn'),
+        document.getElementById('addGamesBtn'),
+        document.getElementById('getArtBtn')
+      ];
+      toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
+    }
+    if (gpShouldFire("a", aBtn)) {
+      GP_NAV.inTopNav = false;
+      navBtns.forEach(b => b.style.outline = "none");
+      showView(views[GP_NAV.topNavIdx]);
+    }
+    if (gpShouldFire("down", down) || gpShouldFire("b", bBtn)) {
+      GP_NAV.inTopNav = false;
+      navBtns.forEach(b => b.style.outline = "none");
+      gpEnterSidebar();
+    }
+    return;
+  }
+
+  if (GP_NAV.inSidebar) {
+    // ── Sidebar navigation ──────────────────────────────────────────────
+    const btns2 = gpGetSysBtns();
+
+    if (gpShouldFire("up", up)) {
+      if (GP_NAV.sidebarIdx === 0) {
+        // At top of sidebar — move up to top nav
+        GP_NAV.inSidebar = false;
+        gpHighlightSys(-1);
+        GP_NAV.inTopNav = true;
+        const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
+        GP_NAV.topNavIdx = Array.from(navBtns).findIndex(b => b.classList.contains("active"));
+        if (GP_NAV.topNavIdx < 0) GP_NAV.topNavIdx = 0;
+        navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+      } else {
+        GP_NAV.sidebarIdx = Math.max(0, GP_NAV.sidebarIdx - 1);
+        gpHighlightSys(GP_NAV.sidebarIdx);
+        gpPreviewSystem(btns2[GP_NAV.sidebarIdx]);
+      }
+    }
+    if (gpShouldFire("down", down)) {
+      if (GP_NAV.sidebarIdx === btns2.length - 1) {
+        // At bottom of sidebar — move down to grid
+        gpExitSidebar();
+      } else {
+        GP_NAV.sidebarIdx = Math.min(btns2.length - 1, GP_NAV.sidebarIdx + 1);
+        gpHighlightSys(GP_NAV.sidebarIdx);
+        gpPreviewSystem(btns2[GP_NAV.sidebarIdx]);
+      }
+    }
+    if (gpShouldFire("right", right)) {
+      // Select this system and move to grid
+      if (btns2[GP_NAV.sidebarIdx]) btns2[GP_NAV.sidebarIdx].click();
+      gpExitSidebar();
+    }
+    if (gpShouldFire("a", aBtn)) {
+      const btn = btns2[GP_NAV.sidebarIdx];
+      if (btn) { const sys = btn.dataset.sys || 'all'; filterSystem(sys, btn); }
+      gpExitSidebar();
+    }
+    if (gpShouldFire("b", bBtn)) {
+      gpExitSidebar();
+    }
+
+  } else {
+    // ── Grid navigation ─────────────────────────────────────────────────
+    const cards = gpGetCards();
+
+    if (gpShouldFire("left", left)) {
+      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "left");
+      if (neighbour >= 0) {
+        GP_NAV.gridIdx = neighbour;
+        gpHighlightCard(GP_NAV.gridIdx);
+      } else {
+        // At leftmost — enter sidebar
+        gpEnterSidebar();
+      }
+    }
+    if (gpShouldFire("right", right)) {
+      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "right");
+      if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
+    }
+    if (gpShouldFire("up", up)) {
+      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "up");
+      if (neighbour >= 0) {
+        GP_NAV.gridIdx = neighbour;
+        gpHighlightCard(GP_NAV.gridIdx);
+      } else {
+        // At top of grid — enter sidebar
+        gpEnterSidebar();
+      }
+    }
+    if (gpShouldFire("down", down)) {
+      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "down");
+      if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
+    }
+
+    // A — select card, or launch if already selected
+    if (gpShouldFire("a", aBtn)) {
+      if (cards[GP_NAV.gridIdx]) {
+        const cardOnclick = cards[GP_NAV.gridIdx].getAttribute('onclick');
+        const idMatch = cardOnclick && cardOnclick.match(/\d+/);
+        const cardId = idMatch ? parseInt(idMatch[0]) : null;
+        if (cardId && selectedGame && selectedGame.id === cardId) {
+          // Already selected — launch it
+          ctestMaybeLaunch(selectedGame);
+        } else {
+          // First press — select and populate detail panel
+          cards[GP_NAV.gridIdx].click();
+        }
+      }
+    }
+
+    // B — close detail panel
+    if (gpShouldFire("b", bBtn)) {
+      const panel = document.getElementById("detailPanel");
+      if (panel && !panel.classList.contains("hidden")) closeDetail();
+    }
+
+    // Y — toggle favorite on currently highlighted card
+    const yBtn = btns[GPB.y].pressed;
+    if (gpShouldFire("y", yBtn)) {
+      const cards = gpGetCards();
+      if (cards[GP_NAV.gridIdx]) {
+        const gameId = parseInt(cards[GP_NAV.gridIdx].getAttribute('onclick').match(/\d+/)[0]);
+        const game = games.find(g => g.id === gameId);
+        if (game) toggleFavorite(game);
+      }
+    }
+  }
+
+  // L1/R1 — cycle systems from anywhere
+  if (gpShouldFire("l1", l1)) {
+    const sysBtns = gpGetSysBtns();
+    const activeIdx = sysBtns.findIndex(b => b.classList.contains("active"));
+    const newIdx = Math.max(0, activeIdx - 1);
+    if (newIdx !== activeIdx) { sysBtns[newIdx].click(); GP_NAV.gridIdx = 0; gpHighlightCard(0); }
+  }
+  if (gpShouldFire("r1", r1)) {
+    const sysBtns = gpGetSysBtns();
+    const activeIdx = sysBtns.findIndex(b => b.classList.contains("active"));
+    const newIdx = Math.min(sysBtns.length - 1, activeIdx + 1);
+    if (newIdx !== activeIdx) { sysBtns[newIdx].click(); GP_NAV.gridIdx = 0; gpHighlightCard(0); }
+  }
+
+  // Start — enter top nav mode
+  if (gpShouldFire("start", start)) {
+    GP_NAV.inTopNav = true;
+    GP_NAV.inSidebar = false;
+    const btns = document.querySelectorAll(".nav-btn");
+    GP_NAV.topNavIdx = Array.from(btns).findIndex(b => b.classList.contains("active"));
+    if (GP_NAV.topNavIdx < 0) GP_NAV.topNavIdx = 0;
+    btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+  }
+
+  // Top nav mode — left/right to move, A to select, B to exit
+  if (GP_NAV.inTopNav) {
+    const views = ["library", "wizard", "controller", "settings"];
+    const btns = Array.from(document.querySelectorAll(".nav-btn"));
+    if (gpShouldFire("left", left)) {
+      GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
+      btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+    }
+    if (gpShouldFire("right", right)) {
+      GP_NAV.topNavIdx = Math.min(btns.length - 1, GP_NAV.topNavIdx + 1);
+      btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+    }
+    if (gpShouldFire("a", aBtn)) {
+      GP_NAV.inTopNav = false;
+      btns.forEach(b => b.style.outline = "none");
+      showView(views[GP_NAV.topNavIdx]);
+    }
+    if (gpShouldFire("b", bBtn)) {
+      GP_NAV.inTopNav = false;
+      btns.forEach(b => b.style.outline = "none");
+      showView("library");
+    }
+    return;
+  }
+}
+
+// Monitor Select+Start to kill game
+let exitComboStart = 0;
+function gpCheckExitCombo(gp) {
+  const select = gp.buttons[8] && gp.buttons[8].pressed;
+  const start  = gp.buttons[9] && gp.buttons[9].pressed;
+  if (select && start) {
+    if (!exitComboStart) exitComboStart = Date.now();
+    if (Date.now() - exitComboStart > 500) {
+      exitComboStart = 0;
+      if (window.easyarc) window.easyarc.killGame();
+    }
+  } else {
+    exitComboStart = 0;
+  }
+}
+
+// Main navigation poll loop — any connected controller drives the UI
+function gpNavPoll() {
+  // Block all navigation while startup modal is open
+  // But allow d-pad/stick navigation and A to select during confirm screen
+  if (ctrlStartupMode) {
+    const confirmTitle = document.getElementById('ctrlModalTitle');
+    if (confirmTitle && confirmTitle.textContent === 'CONFIRM SETUP') {
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const gp of gps) {
+        if (!gp) continue;
+        const left  = gp.buttons[14] && gp.buttons[14].pressed || gp.axes[0] < -0.4;
+        const right = gp.buttons[15] && gp.buttons[15].pressed || gp.axes[0] >  0.4;
+        const aBtn  = gp.buttons[0]  && gp.buttons[0].pressed;
+
+        if (gpShouldFire('confirmLeft', left)) {
+          const noBtn = document.getElementById('ctrlModalSkipBtn');
+          if (noBtn) { noBtn.focus(); noBtn.style.outline = '2px solid var(--cyan)'; document.getElementById('ctrlModalBtn').style.outline = 'none'; }
+        }
+        if (gpShouldFire('confirmRight', right)) {
+          const yesBtn = document.getElementById('ctrlModalBtn');
+          if (yesBtn) { yesBtn.focus(); yesBtn.style.outline = '2px solid var(--cyan)'; document.getElementById('ctrlModalSkipBtn').style.outline = 'none'; }
+        }
+        if (gpShouldFire('confirmA', aBtn)) {
+          const focused = document.activeElement;
+          if (focused && (focused.id === 'ctrlModalBtn' || focused.id === 'ctrlModalSkipBtn')) {
+            focused.click();
+          } else {
+            const yesBtn = document.getElementById('ctrlModalBtn');
+            if (yesBtn) yesBtn.click();
+          }
+        }
+      }
+    }
+    requestAnimationFrame(gpNavPoll);
+    return;
+  }
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  let handled = false;
+  for (const gp of gps) {
+    if (gp) gpCheckExitCombo(gp);
+    if (gp && !handled) {
+      const anyPressed = gp.buttons.some(b => b.pressed) || gp.axes.some(a => Math.abs(a) > 0.4);
+      if (anyPressed) { gpHandleInput(gp); handled = true; }
+    }
+  }
+  if (!handled) {
+    for (const gp of gps) { if (gp) { gpHandleInput(gp); break; } }
+  }
+  requestAnimationFrame(gpNavPoll);
+}
+
+gpNavPoll();
+
+// ── Keyboard navigation fallback ──────────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Don't intercept when typing in search box
+  if (document.activeElement === document.getElementById("searchInput")) return;
+  // Don't intercept when a modal is open
+  if (!document.getElementById("frwOverlay").classList.contains("hidden")) return;
+  if (!document.getElementById("ctrlModal").classList.contains("hidden")) return;
+
+  const cards = gpGetCards();
+  if (cards.length === 0) return;
+
+  gpActivate();
+
+  switch(e.key) {
+    case "ArrowUp":    e.preventDefault(); {
+      if (GP_NAV.inSidebar) {
+        GP_NAV.sidebarIdx = Math.max(0, GP_NAV.sidebarIdx - 1);
+        gpHighlightSys(GP_NAV.sidebarIdx);
+      } else {
+        const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "up");
+        if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
+      }
+      break;
+    }
+    case "ArrowDown":  e.preventDefault(); {
+      if (GP_NAV.inSidebar) {
+        const btns = gpGetSysBtns();
+        GP_NAV.sidebarIdx = Math.min(btns.length - 1, GP_NAV.sidebarIdx + 1);
+        gpHighlightSys(GP_NAV.sidebarIdx);
+      } else {
+        const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "down");
+        if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
+      }
+      break;
+    }
+    case "ArrowLeft":  e.preventDefault(); {
+      if (GP_NAV.inSidebar) break;
+      const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "left");
+      if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
+      else gpEnterSidebar();
+      break;
+    }
+    case "ArrowRight": e.preventDefault(); {
+      if (GP_NAV.inSidebar) {
+        const btns = gpGetSysBtns();
+        if (btns[GP_NAV.sidebarIdx]) btns[GP_NAV.sidebarIdx].click();
+        gpExitSidebar();
+      } else {
+        const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "right");
+        if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
+      }
+      break;
+    }
+    case "Enter": e.preventDefault(); {
+      if (GP_NAV.inSidebar) {
+        const btns = gpGetSysBtns();
+        if (btns[GP_NAV.sidebarIdx]) btns[GP_NAV.sidebarIdx].click();
+        gpExitSidebar();
+      } else {
+        if (cards[GP_NAV.gridIdx]) cards[GP_NAV.gridIdx].click();
+      }
+      break;
+    }
+    case "Escape": e.preventDefault(); {
+      const panel = document.getElementById("detailPanel");
+      if (panel && !panel.classList.contains("hidden")) closeDetail();
+      else if (GP_NAV.inSidebar) gpExitSidebar();
+      break;
+    }
+  }
+});
+
+// Reset grid selection when library re-renders
+const _origRenderGrid = renderGrid;
+renderGrid = function() {
+  _origRenderGrid.apply(this, arguments);
+  GP_NAV.gridIdx = 0;
+  // Don't reset inSidebar — preserve sidebar focus during preview
+  if (GP_NAV.active && !GP_NAV.inSidebar) setTimeout(() => gpHighlightCard(0), 60);
+};
+
+
+
+// ═══════════════════════════════════════════════════════════
+// ADD GAMES MODAL
+// ═══════════════════════════════════════════════════════════
+let addGamesStep = 0;
+let addGamesHasFiles = null;
+let addGamesSystem = null;
+let addGamesFolder = null;
+
+const ADD_GAMES_SYSTEMS = [
+  { id:'psx',         name:'PlayStation' },
+  { id:'ps2',         name:'PlayStation 2' },
+  { id:'psp',         name:'PlayStation Portable' },
+  { id:'ps3',         name:'PlayStation 3' },
+  { id:'n64',         name:'Nintendo 64' },
+  { id:'gamecube',    name:'GameCube' },
+  { id:'wii',         name:'Nintendo Wii' },
+  { id:'wiiu',        name:'Nintendo Wii U' },
+  { id:'snes',        name:'Super Nintendo' },
+  { id:'nes',         name:'NES' },
+  { id:'gba',         name:'Game Boy Advance' },
+  { id:'gbc',         name:'Game Boy Color' },
+  { id:'genesis',     name:'Sega Genesis' },
+  { id:'saturn',      name:'Sega Saturn' },
+  { id:'dreamcast',   name:'Sega Dreamcast' },
+  { id:'gamegear',    name:'Game Gear' },
+  { id:'mastersystem',name:'Master System' },
+  { id:'jaguar',      name:'Atari Jaguar' },
+  { id:'switch',      name:'Nintendo Switch' },
+];
+
+function showTestPlanModal() {
+  document.getElementById('instructionsModal').classList.remove('hidden');
+}
+
+function hideInstructionsModal() {
+  document.getElementById('instructionsModal').classList.add('hidden');
+}
+
+function showGetArtModal() {
+  // TODO: move full scrape UI here from Settings
+  const ssUser = localStorage.getItem('ss_user') || '';
+  const ssPass = localStorage.getItem('ss_pass') || '';
+  if (!ssUser || !ssPass) {
+    showToast('Please set your ScreenScraper credentials in Settings first.');
+    return;
+  }
+  if (confirm('Download artwork for all games? This may take a while.')) {
+    startScrape();
+  }
+}
+
+function showAddGamesModal() {
+  addGamesStep = 0;
+  addGamesHasExisting = null;
+  addGamesSystem = null;
+  addGamesFolder = null;
+  addGamesFiles = null;
+  addGamesFolderName = null;
+  document.getElementById('addGamesModal').classList.remove('hidden');
+  addGamesRenderStep();
+}
+
+function hideAddGamesModal() {
+  document.getElementById('addGamesModal').classList.add('hidden');
+}
+
+// Track wizard state
+let addGamesHasExisting = null;
+let addGamesFolderName = null;
+
+function addGamesRenderDots() {
+  // Dots vary by path: existing = 3 steps, new folder = 4 steps
+  const totalSteps = 4;
+  document.getElementById('addGamesStepDots').innerHTML = Array.from({length:totalSteps}, (_,i) => {
+    const cls = i < addGamesStep ? 'done' : i === addGamesStep ? 'active' : '';
+    return '<div class="frw-step-dot ' + cls + '"></div>';
+  }).join('');
+}
+
+function addGamesRenderStep() {
+  addGamesRenderDots();
+  const icon  = document.getElementById('addGamesIcon');
+  const title = document.getElementById('addGamesTitle');
+  const sub   = document.getElementById('addGamesSub');
+  const body  = document.getElementById('addGamesBody');
+  const next  = document.getElementById('addGamesNextBtn');
+  next.disabled = false;
+
+  // Step 0: Do you have an existing folder?
+  if (addGamesStep === 0) {
+    icon.textContent = String.fromCodePoint(0x1F4C2);
+    title.textContent = 'ADD GAMES';
+    sub.textContent = 'Do you already have a folder with game files on this computer or an external drive?';
+    next.disabled = addGamesHasExisting === null;
+    next.textContent = 'NEXT →';
+    body.innerHTML =
+      '<div class="frw-choice-row">' +
+        '<div class="frw-choice ' + (addGamesHasExisting === true ? 'selected' : '') + '" onclick="addGamesHasExisting=true;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false;addGamesRenderStep()">' +
+          '<span class="frw-choice-icon">📁</span>' +
+          '<div class="frw-choice-label">Yes, I have a folder</div>' +
+          '<div class="frw-choice-desc">Add games from an existing folder</div>' +
+        '</div>' +
+        '<div class="frw-choice ' + (addGamesHasExisting === false ? 'selected' : '') + '" onclick="addGamesHasExisting=false;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false;addGamesRenderStep()">' +
+          '<span class="frw-choice-icon">✨</span>' +
+          '<div class="frw-choice-label">No, create a new folder</div>' +
+          '<div class="frw-choice-desc">Set up a new folder for a new system</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Step 1a (existing folder path): Browse to folder
+  else if (addGamesStep === 1 && addGamesHasExisting) {
+    icon.textContent = String.fromCodePoint(0x1F4C1);
+    title.textContent = 'SELECT FOLDER';
+    sub.textContent = 'Navigate to the folder containing your game files.';
+    next.textContent = addGamesFolder ? 'CONFIRM →' : 'BROWSE →';
+    next.disabled = false;
+    body.innerHTML = addGamesFolder
+      ? '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + addGamesFolder + '</div>'
+      : '<div class="frw-status">Click BROWSE to find your games folder...</div>';
+  }
+
+  // Step 1.5 (existing folder path): Confirm detected system
+  else if (addGamesStep === 2 && addGamesHasExisting) {
+    icon.textContent = String.fromCodePoint(0x1F3AE);
+    title.textContent = 'CONFIRM SYSTEM';
+    sub.textContent = 'We detected this system. Please confirm or correct it.';
+    next.disabled = addGamesSystem === null;
+    next.textContent = 'NEXT →';
+    body.innerHTML =
+      '<select id="addGamesSystemSelect" class="setting-select" style="width:100%;font-size:14px;padding:12px" onchange="addGamesSystem=this.value;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false">' +
+        '<option value="">— Select a system —</option>' +
+        ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '"' + (addGamesSystem === s.id ? ' selected' : '') + '>' + s.name + '</option>').join('') +
+      '</select>' +
+      (addGamesSystem ? '<div class="frw-sub" style="margin-top:8px;font-size:12px">Auto-detected: ' + (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name + '</div>' : '');
+  }
+
+  // Step 1b (new folder path): Select system
+  else if (addGamesStep === 1 && addGamesHasExisting === false) {
+    icon.textContent = String.fromCodePoint(0x1F3AE);
+    title.textContent = 'SELECT SYSTEM';
+    sub.textContent = 'What system are these games for?';
+    next.disabled = addGamesSystem === null;
+    next.textContent = 'NEXT →';
+    body.innerHTML =
+      '<select id="addGamesSystemSelect" class="setting-select" style="width:100%;font-size:14px;padding:12px" onchange="addGamesSystem=this.value;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false">' +
+        '<option value="">— Select a system —</option>' +
+        ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '"' + (addGamesSystem === s.id ? ' selected' : '') + '>' + s.name + '</option>').join('') +
+      '</select>';
+  }
+
+  // Step 2 (new folder path): Name and create folder
+  else if (addGamesStep === 2 && addGamesHasExisting === false) {
+    icon.textContent = String.fromCodePoint(0x1F4DD);
+    const sysName = (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
+    title.textContent = 'NAME YOUR FOLDER';
+    sub.textContent = 'Enter a name for your new ' + sysName + ' games folder, then choose where to create it.';
+    next.textContent = 'CREATE FOLDER →';
+    next.disabled = false;
+    body.innerHTML = addGamesFolder
+      ? '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + addGamesFolder + '</div>'
+      : '<input id="addGamesFolderNameInput" type="text" class="setting-select" style="width:100%;font-size:14px;padding:12px" placeholder="e.g. My ' + sysName + ' Games" onkeydown="if(event.key===&quot;Enter&quot;)addGamesNext()">';
+  }
+
+  // Step 3 (both paths): Select files
+  else if (addGamesStep === 3) {
+    icon.textContent = String.fromCodePoint(0x1F4BE);
+    title.textContent = 'SELECT FILES';
+    const sysName = addGamesSystem ? (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name : 'your';
+    sub.textContent = 'Select the ROM files you want to add.';
+    next.textContent = addGamesFiles ? 'CONFIRM →' : 'SELECT FILES →';
+    next.disabled = false;
+    body.innerHTML = addGamesFiles
+      ? '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + addGamesFiles.length + ' file(s) selected</div>'
+      : '<div class="frw-status">Click SELECT FILES to choose your ROM files...</div>';
+  }
+
+  // Step 4: Confirm
+  else {
+    icon.textContent = String.fromCodePoint(0x2705);
+    title.textContent = 'CONFIRM';
+    const sysName = addGamesSystem ? (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name : 'Unknown';
+    sub.textContent = 'Ready to add your games.';
+    next.textContent = 'UPDATE LIBRARY →';
+    next.disabled = false;
+    body.innerHTML =
+      (addGamesSystem ? '<div class="frw-status success" style="margin-bottom:8px">System: ' + sysName + '</div>' : '') +
+      '<div class="frw-status success" style="margin-bottom:8px">Folder: ' + addGamesFolder + '</div>' +
+      '<div class="frw-status success">' + (addGamesFiles ? addGamesFiles.length + ' file(s) ready to add' : 'Scanning folder...') + '</div>';
+  }
+}
+
+async function addGamesNext() {
+  const next = document.getElementById('addGamesNextBtn');
+
+  // Step 0: Has existing folder?
+  if (addGamesStep === 0) {
+    if (addGamesHasExisting === null) return;
+  }
+
+  // Step 1a (existing): Browse to folder
+  if (addGamesStep === 1 && addGamesHasExisting) {
+    if (addGamesFolder) {
+      addGamesStep++;
+      addGamesRenderStep();
+      return;
+    }
+    const folder = await window.easyarc.pickRomFolder();
+    if (!folder) return;
+    addGamesFolder = folder;
+    // Try to detect system from folder contents
+    if (!addGamesSystem && window.easyarc) {
+      const result = await window.easyarc.scanRoms(folder);
+      if (result.success && result.roms.length > 0) {
+        addGamesSystem = result.roms[0].system;
+      }
+    }
+    const nb = document.getElementById('addGamesNextBtn');
+    if (nb) { nb.textContent = 'NEXT →'; nb.disabled = false; }
+    addGamesStep++;
+    addGamesRenderStep();
+    return;
+  }
+
+  // Step 2 (existing): System confirmed
+  if (addGamesStep === 2 && addGamesHasExisting) {
+    const sel = document.getElementById('addGamesSystemSelect');
+    if (sel && sel.value) addGamesSystem = sel.value;
+    if (!addGamesSystem) return;
+    const existingCount = games.filter(g => g.system === addGamesSystem).length;
+    if (existingCount > 0) {
+      const sysName = (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
+      if (!confirm('You already have ' + existingCount + ' ' + sysName + ' games in your library.\n\nNew games will be merged. Continue?')) return;
+    }
+  }
+
+  // Step 1b (new folder): System selected
+  if (addGamesStep === 1 && addGamesHasExisting === false) {
+    const sel = document.getElementById('addGamesSystemSelect');
+    if (sel) addGamesSystem = sel.value;
+    if (!addGamesSystem) return;
+    const existingCount = games.filter(g => g.system === addGamesSystem).length;
+    if (existingCount > 0) {
+      const sysName = (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
+      if (!confirm('You already have ' + existingCount + ' ' + sysName + ' games in your library.\n\nNew games will be merged into your existing collection. Continue?')) return;
+    }
+  }
+
+  // Step 2 (new folder): Create folder
+  if (addGamesStep === 2 && addGamesHasExisting === false) {
+    if (addGamesFolder) {
+      addGamesStep++;
+      addGamesRenderStep();
+      return;
+    }
+    const input = document.getElementById('addGamesFolderNameInput');
+    if (!input || !input.value.trim()) return;
+    const folderName = input.value.trim().replace(/[^a-zA-Z0-9 _-]/g, '');
+    if (!folderName) return;
+    const base = await window.easyarc.pickParentFolder(folderName);
+    if (!base) return;
+    addGamesFolder = base + '/' + folderName;
+    const created = await window.easyarc.createFolder(addGamesFolder);
+    if (!created.success) { showToast('Could not create folder: ' + created.error); return; }
+    const nb = document.getElementById('addGamesNextBtn');
+    if (nb) { nb.textContent = 'NEXT →'; nb.disabled = false; }
+    const body = document.getElementById('addGamesBody');
+    if (body) body.innerHTML = '<div class="frw-status success" style="font-size:14px;padding:16px">✓ Folder created: ' + addGamesFolder + '</div>';
+    addGamesStep++;
+    addGamesRenderStep();
+    return;
+  }
+
+  // Select files step (step 3 for existing, step 3 for new)
+  const isFileStep = (addGamesStep === 3 && addGamesHasExisting) || (addGamesStep === 3 && !addGamesHasExisting);
+  if (isFileStep) {
+    if (addGamesFiles) {
+      addGamesStep++;
+      addGamesRenderStep();
+      return;
+    }
+    const files = await window.easyarc.pickFiles();
+    if (!files || files.length === 0) return;
+    // Validate file types
+    const VALID_EXTENSIONS = {
+      psx:['bin','cue','img','pbp','chd'], ps2:['iso','bin','chd'],
+      gamecube:['gcm','gcz','rvz','iso'], wii:['wbfs','rvz','iso'],
+      n64:['z64','n64','v64'], gba:['gba'], gbc:['gbc','gb'],
+      nes:['nes'], snes:['sfc','smc'], genesis:['md','gen','smd'],
+      atari2600:['a26','rom'], psp:['iso','cso']
+    };
+    if (addGamesSystem) {
+      const validExts = VALID_EXTENSIONS[addGamesSystem] || [];
+      const badFiles = files.filter(f => {
+        const ext = f.split('.').pop().toLowerCase();
+        return validExts.length > 0 && !validExts.includes(ext) && ext !== 'zip';
+      });
+      if (badFiles.length > 0) {
+        const names = badFiles.map(f => f.split('/').pop()).join(', ');
+        if (!confirm(badFiles.length + ' file(s) may not be valid for this system:\n' + names + '\n\nAdd them anyway?')) return;
+      }
+    }
+    addGamesFiles = files;
+    const nb = document.getElementById('addGamesNextBtn');
+    if (nb) { nb.textContent = 'CONFIRM →'; nb.disabled = false; }
+    const body = document.getElementById('addGamesBody');
+    if (body) body.innerHTML = '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + files.length + ' file(s) selected</div>';
+    return;
+  }
+
+  // Final confirm step — scan and add
+  const isConfirmStep = (addGamesStep === 4 && addGamesHasExisting) || (addGamesStep === 4 && !addGamesHasExisting);
+  if (isConfirmStep) {
+    await addGamesScanAndAdd();
+    return;
+  }
+
+  addGamesStep++;
+  addGamesRenderStep();
+}
+
+
+async function addGamesScanAndAdd() {
+  const next = document.getElementById('addGamesNextBtn');
+  next.disabled = true;
+  next.textContent = 'Adding...';
+
+
+
+  // Move selected files into the destination folder
+  if (addGamesFiles && addGamesFiles.length > 0) {
+    next.textContent = 'Moving files...';
+    await window.easyarc.moveFiles(addGamesFiles, addGamesFolder);
+    addGamesFiles = null;
+  }
+
+  // Save folder to ROM folders list
+  const folders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
+  if (!folders.includes(addGamesFolder)) {
+    folders.push(addGamesFolder);
+    localStorage.setItem('easyarc_rom_folders', JSON.stringify(folders));
+  }
+
+  // Scan for games
+  let newCount = 0;
+  if (window.easyarc) {
+    const result = await window.easyarc.scanRoms(addGamesFolder);
+    if (result.success) {
+      result.roms.forEach((rom, i) => {
+        if (!games.find(g => g.path === rom.path)) {
+          games.push({ id: Date.now()+i, title:rom.title, system:addGamesSystem, path:rom.path });
+          newCount++;
+        }
+      });
+    }
+  }
+
+  updateCounts();
+  renderGrid();
+  hideAddGamesModal();
+
+  // Turn Add Games button green briefly
+  const btn = document.getElementById('addGamesBtn');
+  if (btn) {
+    btn.classList.add('active');
+    btn.textContent = '✓ ' + newCount + ' Games Added!';
+    setTimeout(() => {
+      btn.classList.remove('active');
+      btn.textContent = '+ Add Games';
+    }, 3000);
+  }
+
+  if (newCount > 0) {
+    const ssUser = localStorage.getItem('ss_user') || '';
+    const ssPass = localStorage.getItem('ss_pass') || '';
+    if (ssUser && ssPass) {
+      const toastMsg = newCount + ' new games added! Download artwork?';
+      showToast(toastMsg);
+      setTimeout(() => {
+        if (confirm(newCount + ' new games added! Download artwork now?')) {
+          const newGames = games.slice(-newCount);
+          newGames.forEach(async (g) => {
+            await window.easyarc.scrapeGame(g, ssUser, ssPass);
+          });
+          showToast('Downloading artwork for ' + newCount + ' games...');
+        }
+      }, 500);
+    } else {
+      showToast(newCount + ' new games added!');
+    }
+  } else {
+    showToast('No new games found in ' + addGamesFolder);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOX ART SCRAPING
+// ═══════════════════════════════════════════════════════════
+let scrapeRunning = false;
+const SCRAPE_SYSTEMS = ['psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3'];
+
+async function startScrape() {
+  if (!window.easyarc) { showToast('Not available in browser'); return; }
+  const ssUser = document.getElementById('ssUser').value.trim();
+  const ssPass = document.getElementById('ssPass').value.trim();
+  if (!ssUser || !ssPass) { showToast('Enter ScreenScraper credentials first'); return; }
+  localStorage.setItem('ss_user', ssUser);
+  localStorage.setItem('ss_pass', ssPass);
+
+  const toScrape = games.filter(g => SCRAPE_SYSTEMS.includes(g.system));
+  if (toScrape.length === 0) { showToast('All games already scraped!'); return; }
+
+  scrapeRunning = true;
+  const row = document.getElementById('scrapeProgressRow');
+  const title = document.getElementById('scrapeProgressTitle');
+  const gameEl = document.getElementById('scrapeProgressGame');
+  if (row) row.style.display = '';
+
+  let done = 0;
+  for (const g of toScrape) {
+    if (!scrapeRunning) break;
+    if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
+    if (gameEl) gameEl.textContent = g.title;
+    const result = await window.easyarc.scrapeGame(g, ssUser, ssPass);
+    if (result.success && result.path) {
+      artworkCache[g.path] = encodeURI('file://' + result.path);
+    }
+    done++;
+    await new Promise(r => setTimeout(r, 1200));
+  }
+
+  scrapeRunning = false;
+  if (row) row.style.display = 'none';
+  showToast('Scraped ' + done + ' games!');
+  renderGrid();
+}
+
+function stopScrape() {
+  scrapeRunning = false;
+  const row = document.getElementById('scrapeProgressRow');
+  if (row) row.style.display = 'none';
+  showToast('Scraping stopped.');
+}
+
+// Load saved credentials
+window.addEventListener('load', () => {
+  const u = localStorage.getItem('ss_user');
+  const p = localStorage.getItem('ss_pass');
+  if (u) { const el = document.getElementById('ssUser'); if(el) el.value = u; }
+  if (p) { const el = document.getElementById('ssPass'); if(el) el.value = p; }
+});
+
+// Update bottom bar with controller status
+function updateBottomBar() {
+  const bar = document.getElementById('bottombarStatus');
+  if (!bar) return;
+  const ctrls = Object.values(connectedControllers);
+  if (ctrls.length === 0) {
+    bar.textContent = 'No controller detected';
+    bar.style.color = 'var(--muted)';
+  } else {
+    bar.innerHTML = ctrls.map(c =>
+      '<span style="color:var(--green);margin-right:16px">&#9679; ' + c.profile.name + ' — P' + c.slot + '</span>'
+    ).join('');
+  }
+}
+const _origCtrlUpdateScreen = ctrlUpdateScreen;
+ctrlUpdateScreen = function() { _origCtrlUpdateScreen.apply(this, arguments); updateBottomBar(); };
+
+// Override showView to handle new layout
+const _origShowView = showView;
+showView = function(name) {
+  const sidebar = document.getElementById('sidebar');
+  const libraryView = document.getElementById('library-view');
+  const detailPanel = document.getElementById('detailPanel');
+  const ctrlView = document.getElementById('controller-view');
+  const settingsView = document.getElementById('settings-view');
+  // Hide all panels first
+  if (ctrlView) { ctrlView.style.display = 'none'; ctrlView.classList.remove('active'); }
+  if (settingsView) { settingsView.style.display = 'none'; settingsView.classList.remove('active'); }
+  if (name === 'library') {
+    if (sidebar) sidebar.style.display = '';
+    if (libraryView) libraryView.style.display = '';
+    if (detailPanel) detailPanel.style.display = '';
+  } else if (name === 'controller') {
+    if (sidebar) sidebar.style.display = 'none';
+    if (libraryView) libraryView.style.display = 'none';
+    if (detailPanel) detailPanel.style.display = 'none';
+    if (ctrlView) { ctrlView.style.display = 'flex'; ctrlView.classList.add('active'); }
+  } else if (name === 'settings') {
+    if (sidebar) sidebar.style.display = 'none';
+    if (libraryView) libraryView.style.display = 'none';
+    if (detailPanel) detailPanel.style.display = 'none';
+    if (settingsView) { settingsView.style.display = 'block'; settingsView.classList.add('active'); }
+  } else if (name === 'wizard') {
+    frwShow();
+    return;
+  }
+  document.querySelectorAll('.nav-btn').forEach((btn,i) => {
+    btn.classList.toggle('active', ['library','wizard','controller','settings'][i] === name);
+  });
+};
+</script>
+
+
+<!-- CONTROLLER DETECTED MODAL -->
+<div class="ctrl-overlay hidden" id="ctrlModal">
+  <div class="ctrl-box">
+    <div class="ctrl-title" id="ctrlModalTitle">CONTROLLER DETECTED</div>
+    <div class="ctrl-sub" id="ctrlModalSub"></div>
+    <div id="ctrlModalBody"></div>
+    <div class="ctrl-btn-row">
+      <button class="ctrl-btn ghost" id="ctrlModalSkipBtn" onclick="ctrlStartupMode=false;ctrlModalDismiss()">Skip for Now</button>
+      <button class="ctrl-btn" id="ctrlModalBtn" onclick="ctrlModalAction()">CONFIGURE &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTROLLER MAPPING MODAL -->
+<div class="ctrl-overlay hidden" id="ctrlMapModal">
+  <div class="ctrl-box">
+    <div class="ctrl-title" id="ctrlMapTitle">MAP CONTROLLER</div>
+    <div class="ctrl-sub" id="ctrlMapSub">Click a button below, then press the matching button on your controller.</div>
+    <div class="ctrl-map-grid" id="ctrlMapGrid"></div>
+    <div class="ctrl-btn-row">
+      <button class="ctrl-btn ghost" onclick="ctrlMapDismiss()">Cancel</button>
+      <button class="ctrl-btn" onclick="ctrlMapSave()">SAVE MAPPING &#8594;</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- CONTROLLER TEST MODAL -->
+<div class="ctest-overlay hidden" id="ctestOverlay">
+  <div class="ctest-box">
+    <div class="ctest-progress" id="ctestProgress"></div>
+    <div class="ctest-title" id="ctestTitle">CONTROLLER TEST</div>
+    <div class="ctest-sub" id="ctestSub"></div>
+    <div id="ctestBody"></div>
+    <div class="ctest-btn-row" id="ctestBtnRow">
+      <button class="ctest-action-btn ghost" onclick="ctestSkip()">Skip Test</button>
+      <button class="ctest-action-btn" id="ctestNextBtn" onclick="ctestNext()">START TEST &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<!-- CORE DOWNLOAD MODAL -->
+<div class="frw-overlay hidden" id="coreDownloadModal">
+  <div class="frw-box" style="max-width:480px">
+    <span class="frw-icon">&#128190;</span>
+    <div class="frw-title">PLUGIN REQUIRED</div>
+    <div class="frw-sub" id="coreDownloadStatus"></div>
+    <div class="frw-progress-wrap"><div class="frw-progress-bar" id="coreDownloadProgress"></div></div>
+    <div class="frw-btn-row">
+      <button class="frw-btn ghost" id="coreDownloadCancelBtn">Cancel</button>
+      <button class="frw-btn" id="coreDownloadBtn" style="display:none" autofocus>Download Now</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ADD GAMES MODAL -->
+<div class="frw-overlay hidden" id="addGamesModal">
+  <div class="frw-box" style="max-width:520px">
+    <div class="frw-steps" id="addGamesStepDots"></div>
+    <span class="frw-icon" id="addGamesIcon">&#127918;</span>
+    <div class="frw-title" id="addGamesTitle">ADD GAMES</div>
+    <div class="frw-sub" id="addGamesSub"></div>
+    <div id="addGamesBody"></div>
+    <div class="frw-btn-row">
+      <button class="frw-btn ghost" onclick="hideAddGamesModal()">Cancel</button>
+      <button class="frw-btn" id="addGamesNextBtn" onclick="addGamesNext()">NEXT &#8594;</button>
+    </div>
+  </div>
+</div>
+  <!-- INSTRUCTIONS MODAL -->
+  <div class="frw-overlay hidden" id="instructionsModal" style="z-index:1000;">
+    <div class="frw-card" style="max-width:700px;width:90%;max-height:80vh;overflow-y:auto;">
+      <div class="frw-icon">📋</div>
+      <div class="frw-title">INSTRUCTIONS</div>
+      <div class="frw-sub" style="font-size:16px;color:#fff;line-height:1.8;text-align:left;margin-top:24px;">
+        Content to follow.
+      </div>
+      <div style="margin-top:32px;text-align:center;">
+        <button class="action-btn" onclick="hideInstructionsModal()">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "easyarc",
+  "version": "0.1.0",
+  "description": "A better frontend for RetroArch",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0"
+  }
+}

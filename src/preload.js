@@ -1,0 +1,27 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('easyarc', {
+  findRetroArch: () => ipcRenderer.invoke('bridge:findRetroArch'),
+  getConfig: () => ipcRenderer.invoke('bridge:getConfig'),
+  setConfig: (values) => ipcRenderer.invoke('bridge:setConfig', values),
+  listCores: () => ipcRenderer.invoke('bridge:listCores'),
+  coreExists: (system) => ipcRenderer.invoke('bridge:coreExists', system),
+  installCore: (system) => ipcRenderer.invoke('bridge:installCore', system),
+  pickRomFolder:    () => ipcRenderer.invoke('bridge:pickRomFolder'),
+  pickParentFolder: (folderName) => ipcRenderer.invoke('bridge:pickParentFolder', folderName),
+  scanRoms: (folderPath) => ipcRenderer.invoke('bridge:scanRoms', folderPath),
+  launchGame: (options) => ipcRenderer.invoke('bridge:launchGame', options),
+  killGame: () => ipcRenderer.invoke('bridge:killGame'),
+  listControllers: () => ipcRenderer.invoke('bridge:listControllers'),
+  saveMapping: (mapping) => ipcRenderer.invoke('bridge:saveMapping', mapping),
+  scrapeGame: (game, ssUser, ssPassword) => ipcRenderer.invoke('bridge:scrapeGame', game, ssUser, ssPassword),
+  createFolder:  (folderPath) => ipcRenderer.invoke('bridge:createFolder', folderPath),
+  moveFiles:      (filePaths, destFolder) => ipcRenderer.invoke('bridge:moveFiles', filePaths, destFolder),
+  pickFiles:      () => ipcRenderer.invoke('bridge:pickFiles'),
+  artworkExists: (game) => ipcRenderer.invoke('bridge:artworkExists', game),
+  getArtworkPath: (game) => ipcRenderer.invoke('bridge:getArtworkPath', game),
+  getMetadata:    (game) => ipcRenderer.invoke('bridge:getMetadata', game),
+  saveArtwork:    (game, data) => ipcRenderer.invoke('bridge:saveArtwork', game, data),
+  onProgress: (callback) => ipcRenderer.on('progress', (_e, data) => callback(data)),
+  offProgress: (callback) => ipcRenderer.removeListener('progress', callback),
+});
