@@ -622,7 +622,7 @@ body::after {
     </div>
     <div class="titlebar-right">
       <button class="action-btn" id="rescanBtn" onclick="rescanLibrary()">⟳ Refresh Library</button>
-      <button class="action-btn" id="addGamesBtn" onclick="showAddGamesModal()">+ Add Games</button>
+      <button class="action-btn" id="addGamesBtn" onclick="showAddGamesModal()">+ Add Games/Collection</button>
       <button class="action-btn" id="getArtBtn" onclick="showGetArtModal()">🖼 Get Game Art</button>
       <div class="status-dot"></div>
       <span class="status-text" id="statusText">Checking...</span>
@@ -911,6 +911,54 @@ let currentSystem = 'all';
 let currentSearch = '';
 let selectedGame  = null;
 
+function showSysReqScreen() {
+  const grid = document.getElementById('gameGrid');
+  grid.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
+      <div style="max-width:680px;">
+        <div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:24px;text-align:center;">
+          System Requirements
+        </div>
+        <div style="font-family:Calibri,Arial,sans-serif;font-size:16pt;color:#fff;line-height:1.8;text-align:left;">
+
+          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Minimum Requirements</p>
+          <p style="margin-bottom:8px;">• macOS 12 Monterey or later</p>
+          <p style="margin-bottom:8px;">• Intel Mac (2018 or newer) or any Apple Silicon</p>
+          <p style="margin-bottom:8px;">• 8GB RAM</p>
+          <p style="margin-bottom:16px;">• 4GB free disk space (for emulator cores and artwork)</p>
+
+          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Recommended</p>
+          <p style="margin-bottom:8px;">• macOS 13 Ventura or later</p>
+          <p style="margin-bottom:8px;">• Apple Silicon (M1 or newer) — best performance</p>
+          <p style="margin-bottom:8px;">• 16GB RAM</p>
+          <p style="margin-bottom:16px;">• 10GB+ free disk space</p>
+
+          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Required Software</p>
+          <p style="margin-bottom:8px;">• <a href="https://www.retroarch.com" style="color:var(--cyan);">RetroArch</a> — installed in your Applications folder</p>
+          <p style="margin-bottom:16px;">• <a href="https://dolphin-emu.org" style="color:var(--cyan);">Dolphin</a> — required for GameCube and Wii games only</p>
+
+          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Confirmed Controllers (Bluetooth)</p>
+          <p style="margin-bottom:8px;">• DualShock 4</p>
+          <p style="margin-bottom:8px;">• Xbox One/Series controller</p>
+          <p style="margin-bottom:8px;">• Nintendo Switch Pro Controller</p>
+          <p style="margin-bottom:8px;">• EasySMX X15 (in Xbox mode)</p>
+          <p style="margin-bottom:24px;">• GameSir Nova Lite (in XInput mode — hold B+Home to activate)</p>
+
+          <p style="color:var(--cyan);font-size:14pt;">Press <strong>ENTER</strong> on your keyboard to continue.</p>
+        </div>
+      </div>
+    </div>`;
+
+  // Listen for ENTER to proceed to controller modal
+  const sysReqKey = (e) => {
+    if (e.key === 'Enter') {
+      document.removeEventListener('keydown', sysReqKey);
+      ctrlShowStartupModal();
+    }
+  };
+  document.addEventListener('keydown', sysReqKey);
+}
+
 function renderGrid() {
   const grid = document.getElementById('gameGrid');
   const filtered = games.filter(g => {
@@ -921,7 +969,36 @@ function renderGrid() {
   document.getElementById('game-count').textContent = filtered.length + ' games';
   document.getElementById('system-title').textContent = systemNames[currentSystem] || 'All Games';
   if (filtered.length === 0) {
-    grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO GAMES FOUND<br><span style="font-size:9px;opacity:0.5">Try a different filter or run Setup to add ROMs</span></div>';
+    if (games.length === 0) {
+      // No games at all — show welcome message
+      grid.innerHTML = `
+        <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
+          <div style="max-width:680px;text-align:center;">
+            <div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:24px;">
+              Welcome to EasyArc Alpha!
+            </div>
+            <div style="font-family:Calibri,Arial,sans-serif;font-size:16pt;color:#fff;line-height:1.8;text-align:left;margin-bottom:32px;">
+              <p style="margin-bottom:16px;">You made it! You're one of a small, hand-picked group of people who are among the very first to experience EasyArc. That's a pretty big deal — and we mean that sincerely.</p>
+              <p style="margin-bottom:16px;">What you do over the next few days matters more than you might think. Your feedback, your bug reports, even your "huh, that's weird" moments will directly shape the final release. You're not just testing software — you're helping build it.</p>
+              <p style="margin-bottom:16px;">EasyArc is heading toward a much wider beta release, and your job is to help us get it ready. We want to know what works, what doesn't, and what just feels off. Nothing is too small to mention. If a button is in the wrong place, tell us. If something confused you, tell us. If something made you smile, tell us that too.</p>
+              <p style="margin-bottom:16px;">When you find something — and you will find something, that's why you're here — just make a note of it and send it back to us. No technical knowledge required. Plain English is perfect.</p>
+              <p style="margin-bottom:24px;">Thank you for being part of this. Now go play some games. 🎮</p>
+              <p style="margin-bottom:0;font-size:14pt;color:var(--cyan);">Press <strong>ENTER</strong> on your keyboard to continue.</p>
+            </div>
+          </div>
+        </div>`
+      // Listen for ENTER key to dismiss welcome and show controller modal
+      const welcomeKeyHandler = (e) => {
+        if (e.key === 'Enter') {
+          document.removeEventListener('keydown', welcomeKeyHandler);
+          showSysReqScreen();
+        }
+      };
+      document.addEventListener('keydown', welcomeKeyHandler);
+    } else {
+      // Has games but none match filter
+      grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO GAMES FOUND<br><span style="font-size:9px;opacity:0.5">Try a different filter</span></div>';
+    }
     return;
   }
   grid.innerHTML = '<div class="game-grid">' + filtered.map((g,i) =>
@@ -1216,7 +1293,9 @@ let frwRomFolders  = [];
 let frwFoundGames  = [];
 
 function frwInit() {
-  if (!localStorage.getItem('easyarc_setup_done')) frwShow();
+  // Setup wizard disabled for alpha — replaced by welcome message in empty grid
+  // Always mark setup as done so ROM scanning works
+  localStorage.setItem('easyarc_setup_done', '1');
 }
 
 function frwShow() {
@@ -1415,7 +1494,8 @@ function frwNext() {
 window.frwShow = frwShow;
 
 // ── STARTUP ─────────────────────────────────────────────────────────────────
-renderGrid();
+// Don't render grid until after splash screen completes
+// renderGrid() will be called after splash fades out
 updateCounts();
 
 if (window.easyarc) {
@@ -1455,10 +1535,89 @@ if (window.easyarc) {
 
 frwInit();
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SOUND SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+function playWhoosh() {
+  try {
+    const ctx = new AudioContext();
+    const duration = 1.4;
+    const bufferSize = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    // Bandpass filter sweeps upward — like something flying away
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(150, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.25);
+    filter.frequency.exponentialRampToValueAtTime(3000, ctx.currentTime + 0.6);
+    filter.Q.value = 1.2;
+
+    // Volume — quick build then long satisfying fade
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.08);
+    gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(ctx.currentTime);
+    noise.stop(ctx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playClick() {
+  try {
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(900, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.04);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.04);
+  } catch(e) {}
+}
+
+function playStartup() {
+  try {
+    const ctx = new AudioContext();
+    const notes = [440, 554, 659, 880];
+    notes.forEach((freq, i) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.value = freq;
+      const start = ctx.currentTime + i * 0.2;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.25, start + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.6);
+      oscillator.start(start);
+      oscillator.stop(start + 0.6);
+    });
+  } catch(e) {}
+}
+
 // Splash screen — logo fades in over dimmed UI, then reveals
 const splash = document.getElementById('splashScreen');
 const shell = document.getElementById('eaShell');
 if (splash && shell) {
+  playStartup();
   // Step 1: After 3 seconds, fade out splash and brighten UI
   setTimeout(() => {
     splash.classList.add('fade-out');
@@ -1466,14 +1625,23 @@ if (splash && shell) {
     // Step 2: After splash fade completes (1s), remove it
     setTimeout(() => {
       splash.remove();
-      // Step 3: Wait 2 more seconds then show controller modal
-      setTimeout(() => {
-        ctrlShowStartupModal();
-      }, 2000);
+      // Render grid now that splash is gone — welcome message appears if no games
+      renderGrid();
+      // Controller modal now triggered by ENTER on welcome screen
+      // If user already has games, show controller modal automatically
+      if (games.length > 0) {
+        setTimeout(() => {
+          ctrlShowStartupModal();
+        }, 2000);
+      }
     }, 1000);
   }, 3000);
 } else {
-  ctrlShowStartupModal();
+  // No splash screen — render grid directly
+  renderGrid();
+  if (games.length > 0) {
+    ctrlShowStartupModal();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1941,6 +2109,7 @@ function ctestShouldTest(system) {
 
 // Call this before launching a game — intercepts if test needed
 async function ctestMaybeLaunch(game) {
+  playWhoosh();
   if (!game) return;
   if (ctrlStartupMode) return;
 
@@ -2391,12 +2560,14 @@ function gpShouldFire(key, isPressed) {
   if (!GP_NAV.holdStart[key]) {
     GP_NAV.holdStart[key] = now;
     GP_NAV.lastFire = now;
+    playClick();
     return true;
   }
   const held = now - GP_NAV.holdStart[key];
   if (held < GP_NAV.initDelay) return false;
   if (now - GP_NAV.lastFire < GP_NAV.repeatDelay) return false;
   GP_NAV.lastFire = now;
+  playClick();
   return true;
 }
 
@@ -2559,12 +2730,8 @@ function gpHandleInput(gp) {
         gpPreviewSystem(btns2[GP_NAV.sidebarIdx]);
       }
     }
-    if (gpShouldFire("right", right)) {
-      // Select this system and move to grid
-      if (btns2[GP_NAV.sidebarIdx]) btns2[GP_NAV.sidebarIdx].click();
-      gpExitSidebar();
-    }
     if (gpShouldFire("a", aBtn)) {
+      // A button only — deliberately enter the game grid
       const btn = btns2[GP_NAV.sidebarIdx];
       if (btn) { const sys = btn.dataset.sys || 'all'; filterSystem(sys, btn); }
       gpExitSidebar();
@@ -2900,6 +3067,8 @@ function showAddGamesModal() {
   addGamesFolder = null;
   addGamesFiles = null;
   addGamesFolderName = null;
+  addGamesImportCollection = false;
+  addGamesCollectionResults = [];
   document.getElementById('addGamesModal').classList.remove('hidden');
   addGamesRenderStep();
 }
@@ -2911,6 +3080,8 @@ function hideAddGamesModal() {
 // Track wizard state
 let addGamesHasExisting = null;
 let addGamesFolderName = null;
+let addGamesImportCollection = false;
+let addGamesCollectionResults = []; // [{folder, folderName, detectedSystem, fileCount, selectedSystem}]
 
 function addGamesRenderDots() {
   // Dots vary by path: existing = 3 steps, new folder = 4 steps
@@ -2930,26 +3101,76 @@ function addGamesRenderStep() {
   const next  = document.getElementById('addGamesNextBtn');
   next.disabled = false;
 
-  // Step 0: Do you have an existing folder?
+  // Step 0: What would you like to do?
   if (addGamesStep === 0) {
     icon.textContent = String.fromCodePoint(0x1F4C2);
-    title.textContent = 'ADD GAMES';
-    sub.textContent = 'Do you already have a folder with game files on this computer or an external drive?';
-    next.disabled = addGamesHasExisting === null;
+    title.textContent = 'ADD GAMES/COLLECTION';
+    sub.textContent = 'What would you like to do?';
+    next.disabled = addGamesHasExisting === null && !addGamesImportCollection;
     next.textContent = 'NEXT →';
     body.innerHTML =
       '<div class="frw-choice-row">' +
-        '<div class="frw-choice ' + (addGamesHasExisting === true ? 'selected' : '') + '" onclick="addGamesHasExisting=true;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false;addGamesRenderStep()">' +
+        '<div class="frw-choice ' + (!addGamesImportCollection && addGamesHasExisting !== null ? 'selected' : '') + '" onclick="addGamesImportCollection=false;addGamesHasExisting=true;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false;addGamesRenderStep()">' +
           '<span class="frw-choice-icon">📁</span>' +
-          '<div class="frw-choice-label">Yes, I have a folder</div>' +
-          '<div class="frw-choice-desc">Add games from an existing folder</div>' +
+          '<div class="frw-choice-label">Add a single system</div>' +
+          '<div class="frw-choice-desc">I have a folder of games for one console</div>' +
         '</div>' +
-        '<div class="frw-choice ' + (addGamesHasExisting === false ? 'selected' : '') + '" onclick="addGamesHasExisting=false;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false;addGamesRenderStep()">' +
-          '<span class="frw-choice-icon">✨</span>' +
-          '<div class="frw-choice-label">No, create a new folder</div>' +
-          '<div class="frw-choice-desc">Set up a new folder for a new system</div>' +
+        '<div class="frw-choice ' + (addGamesImportCollection ? 'selected' : '') + '" onclick="addGamesImportCollection=true;addGamesHasExisting=null;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false;addGamesRenderStep()">' +
+          '<span class="frw-choice-icon">🗂️</span>' +
+          '<div class="frw-choice-label">Import my whole collection</div>' +
+          '<div class="frw-choice-desc">Add all my game folders at once</div>' +
         '</div>' +
       '</div>';
+  }
+
+  // Import Collection Step 1: Browse to parent folder
+  else if (addGamesStep === 1 && addGamesImportCollection) {
+    icon.textContent = String.fromCodePoint(0x1F5C2);
+    title.textContent = 'SELECT COLLECTION FOLDER';
+    sub.textContent = 'Select the folder that contains all your game system folders.';
+    next.textContent = addGamesFolder ? 'SCAN →' : 'BROWSE →';
+    next.disabled = false;
+    body.innerHTML = addGamesFolder
+      ? '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + addGamesFolder + '</div>'
+      : '<div class="frw-status">Click BROWSE to select your collection folder...</div>';
+  }
+
+  // Import Collection Step 2: Confirmation table
+  else if (addGamesStep === 2 && addGamesImportCollection) {
+    icon.textContent = String.fromCodePoint(0x1F4CB);
+    title.textContent = 'CONFIRM COLLECTION';
+    sub.textContent = 'Review detected systems. Fix any that are wrong then click Import All.';
+    next.textContent = 'IMPORT ALL →';
+    next.disabled = addGamesCollectionResults.length === 0;
+    const systemOptions = ADD_GAMES_SYSTEMS.map(s =>
+      '<option value="' + s.id + '">' + s.name + '</option>'
+    ).join('');
+    body.innerHTML = addGamesCollectionResults.length === 0
+      ? '<div class="frw-status">No game folders found.</div>'
+      : '<div style="max-height:320px;overflow-y:auto">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<tr style="color:var(--cyan);border-bottom:1px solid rgba(255,255,255,0.1)">' +
+        '<th style="text-align:left;padding:8px">Folder</th>' +
+        '<th style="text-align:left;padding:8px">Files</th>' +
+        '<th style="text-align:left;padding:8px">System</th>' +
+        '</tr>' +
+        addGamesCollectionResults.map((r, i) =>
+          '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
+          '<td style="padding:8px;color:#fff">' + r.folderName + '</td>' +
+          '<td style="padding:8px;color:var(--green)">' + r.fileCount + '</td>' +
+          '<td style="padding:8px">' +
+          (r.detectedSystem
+            ? '<select class="setting-select" style="font-size:12px;padding:4px" onchange="addGamesCollectionResults[' + i + '].selectedSystem=this.value">' +
+              ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '"' + (s.id === r.detectedSystem ? ' selected' : '') + '>' + s.name + '</option>').join('') +
+              '<option value="">-- Skip --</option>' +
+              '</select>'
+            : '<select class="setting-select" style="font-size:12px;padding:4px;border-color:orange" onchange="addGamesCollectionResults[' + i + '].selectedSystem=this.value">' +
+              '<option value="">-- Select system --</option>' +
+              ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '">' + s.name + '</option>').join('') +
+              '</select>') +
+          '</td></tr>'
+        ).join('') +
+        '</table></div>';
   }
 
   // Step 1a (existing folder path): Browse to folder
@@ -3006,20 +3227,7 @@ function addGamesRenderStep() {
       : '<input id="addGamesFolderNameInput" type="text" class="setting-select" style="width:100%;font-size:14px;padding:12px" placeholder="e.g. My ' + sysName + ' Games" onkeydown="if(event.key===&quot;Enter&quot;)addGamesNext()">';
   }
 
-  // Step 3 (both paths): Select files
-  else if (addGamesStep === 3) {
-    icon.textContent = String.fromCodePoint(0x1F4BE);
-    title.textContent = 'SELECT FILES';
-    const sysName = addGamesSystem ? (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name : 'your';
-    sub.textContent = 'Select the ROM files you want to add.';
-    next.textContent = addGamesFiles ? 'CONFIRM →' : 'SELECT FILES →';
-    next.disabled = false;
-    body.innerHTML = addGamesFiles
-      ? '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + addGamesFiles.length + ' file(s) selected</div>'
-      : '<div class="frw-status">Click SELECT FILES to choose your ROM files...</div>';
-  }
-
-  // Step 4: Confirm
+  // Step 3: Confirm
   else {
     icon.textContent = String.fromCodePoint(0x2705);
     title.textContent = 'CONFIRM';
@@ -3039,7 +3247,46 @@ async function addGamesNext() {
 
   // Step 0: Has existing folder?
   if (addGamesStep === 0) {
-    if (addGamesHasExisting === null) return;
+    if (addGamesHasExisting === null && !addGamesImportCollection) return;
+  }
+
+  // Import Collection Step 1: Browse to parent folder
+  if (addGamesStep === 1 && addGamesImportCollection) {
+    if (addGamesFolder) {
+      // Already have folder — scan it
+      next.textContent = 'Scanning...';
+      next.disabled = true;
+      const result = await window.easyarc.scanCollection(addGamesFolder);
+      if (!result.success) { showToast('Could not scan folder: ' + result.error); return; }
+      addGamesCollectionResults = result.folders.map(f => ({
+        ...f,
+        selectedSystem: f.detectedSystem || ''
+      }));
+      addGamesStep++;
+      addGamesRenderStep();
+      return;
+    }
+    const folder = await window.easyarc.pickRomFolder();
+    if (!folder) return;
+    addGamesFolder = folder;
+    // Scan immediately
+    next.textContent = 'Scanning...';
+    next.disabled = true;
+    const result = await window.easyarc.scanCollection(folder);
+    if (!result.success) { showToast('Could not scan folder: ' + result.error); return; }
+    addGamesCollectionResults = result.folders.map(f => ({
+      ...f,
+      selectedSystem: f.detectedSystem || ''
+    }));
+    addGamesStep++;
+    addGamesRenderStep();
+    return;
+  }
+
+  // Import Collection Step 2: Import all
+  if (addGamesStep === 2 && addGamesImportCollection) {
+    await addGamesImportAll();
+    return;
   }
 
   // Step 1a (existing): Browse to folder
@@ -3115,46 +3362,8 @@ async function addGamesNext() {
     return;
   }
 
-  // Select files step (step 3 for existing, step 3 for new)
-  const isFileStep = (addGamesStep === 3 && addGamesHasExisting) || (addGamesStep === 3 && !addGamesHasExisting);
-  if (isFileStep) {
-    if (addGamesFiles) {
-      addGamesStep++;
-      addGamesRenderStep();
-      return;
-    }
-    const files = await window.easyarc.pickFiles();
-    if (!files || files.length === 0) return;
-    // Validate file types
-    const VALID_EXTENSIONS = {
-      psx:['bin','cue','img','pbp','chd'], ps2:['iso','bin','chd'],
-      gamecube:['gcm','gcz','rvz','iso'], wii:['wbfs','rvz','iso'],
-      n64:['z64','n64','v64'], gba:['gba'], gbc:['gbc','gb'],
-      nes:['nes'], snes:['sfc','smc'], genesis:['md','gen','smd'],
-      atari2600:['a26','rom'], psp:['iso','cso']
-    };
-    if (addGamesSystem) {
-      const validExts = VALID_EXTENSIONS[addGamesSystem] || [];
-      const badFiles = files.filter(f => {
-        const ext = f.split('.').pop().toLowerCase();
-        return validExts.length > 0 && !validExts.includes(ext) && ext !== 'zip';
-      });
-      if (badFiles.length > 0) {
-        const names = badFiles.map(f => f.split('/').pop()).join(', ');
-        if (!confirm(badFiles.length + ' file(s) may not be valid for this system:\n' + names + '\n\nAdd them anyway?')) return;
-      }
-    }
-    addGamesFiles = files;
-    const nb = document.getElementById('addGamesNextBtn');
-    if (nb) { nb.textContent = 'CONFIRM →'; nb.disabled = false; }
-    const body = document.getElementById('addGamesBody');
-    if (body) body.innerHTML = '<div class="frw-status success" style="font-size:14px;padding:16px">✓ ' + files.length + ' file(s) selected</div>';
-    return;
-  }
-
-  // Final confirm step — scan and add
-  const isConfirmStep = (addGamesStep === 4 && addGamesHasExisting) || (addGamesStep === 4 && !addGamesHasExisting);
-  if (isConfirmStep) {
+  // Step 3 — confirm and scan
+  if (addGamesStep === 3 && !addGamesImportCollection) {
     await addGamesScanAndAdd();
     return;
   }
@@ -3163,6 +3372,59 @@ async function addGamesNext() {
   addGamesRenderStep();
 }
 
+
+async function addGamesImportAll() {
+  const toImport = addGamesCollectionResults.filter(r => r.selectedSystem);
+  if (toImport.length === 0) { showToast('No systems selected to import.'); return; }
+
+  let totalAdded = 0;
+  for (const r of toImport) {
+    // Save folder to ROM folders list
+    const folders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
+    if (!folders.includes(r.folder)) {
+      folders.push(r.folder);
+      localStorage.setItem('easyarc_rom_folders', JSON.stringify(folders));
+    }
+    // Scan for games
+    if (window.easyarc) {
+      const result = await window.easyarc.scanRoms(r.folder);
+      if (result.success) {
+        result.roms.forEach((rom, i) => {
+          if (!games.find(g => g.path === rom.path)) {
+            games.push({ id: Date.now()+i+totalAdded, title: rom.title, system: r.selectedSystem, path: rom.path });
+            totalAdded++;
+          }
+        });
+      }
+    }
+  }
+
+  updateCounts();
+  renderGrid();
+  hideAddGamesModal();
+
+  const btn = document.getElementById('addGamesBtn');
+  if (btn) {
+    btn.classList.add('active');
+    btn.textContent = '✓ ' + totalAdded + ' Games Added!';
+    setTimeout(() => {
+      btn.classList.remove('active');
+      btn.textContent = '+ Add Games/Collection';
+    }, 3000);
+  }
+
+  if (totalAdded > 0) {
+    const ssUser = localStorage.getItem('ss_user') || '';
+    const ssPass = localStorage.getItem('ss_pass') || '';
+    if (ssUser && ssPass) {
+      if (confirm(totalAdded + ' games added from ' + toImport.length + ' systems! Click OK to download artwork now, or Cancel to do it later.')) {
+        startScrape();
+      }
+    } else {
+      showToast(totalAdded + ' games added from ' + toImport.length + ' systems!');
+    }
+  }
+}
 
 async function addGamesScanAndAdd() {
   const next = document.getElementById('addGamesNextBtn');

@@ -91,7 +91,9 @@ const FOLDER_HINTS = [
 const SKIP_FOLDERS = new Set([
   'logs','logs_arrm','media','images','videos','manuals',
   'cheats','saves','states','backup','extras','artwork',
-  'boxart','screenshots','thumbs',
+  'boxart','screenshots','thumbs','bios','themes','tools',
+  'bgmusic','launchimages','pico-8','scummvm','easyrpg',
+  '.fseventsd','.spotlight-v100','.trashes','.ds_store',
 ]);
 
 const CORES_PATH = path.join(os.homedir(), 'Library/Application Support/RetroArch/cores');
@@ -800,6 +802,51 @@ Source = 0`;
       }
     }
     return { success: true, moved: results.moved.length, failed: results.failed.length };
+  }
+
+  scanCollection(parentFolder) {
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      const entries = fs.readdirSync(parentFolder, { withFileTypes: true });
+      const results = [];
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const folderName = entry.name.toLowerCase();
+        if (SKIP_FOLDERS.has(folderName)) continue;
+        const fullPath = path.join(parentFolder, entry.name);
+        // Try to detect system from folder name
+        let detectedSystem = null;
+        for (const hint of FOLDER_HINTS) {
+          if (hint.hints.some(h => {
+            // Exact match always wins
+            if (folderName === h) return true;
+            // For short hints (3 chars or less), only exact match
+            if (h.length <= 3) return folderName === h;
+            // For longer hints, check if contained with word boundaries
+            const idx = folderName.indexOf(h);
+            if (idx === -1) return false;
+            const before = idx === 0 || !/[a-z0-9]/.test(folderName[idx-1]);
+            const after = idx+h.length >= folderName.length || !/[a-z0-9]/.test(folderName[idx+h.length]);
+            return before && after;
+          })) {
+            detectedSystem = hint.system;
+            break;
+          }
+        }
+        // Count files in folder
+        let fileCount = 0;
+        try {
+          fileCount = fs.readdirSync(fullPath).filter(f => !fs.statSync(path.join(fullPath, f)).isDirectory()).length;
+        } catch(e) {}
+        if (fileCount > 0) {
+          results.push({ folder: fullPath, folderName: entry.name, detectedSystem, fileCount });
+        }
+      }
+      return { success: true, folders: results };
+    } catch(e) {
+      return { success: false, error: e.message, folders: [] };
+    }
   }
 
   createFolder(folderPath) {
