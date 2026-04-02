@@ -281,6 +281,7 @@ body::after {
   box-shadow:0 4px 28px rgba(0,240,255,0.32), 0 0 0 1px rgba(0,240,255,0.18);
   transform:translateY(-3px) scale(1.02);
   z-index:10;
+  filter:brightness(1.5);
 }
 
 .card-art {
@@ -1709,171 +1710,71 @@ function ctrlShowStartupModal() {
 
   ctrlStartupMode = true;
   modal.classList.remove("hidden");
+  title.textContent = "CONTROLLERS";
+  sub.textContent = "";
+  btn.style.display = "inline-block";
 
-  const textStyle = "font-size:18px;color:#fff;line-height:1.8;text-align:center;";
-  let assignedControllers = [];
-  let currentAssigning = 0;
-  let allGPs = [];
-
-  function showWaiting() {
-    title.textContent = "CONTROLLER SETUP";
-    sub.textContent = "";
-    body.innerHTML =
-      "<div style='" + textStyle + "padding:24px 0'>" +
-      "Connect your controller(s) and press a button<br>or SPACE to use the keyboard." +
-      "</div>";
-    btn.textContent = "USE KEYBOARD (Space)";
-    btn.onclick = () => { ctrlModalDismiss(); setTimeout(() => { ctrlStartupMode = false; }, 800); };
-
-    function onSpace(e) {
-      if (e.key === " ") {
-        document.removeEventListener("keydown", onSpace);
-        ctrlModalDismiss();
-        setTimeout(() => { ctrlStartupMode = false; }, 800);
-      }
+  function renderControllers() {
+    const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    if (gps.length === 0) {
+      body.innerHTML =
+        "<div style='font-size:16px;color:#fff;line-height:2;text-align:center;padding:24px 0'>" +
+        "No controllers detected.<br>" +
+        "<span style='color:var(--muted);font-size:14px'>Press a button on your controller<br>" +
+        "or click LET\'S PLAY to use keyboard only.</span>" +
+        "</div>";
+    } else {
+      body.innerHTML =
+        "<div style='font-size:16px;color:var(--green);font-weight:bold;text-align:center;padding:8px 0;margin-bottom:12px'>" +
+        gps.length + " controller" + (gps.length > 1 ? "s" : "") + " ready!" +
+        "</div>" +
+        gps.map((gp, i) => {
+          const profile = ctrlGetProfile(gp.id) || { name: gp.id.split('(')[0].trim() };
+          return "<div style='display:flex;align-items:center;gap:12px;padding:10px 16px;" +
+            "margin-bottom:8px;background:rgba(0,255,136,0.08);" +
+            "border:1px solid rgba(0,255,136,0.2);border-radius:8px'>" +
+            "<span style='font-size:24px'>&#127918;</span>" +
+            "<div>" +
+            "<div style='color:var(--green);font-size:16px;font-weight:bold'>Player " + (i+1) + "</div>" +
+            "<div style='color:#fff;font-size:14px'>" + profile.name + "</div>" +
+            "</div></div>";
+        }).join("");
     }
-    document.addEventListener("keydown", onSpace);
   }
 
-  function showSingleDetected(gp) {
-    const profile = ctrlGetProfile(gp.id) || { name: gp.id.split("(")[0].trim(), icon: "&#127918;" };
-    title.textContent = "CONTROLLER DETECTED";
-    sub.textContent = "";
-    body.innerHTML =
-      "<div style='" + textStyle + "padding:16px 0'>" +
-      "Controller detected.<br><br>" +
-      "<span style='color:var(--green);font-size:20px;font-weight:bold'>" + profile.name + "</span><br><br>" +
-      "Press a button to confirm or press SPACE to use the keyboard." +
-      "</div>";
-    btn.textContent = "CONFIRM (Enter)";
-    btn.onclick = () => { confirmAndEnter(); };
+  // Register connected controllers
+  const initialGps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+  initialGps.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
 
-    function onKey(e) {
-      if (e.key === "Enter" || e.key === " ") {
-        document.removeEventListener("keydown", onKey);
-        if (e.key === " ") { ctrlModalDismiss(); setTimeout(() => { ctrlStartupMode = false; }, 800); }
-        else confirmAndEnter();
-      }
-    }
-    document.addEventListener("keydown", onKey);
+  renderControllers();
+  const scanInterval = setInterval(renderControllers, 500);
 
-    const poll = setInterval(() => {
-      const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-      const g = gps.find(x => x.index === gp.index);
-      if (g && g.buttons.some(b => b.pressed)) {
-        clearInterval(poll);
-        confirmAndEnter();
-      }
-    }, 100);
-  }
-
-  function showAssignPlayer(playerNum) {
-    title.textContent = "ASSIGN CONTROLLERS";
-    sub.textContent = "";
-    body.innerHTML =
-      "<div style='" + textStyle + "padding:16px 0'>" +
-      "Select the Player " + playerNum + " controller.<br><br>" +
-      "Press any button on the controller<br>you want to assign to Player " + playerNum + "." +
-      "</div>" +
-      "<div class='ctrl-player-list' id='assignList'>" +
-      allGPs.map((gp, i) => {
-        const profile = ctrlGetProfile(gp.id) || { name: gp.id.split("(")[0].trim(), icon: "&#127918;" };
-        const isAssigned = assignedControllers.find(a => a.gpIndex === gp.index);
-        const cls = isAssigned ? "connected" : "";
-        const status = isAssigned ? "Assigned to P" + isAssigned.player : "Press a button to select";
-        return "<div class='ctrl-player-row " + cls + "' id='assignRow" + gp.index + "'>" +
-          "<span class='ctrl-player-icon'>" + profile.icon + "</span>" +
-          "<div class='ctrl-player-info'>" +
-          "<div class='ctrl-player-name' style='font-size:16px'>" + profile.name + "</div>" +
-          "<div class='ctrl-player-status' style='font-size:14px'>" + status + "</div>" +
-          "</div></div>";
-      }).join("") +
-      "</div>";
-    btn.style.display = "none";
-
-    const poll = setInterval(() => {
-      const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-      for (const gp of gps) {
-        if (assignedControllers.find(a => a.gpIndex === gp.index)) continue;
-        if (gp.buttons.some(b => b.pressed)) {
-          clearInterval(poll);
-          assignedControllers.push({ player: playerNum, gpIndex: gp.index, gp });
-          console.log('Assigned P' + playerNum + ', total assigned:', assignedControllers.length, 'total controllers:', allGPs.length);
-          if (assignedControllers.length < allGPs.length) {
-            setTimeout(() => showAssignPlayer(playerNum + 1), 600);
-          } else {
-            setTimeout(() => showConfirm(), 600);
-          }
-          break;
-        }
-      }
-    }, 100);
-  }
-
-  function showConfirm() {
-    title.textContent = "CONFIRM SETUP";
-    sub.textContent = "";
-    btn.style.display = "inline-block";
-    body.innerHTML =
-      "<div style='" + textStyle + "padding:8px 0;margin-bottom:16px'>" +
-      "Is this correct?" +
-      "</div>" +
-      "<div class='ctrl-player-list'>" +
-      assignedControllers.map(a => {
-        const profile = ctrlGetProfile(a.gp.id) || { name: a.gp.id.split("(")[0].trim(), icon: "&#127918;" };
-        return "<div class='ctrl-player-row connected'>" +
-          "<div class='ctrl-player-num' style='font-size:16px'>P" + a.player + "</div>" +
-          "<span class='ctrl-player-icon'>" + profile.icon + "</span>" +
-          "<div class='ctrl-player-info'>" +
-          "<div class='ctrl-player-name' style='font-size:16px'>" + profile.name + "</div>" +
-          "</div></div>";
-      }).join("") +
-      "</div>";
-    btn.textContent = "YES →";
-    btn.onclick = confirmAndEnter;
-
-    // No button
-    const noBtn = document.getElementById("ctrlModalSkipBtn");
-    if (noBtn) { noBtn.style.display = "inline-block"; noBtn.textContent = "NO"; noBtn.onclick = () => { assignedControllers = []; setTimeout(() => showAssignPlayer(1), 600); }; }
-  }
-
-  function confirmAndEnter() {
-    // Apply controller assignments
-    assignedControllers.forEach(a => {
-      if (connectedControllers[a.gpIndex]) {
-        connectedControllers[a.gpIndex].slot = a.player;
-      }
-    });
+  function dismiss() {
+    clearInterval(scanInterval);
+    clearInterval(dismissPoll);
     ctrlModalDismiss();
     setTimeout(() => { ctrlStartupMode = false; }, 800);
   }
 
-  showWaiting();
+  btn.textContent = "LET'S PLAY →";
+  btn.onclick = () => dismiss();
 
-  const poll = setInterval(() => {
-    const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-    if (gps.length > 0) {
-      clearInterval(poll);
-      allGPs = gps;
-      gps.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
-      if (gps.length === 1) {
-        setTimeout(() => showSingleDetected(gps[0]), 600);
-      } else {
-        setTimeout(() => showAssignPlayer(1), 600);
-      }
+  function onKey(e) {
+    if (e.key === "Enter" || e.key === " ") {
+      document.removeEventListener("keydown", onKey);
+      dismiss();
     }
-  }, 200);
+  }
+  document.addEventListener("keydown", onKey);
 
-  window.addEventListener("gamepadconnected", function onGPConnect(e) {
-    window.removeEventListener("gamepadconnected", onGPConnect);
-    allGPs = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-    allGPs.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
-    if (allGPs.length === 1) {
-      setTimeout(() => showSingleDetected(allGPs[0]), 600);
-    } else {
-      setTimeout(() => showAssignPlayer(1), 600);
+  const dismissPoll = setInterval(() => {
+    const gps2 = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    if (gps2.length > 0 && gps2.some(g => g.buttons.some(b => b.pressed))) {
+      clearInterval(dismissPoll);
+      document.removeEventListener("keydown", onKey);
+      dismiss();
     }
-  });
+  }, 100);
 }
 
 function ctrlInit() {
@@ -2432,8 +2333,8 @@ function ctestSkip() {
 
 const GP_NAV = {
   deadzone:     0.4,
-  initDelay:    400,
-  repeatDelay:  150,
+  initDelay:    600,
+  repeatDelay:  500,
   inSidebar:    false,
   inTopNav:     false,
   inToolbar:    false,
@@ -2743,7 +2644,16 @@ function gpHandleInput(gp) {
     if (gpShouldFire("a", aBtn)) {
       // A button only — deliberately enter the game grid
       const btn = btns2[GP_NAV.sidebarIdx];
-      if (btn) { const sys = btn.dataset.sys || 'all'; filterSystem(sys, btn); }
+      if (btn) {
+        const sys = btn.dataset.sys || 'all';
+        if (sys === 'favorites') {
+          filterFavorites(btn);
+        } else if (sys === 'recent') {
+          filterRecent(btn);
+        } else {
+          filterSystem(sys, btn);
+        }
+      }
       gpExitSidebar();
     }
     if (gpShouldFire("b", bBtn)) {
