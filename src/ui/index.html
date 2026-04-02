@@ -702,7 +702,7 @@ body::after {
     <div class="controller-panel" id="controller-view" style="grid-column:1/-1">
       <div class="ctrl-screen-header">
         <div class="ctrl-screen-title">CONTROLLERS</div>
-        <button class="ctrl-add-btn" onclick="ctrlAddNew()">+ Add Controller</button>
+        <!-- Add Controller button removed for alpha -->
       </div>
       <div id="ctrlScreenBody"></div>
     </div>
@@ -1767,14 +1767,18 @@ function ctrlShowStartupModal() {
   }
   document.addEventListener("keydown", onKey);
 
-  const dismissPoll = setInterval(() => {
-    const gps2 = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-    if (gps2.length > 0 && gps2.some(g => g.buttons.some(b => b.pressed))) {
-      clearInterval(dismissPoll);
-      document.removeEventListener("keydown", onKey);
-      dismiss();
-    }
-  }, 100);
+  // Delay dismiss poll to prevent immediate dismissal from held button
+  let dismissPoll;
+  setTimeout(() => {
+    dismissPoll = setInterval(() => {
+      const gps2 = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+      if (gps2.length > 0 && gps2.some(g => g.buttons.some(b => b.pressed))) {
+        clearInterval(dismissPoll);
+        document.removeEventListener("keydown", onKey);
+        dismiss();
+      }
+    }, 100);
+  }, 1000);
 }
 
 function ctrlInit() {
@@ -1817,29 +1821,13 @@ function ctrlHandleConnect(gp) {
   connectedControllers[gp.index] = { gp, profile, slot, isKnown: !!ctrlGetProfile(gp.id) };
   ctrlUpdateScreen();
 
-  const hasMapping = ctrlMappings[gp.id];
-  if (ctrlStartupMode) return; // startup modal handles this
-  if (!hasMapping) {
-    if (connectedControllers[gp.index].isKnown) {
-      ctrlShowModal(
-        'CONTROLLER READY',
-        profile.name + ' connected and configured automatically.',
-        profile,
-        'GOT IT',
-        () => { ctrlMappings[gp.id] = { auto: true }; localStorage.setItem('easyarc_ctrl_mappings', JSON.stringify(ctrlMappings)); ctrlModalDismiss(); }
-      );
-    } else {
-      ctrlShowModal(
-        'NEW CONTROLLER DETECTED',
-        "EasyArc doesn't recognise this controller. Map the buttons now for the best experience.",
-        profile,
-        'MAP BUTTONS →',
-        () => { ctrlModalDismiss(); ctrlStartMapping(gp); }
-      );
-    }
-  } else {
-    showToast(profile.name + ' connected');
+  // Auto-accept all controllers for alpha — no popup modals
+  if (ctrlStartupMode) return;
+  if (!ctrlMappings[gp.id]) {
+    ctrlMappings[gp.id] = { auto: true };
+    localStorage.setItem('easyarc_ctrl_mappings', JSON.stringify(ctrlMappings));
   }
+  showToast(profile.name + ' connected as Player ' + slot);
 }
 
 function ctrlHandleDisconnect(gp) {
@@ -1850,32 +1838,11 @@ function ctrlHandleDisconnect(gp) {
   if (ctrl) showToast(ctrl.profile.name + ' disconnected');
 }
 
-function ctrlShowModal(title, sub, profile, btnLabel, btnAction) {
-  document.getElementById('ctrlModal').classList.remove('hidden');
-  document.getElementById('ctrlModalTitle').textContent = title;
-  document.getElementById('ctrlModalSub').textContent = sub;
-  document.getElementById('ctrlModalBody').innerHTML =
-    '<div class="ctrl-player-row connected" style="margin-bottom:16px">' +
-    '<span class="ctrl-player-icon">' + profile.icon + '</span>' +
-    '<div class="ctrl-player-info"><div class="ctrl-player-name">' + profile.name + '</div></div></div>';
-  const btn = document.getElementById('ctrlModalBtn');
-  btn.textContent = btnLabel;
-  btn.onclick = btnAction;
-}
+// ctrlShowModal removed for alpha — replaced by toast notifications
 
 function ctrlModalDismiss() { document.getElementById('ctrlModal').classList.add('hidden'); }
 
-function ctrlAddNew() {
-  document.getElementById('ctrlModal').classList.remove('hidden');
-  document.getElementById('ctrlModalTitle').textContent = 'ADD CONTROLLER';
-  document.getElementById('ctrlModalSub').textContent = 'Turn on your controller now. EasyArc will detect it automatically.';
-  document.getElementById('ctrlModalBody').innerHTML =
-    '<div class="ctrl-player-row" style="margin-bottom:16px;justify-content:center;">' +
-    '<div class="ctrl-detect-pulse"></div>' +
-    '<span style="font-size:13px;color:var(--cyan);margin-left:12px;">Waiting for controller...</span></div>';
-  document.getElementById('ctrlModalBtn').textContent = 'CANCEL';
-  document.getElementById('ctrlModalBtn').onclick = ctrlModalDismiss;
-}
+// ctrlAddNew removed for alpha
 
 function ctrlUpdateScreen() {
   const body = document.getElementById('ctrlScreenBody');
@@ -2796,36 +2763,7 @@ function gpCheckExitCombo(gp) {
 // Main navigation poll loop — any connected controller drives the UI
 function gpNavPoll() {
   // Block all navigation while startup modal is open
-  // But allow d-pad/stick navigation and A to select during confirm screen
   if (ctrlStartupMode) {
-    const confirmTitle = document.getElementById('ctrlModalTitle');
-    if (confirmTitle && confirmTitle.textContent === 'CONFIRM SETUP') {
-      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-      for (const gp of gps) {
-        if (!gp) continue;
-        const left  = gp.buttons[14] && gp.buttons[14].pressed || gp.axes[0] < -0.4;
-        const right = gp.buttons[15] && gp.buttons[15].pressed || gp.axes[0] >  0.4;
-        const aBtn  = gp.buttons[0]  && gp.buttons[0].pressed;
-
-        if (gpShouldFire('confirmLeft', left)) {
-          const noBtn = document.getElementById('ctrlModalSkipBtn');
-          if (noBtn) { noBtn.focus(); noBtn.style.outline = '2px solid var(--cyan)'; document.getElementById('ctrlModalBtn').style.outline = 'none'; }
-        }
-        if (gpShouldFire('confirmRight', right)) {
-          const yesBtn = document.getElementById('ctrlModalBtn');
-          if (yesBtn) { yesBtn.focus(); yesBtn.style.outline = '2px solid var(--cyan)'; document.getElementById('ctrlModalSkipBtn').style.outline = 'none'; }
-        }
-        if (gpShouldFire('confirmA', aBtn)) {
-          const focused = document.activeElement;
-          if (focused && (focused.id === 'ctrlModalBtn' || focused.id === 'ctrlModalSkipBtn')) {
-            focused.click();
-          } else {
-            const yesBtn = document.getElementById('ctrlModalBtn');
-            if (yesBtn) yesBtn.click();
-          }
-        }
-      }
-    }
     requestAnimationFrame(gpNavPoll);
     return;
   }
