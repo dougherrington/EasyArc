@@ -1902,7 +1902,11 @@ function ctrlInit() {
 function ctrlHandleConnect(gp) {
   if (!gp) return;
   const profile = ctrlGetProfile(gp.id) || { name: gp.id.split('(')[0].trim(), icon:'&#127918;', type:'generic' };
-  const slot = Object.keys(connectedControllers).length + 1;
+  // Always assign slots sequentially from 1 based on connection order
+  // Never persist slot from previous session
+  const usedSlots = Object.values(connectedControllers).map(c => c.slot);
+  let slot = 1;
+  while (usedSlots.includes(slot)) slot++;
   connectedControllers[gp.index] = { gp, profile, slot, isKnown: !!ctrlGetProfile(gp.id) };
   ctrlUpdateScreen();
 
