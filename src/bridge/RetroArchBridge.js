@@ -976,6 +976,92 @@ Source = 0`;
     }
   }
 
+  async scrapeGameWithFallback(game, ssUser, ssPassword, tgdbKey) {
+    // Try ScreenScraper first if credentials provided
+    if (ssUser && ssPassword) {
+      const ssResult = await this.scrapeGame(game, ssUser, ssPassword);
+      if (ssResult.success) return ssResult;
+    }
+    // Fall back to TheGamesDB
+    if (tgdbKey) {
+      const tgdbResult = await this.scrapeGameTGDB(game, tgdbKey);
+      if (tgdbResult.success) return tgdbResult;
+    }
+    return { success:false, error:'Not found in any scraper' };
+  }
+
+
+  async scrapeGameTGDB(game, apiKey) {
+    const TGDB_IDS = {
+      nes:3, snes:6, n64:3, gba:5, gbc:41, gb:41,
+      genesis:36, gamegear:20, mastersystem:35,
+      psx:10, psp:13, ps2:11, ps3:12,
+      gamecube:2, wii:9, dreamcast:16, saturn:17,
+      atari2600:22, jaguar:28
+    };
+    const platformId = TGDB_IDS[game.system];
+    if (!platformId) return { success:false, error:'Unsupported system' };
+
+    const https = require('https');
+    const fs = require('fs');
+    const artPath = this.getArtworkPath(game);
+    if (fs.existsSync(artPath)) return { success:true, path:artPath, cached:true };
+
+    const httpsGet = (url) => new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+
+    const httpsGetBinary = (url) => new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return resolve(httpsGetBinary(res.headers.location));
+        }
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      }).on('error', reject);
+    });
+
+    try {
+      const cleanTitle = game.title
+        .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs)$/i, '')
+        .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
+        .replace(/\(Disc ?\d+\)/gi, '')
+        .replace(/\[.*?\]/g, '')
+        .replace(/\s+/g, ' ').trim();
+
+      // Step 1: Search for game by name and platform
+      const searchUrl = 'https://api.thegamesdb.net/v1/Games/ByGameName?apikey=' + apiKey +
+        '&name=' + encodeURIComponent(cleanTitle) +
+        '&fields=game_title';
+      const searchData = await httpsGet(searchUrl);
+      const searchJson = JSON.parse(searchData);
+
+      if (!searchJson.data || !searchJson.data.games || searchJson.data.games.length === 0) {
+        return { success:false, error:'Game not found in TheGamesDB' };
+      }
+
+      const gameId = searchJson.data.games[0].id;
+
+      // Step 2: Try direct CDN URL for box art
+      const imgUrl = 'https://cdn.thegamesdb.net/images/medium/boxart/front/' + gameId + '-1.jpg';
+      const imgBuf = await httpsGetBinary(imgUrl);
+
+      if (!imgBuf || imgBuf.length < 1000) {
+        return { success:false, error:'No box art found in TheGamesDB' };
+      }
+
+      fs.writeFileSync(artPath, imgBuf);
+      return { success:true, path:artPath };
+
+    } catch(e) {
+      return { success:false, error:e.message };
+    }
+  }
 
   async scrapeLibrary(games, ssUser, ssPassword, progressCallback) {
     const results = { success:0, failed:0, cached:0 };

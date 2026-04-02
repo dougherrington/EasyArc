@@ -1716,18 +1716,16 @@ function ctrlShowStartupModal() {
 
   function renderControllers() {
     const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-    if (gps.length === 0) {
-      body.innerHTML =
-        "<div style='font-size:16px;color:#fff;line-height:2;text-align:center;padding:24px 0'>" +
-        "No controllers detected.<br>" +
-        "<span style='color:var(--muted);font-size:14px'>Press a button on your controller<br>" +
-        "or click LET\'S PLAY to use keyboard only.</span>" +
-        "</div>";
-    } else {
-      body.innerHTML =
-        "<div style='font-size:16px;color:var(--green);font-weight:bold;text-align:center;padding:8px 0;margin-bottom:12px'>" +
-        gps.length + " controller" + (gps.length > 1 ? "s" : "") + " ready!" +
-        "</div>" +
+    // Register any new controllers
+    gps.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
+
+    let html = "<div style='font-size:16px;color:#fff;text-align:center;padding:8px 0;margin-bottom:16px'>" +
+      "Press a button on your controller(s) to register them." +
+      "</div>";
+
+    if (gps.length > 0) {
+      html += "<div style='font-size:14px;color:var(--green);font-weight:bold;text-align:center;margin-bottom:12px'>" +
+        gps.length + " controller" + (gps.length > 1 ? "s" : "") + " detected</div>" +
         gps.map((gp, i) => {
           const profile = ctrlGetProfile(gp.id) || { name: gp.id.split('(')[0].trim() };
           return "<div style='display:flex;align-items:center;gap:12px;padding:10px 16px;" +
@@ -1740,45 +1738,29 @@ function ctrlShowStartupModal() {
             "</div></div>";
         }).join("");
     }
+    body.innerHTML = html;
   }
-
-  // Register connected controllers
-  const initialGps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-  initialGps.forEach(gp => { if (!connectedControllers[gp.index]) ctrlHandleConnect(gp); });
 
   renderControllers();
   const scanInterval = setInterval(renderControllers, 500);
 
   function dismiss() {
     clearInterval(scanInterval);
-    clearInterval(dismissPoll);
     ctrlModalDismiss();
     setTimeout(() => { ctrlStartupMode = false; }, 800);
   }
 
+  // Only LET'S PLAY button or ENTER dismisses — no auto-dismiss on button press
   btn.textContent = "LET'S PLAY →";
   btn.onclick = () => dismiss();
 
   function onKey(e) {
-    if (e.key === "Enter" || e.key === " ") {
+    if (e.key === "Enter") {
       document.removeEventListener("keydown", onKey);
       dismiss();
     }
   }
   document.addEventListener("keydown", onKey);
-
-  // Delay dismiss poll to prevent immediate dismissal from held button
-  let dismissPoll;
-  setTimeout(() => {
-    dismissPoll = setInterval(() => {
-      const gps2 = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
-      if (gps2.length > 0 && gps2.some(g => g.buttons.some(b => b.pressed))) {
-        clearInterval(dismissPoll);
-        document.removeEventListener("keydown", onKey);
-        dismiss();
-      }
-    }, 100);
-  }, 1000);
 }
 
 function ctrlInit() {
@@ -3361,7 +3343,7 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
-const SCRAPE_SYSTEMS = ['psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3'];
+const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp'];
 
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
@@ -3380,17 +3362,21 @@ async function startScrape() {
   const gameEl = document.getElementById('scrapeProgressGame');
   if (row) row.style.display = '';
 
+  const tgdbKey = 'c38da12dde0715b5f9f349cf5859e096ed4fe9c20e034364b83444b5e7998e11';
   let done = 0;
   for (const g of toScrape) {
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
     if (gameEl) gameEl.textContent = g.title;
-    const result = await window.easyarc.scrapeGame(g, ssUser, ssPass);
+    const result = await window.easyarc.scrapeGameWithFallback(g, ssUser, ssPass, tgdbKey);
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI('file://' + result.path);
     }
     done++;
-    await new Promise(r => setTimeout(r, 1200));
+    // Only delay if we actually made an API call (not cached)
+    if (!result.cached) {
+      await new Promise(r => setTimeout(r, 1200));
+    }
   }
 
   scrapeRunning = false;

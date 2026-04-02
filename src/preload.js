@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   listControllers: () => ipcRenderer.invoke('bridge:listControllers'),
   saveMapping: (mapping) => ipcRenderer.invoke('bridge:saveMapping', mapping),
   scrapeGame: (game, ssUser, ssPassword) => ipcRenderer.invoke('bridge:scrapeGame', game, ssUser, ssPassword),
+  scrapeGameWithFallback: (game, ssUser, ssPassword, tgdbKey) => ipcRenderer.invoke('bridge:scrapeGameWithFallback', game, ssUser, ssPassword, tgdbKey),
   createFolder:    (folderPath) => ipcRenderer.invoke('bridge:createFolder', folderPath),
   scanCollection:  (parentFolder) => ipcRenderer.invoke('bridge:scanCollection', parentFolder),
   moveFiles:      (filePaths, destFolder) => ipcRenderer.invoke('bridge:moveFiles', filePaths, destFolder),
