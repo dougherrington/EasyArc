@@ -1092,10 +1092,16 @@ function selectGame(id) {
     if (rows.length === 0)      rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
     dm.innerHTML = rows.join('');
   }
-  // Highlight selected card
+  // Highlight selected card — exact ID match only
   document.querySelectorAll('.game-card').forEach(c => c.classList.remove('gp-selected'));
   const cards = document.querySelectorAll('.game-card');
-  cards.forEach(c => { if (c.getAttribute('onclick') && c.getAttribute('onclick').includes(String(id))) c.classList.add('gp-selected'); });
+  cards.forEach(c => {
+    const onclick = c.getAttribute('onclick');
+    if (onclick) {
+      const match = onclick.match(/selectGame\((\d+)\)/);
+      if (match && parseInt(match[1]) === id) c.classList.add('gp-selected');
+    }
+  });
 }
 
 function getFavorites() {
