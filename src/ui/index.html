@@ -958,54 +958,7 @@ async function showEmulatorCheck() {
   btn.onclick = () => {
     localStorage.setItem('easyarc_emulators_checked', '1');
     modal.classList.add('hidden');
-    if (games.length > 0) {
-      setTimeout(() => ctrlShowStartupModal(), 500);
-    }
-  };
-}
-
-async function showEmulatorCheck() {
-  const modal = document.getElementById('ctrlModal');
-  const title = document.getElementById('ctrlModalTitle');
-  const sub   = document.getElementById('ctrlModalSub');
-  const body  = document.getElementById('ctrlModalBody');
-  const btn   = document.getElementById('ctrlModalBtn');
-  const skip  = document.getElementById('ctrlModalSkipBtn');
-
-  modal.classList.remove('hidden');
-  title.textContent = 'EMULATOR CHECK';
-  sub.textContent = 'EasyArc requires RetroArch and optionally Dolphin.';
-  body.innerHTML = '<div style="text-align:center;padding:20px;font-size:16px;color:#fff">Checking...</div>';
-  btn.textContent = 'CONTINUE →';
-  btn.style.display = 'inline-block';
-  if (skip) skip.style.display = 'none';
-
-  const ra = await window.easyarc.findRetroArch();
-  const dolphin = await window.easyarc.findDolphin();
-
-  body.innerHTML =
-    '<div style="font-family:Calibri,Arial,sans-serif;font-size:16px;">' +
-    '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (ra.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,60,110,0.08)') + ';border:1px solid ' + (ra.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,60,110,0.3)') + ';border-radius:8px">' +
-    '<span style="font-size:28px">' + (ra.found ? '✅' : '❌') + '</span>' +
-    '<div>' +
-    '<div style="color:#fff;font-weight:bold">RetroArch</div>' +
-    '<div style="color:' + (ra.found ? 'var(--green)' : '#ff3c6e') + ';font-size:14px">' + (ra.found ? ra.path : 'Not found — <a href="https://www.retroarch.com/index.php?page=platforms" style="color:var(--cyan)">Download RetroArch</a>') + '</div>' +
-    '</div></div>' +
-    '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (dolphin.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,180,0,0.08)') + ';border:1px solid ' + (dolphin.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,180,0,0.3)') + ';border-radius:8px">' +
-    '<span style="font-size:28px">' + (dolphin.found ? '✅' : '⚠️') + '</span>' +
-    '<div>' +
-    '<div style="color:#fff;font-weight:bold">Dolphin</div>' +
-    '<div style="color:' + (dolphin.found ? 'var(--green)' : 'var(--yellow)') + ';font-size:14px">' + (dolphin.found ? dolphin.path : 'Not found — required for GameCube only. <a href="https://dolphin-emu.org/download/" style="color:var(--cyan)">Download Dolphin</a>') + '</div>' +
-    '</div></div>' +
-    (!ra.found ? '<div style="color:#ff3c6e;font-size:14px;text-align:center;margin-top:8px">⚠️ RetroArch is required. Please install it before continuing.</div>' : '') +
-    '</div>';
-
-  btn.onclick = () => {
-    localStorage.setItem('easyarc_emulators_checked', '1');
-    modal.classList.add('hidden');
-    if (games.length > 0) {
-      setTimeout(() => ctrlShowStartupModal(), 500);
-    }
+    setTimeout(() => ctrlShowStartupModal(), 500);
   };
 }
 
@@ -1042,16 +995,16 @@ function showSysReqScreen() {
           <p style="margin-bottom:8px;">• EasySMX X15 (in Xbox mode)</p>
           <p style="margin-bottom:24px;">• GameSir Nova Lite (in XInput mode — hold B+Home to activate)</p>
 
-          <p style="color:var(--cyan);font-size:14pt;">Press <strong>ENTER</strong> on your keyboard to continue.</p>
+          <p style="color:var(--cyan);font-size:14pt;">Press <strong>ENTER</strong> on your keyboard — it's time to add some games! 🎮</p>
         </div>
       </div>
     </div>`;
 
-  // Listen for ENTER to proceed to controller modal
+  // Listen for ENTER to proceed to emulator check
   const sysReqKey = (e) => {
     if (e.key === 'Enter') {
       document.removeEventListener('keydown', sysReqKey);
-      ctrlShowStartupModal();
+      showEmulatorCheck();
     }
   };
   document.addEventListener('keydown', sysReqKey);
@@ -1734,10 +1687,10 @@ if (splash && shell) {
       splash.remove();
       // Render grid now that splash is gone — welcome message appears if no games
       renderGrid();
-      // Check emulators on first launch
-      if (!localStorage.getItem('easyarc_emulators_checked')) {
-        setTimeout(() => showEmulatorCheck(), 500);
-      } else if (games.length > 0) {
+      // If user has games and emulators already checked — show controller modal
+      // If no games — welcome screen handles the flow via ENTER key
+      // If emulators not checked — system requirements → emulator check handles it
+      if (games.length > 0 && localStorage.getItem('easyarc_emulators_checked')) {
         setTimeout(() => ctrlShowStartupModal(), 2000);
       }
     }, 1000);
@@ -2976,6 +2929,11 @@ const ADD_GAMES_SYSTEMS = [
   { id:'mastersystem',name:'Master System' },
   { id:'jaguar',      name:'Atari Jaguar' },
   { id:'switch',      name:'Nintendo Switch' },
+  { id:'mame',        name:'MAME Arcade' },
+  { id:'mame2003',    name:'MAME Arcade (2003)' },
+  { id:'arcade',      name:'Arcade (FinalBurn Neo)' },
+  { id:'neogeo',      name:'Neo Geo' },
+  { id:'atari2600',   name:'Atari 2600' },
 ];
 
 function showTestPlanModal() {
