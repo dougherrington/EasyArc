@@ -52,7 +52,7 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — need folder hint to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp'],
+  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','mame','mame2003','arcade','neogeo'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
   '.ciso': ['gamecube','wii'],
@@ -85,6 +85,10 @@ const FOLDER_HINTS = [
   { hints: ['master system','mastersystem'],                                system: 'mastersystem' },
   { hints: ['atari 2600','atari2600'],                                      system: 'atari2600' },
   { hints: ['atari jaguar','jaguar'],                                       system: 'jaguar' },
+  { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
+  { hints: ['mame'],                                                         system: 'mame' },
+  { hints: ['neogeo','neo geo','neo-geo'],                                   system: 'neogeo' },
+  { hints: ['arcade','cps1','cps2','cps3','atomiswave','naomi'],             system: 'arcade' },
 ];
 
 // Folders to skip during scanning
@@ -114,6 +118,10 @@ const CORE_REMAP_FOLDERS = {
   ps2:         'PCSX2',
   psp:         'PPSSPP',
   saturn:      'Beetle Saturn',
+  mame:        'MAME',
+  mame2003:    'MAME 2003-Plus',
+  arcade:      'FinalBurn Neo',
+  neogeo:      'FinalBurn Neo',
   dreamcast:   'Flycast',
   gamecube:    'Dolphin',
   atari2600:   'Stella',
@@ -171,6 +179,10 @@ const SYSTEM_CORES = {
   dreamcast:    'flycast_libretro.dylib',
   gamecube:     'dolphin_libretro.dylib',
   atari2600:    'stella_libretro.dylib',
+  mame:         'mame_libretro.dylib',
+  mame2003:     'mame2003_plus_libretro.dylib',
+  arcade:       'fbneo_libretro.dylib',
+  neogeo:       'fbneo_libretro.dylib',
 };
 
 class RetroArchBridge {

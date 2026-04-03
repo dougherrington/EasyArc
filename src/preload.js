@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('easyarc', {
   findRetroArch: () => ipcRenderer.invoke('bridge:findRetroArch'),
+  findDolphin:   () => ipcRenderer.invoke('bridge:findDolphin'),
   getConfig: () => ipcRenderer.invoke('bridge:getConfig'),
   setConfig: (values) => ipcRenderer.invoke('bridge:setConfig', values),
   listCores: () => ipcRenderer.invoke('bridge:listCores'),

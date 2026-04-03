@@ -123,12 +123,13 @@ body::after {
 .search-box { position:relative; }
 .search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:14px; pointer-events:none; }
 .search-input {
-  background:rgba(0,20,50,0.7); border:1px solid var(--border); color:var(--text);
-  font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:400;
-  padding:7px 14px 7px 32px; border-radius:4px; width:200px; transition:all 0.2s; outline:none;
+  background:rgba(0,20,50,0.9); border:1px solid var(--cyan); color:#fff;
+  font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:500;
+  padding:7px 14px 7px 32px; border-radius:4px; width:220px; transition:all 0.2s; outline:none;
+  box-shadow:0 0 8px rgba(0,240,255,0.15);
 }
-.search-input:focus { border-color:var(--cyan); box-shadow:0 0 12px rgba(0,240,255,0.2); width:240px; }
-.search-input::placeholder { color:var(--muted); }
+.search-input:focus { border-color:var(--cyan); box-shadow:0 0 16px rgba(0,240,255,0.35); width:260px; }
+.search-input::placeholder { color:rgba(255,255,255,0.5); }
 
 .scan-btn { display:none; }
 .action-btn {
@@ -837,6 +838,7 @@ const systemNames = {
   psx:'PlayStation', ps2:'PlayStation 2',
   psp:'PlayStation Portable', ps3:'PlayStation 3',
   saturn:'Sega Saturn',
+  mame:'MAME Arcade', mame2003:'MAME Arcade', arcade:'Arcade', neogeo:'Neo Geo',
   wii:'Nintendo Wii',
   wiiu:'Nintendo Wii U',
   switch:'Nintendo Switch',
@@ -847,6 +849,7 @@ const systemColors = {
   gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a',
   psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', ps3:'#0a0a1a',
   saturn:'#2a0a0a',
+  mame:'#1a1a0a', mame2003:'#1a1a0a', arcade:'#2a0a1a', neogeo:'#1a0a0a',
 };
 const systemIcons = {
   gbc:String.fromCodePoint(0x1F7E2),
@@ -866,6 +869,10 @@ const systemIcons = {
   saturn:String.fromCodePoint(0x1FA90),
   gamecube:String.fromCodePoint(0x1F3AE),
   dreamcast:String.fromCodePoint(0x1F4BF),
+  mame:String.fromCodePoint(0x1F579),
+  mame2003:String.fromCodePoint(0x1F579),
+  arcade:String.fromCodePoint(0x1F579),
+  neogeo:String.fromCodePoint(0x1F579),
   wii:String.fromCodePoint(0x1F3AE),
   wiiu:String.fromCodePoint(0x1F3AE),
   switch:String.fromCodePoint(0x1F3AE),
@@ -911,6 +918,96 @@ let metadataCache = {}; // game.path -> metadata object
 let currentSystem = 'all';
 let currentSearch = '';
 let selectedGame  = null;
+
+async function showEmulatorCheck() {
+  const modal = document.getElementById('ctrlModal');
+  const title = document.getElementById('ctrlModalTitle');
+  const sub   = document.getElementById('ctrlModalSub');
+  const body  = document.getElementById('ctrlModalBody');
+  const btn   = document.getElementById('ctrlModalBtn');
+  const skip  = document.getElementById('ctrlModalSkipBtn');
+
+  modal.classList.remove('hidden');
+  title.textContent = 'EMULATOR CHECK';
+  sub.textContent = 'EasyArc requires RetroArch and optionally Dolphin.';
+  body.innerHTML = '<div style="text-align:center;padding:20px;font-size:16px;color:#fff">Checking...</div>';
+  btn.textContent = 'CONTINUE →';
+  btn.style.display = 'inline-block';
+  if (skip) skip.style.display = 'none';
+
+  const ra = await window.easyarc.findRetroArch();
+  const dolphin = await window.easyarc.findDolphin();
+
+  body.innerHTML =
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:16px;">' +
+    '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (ra.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,60,110,0.08)') + ';border:1px solid ' + (ra.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,60,110,0.3)') + ';border-radius:8px">' +
+    '<span style="font-size:28px">' + (ra.found ? '✅' : '❌') + '</span>' +
+    '<div>' +
+    '<div style="color:#fff;font-weight:bold">RetroArch</div>' +
+    '<div style="color:' + (ra.found ? 'var(--green)' : '#ff3c6e') + ';font-size:14px">' + (ra.found ? ra.path : 'Not found — <a href="https://www.retroarch.com/index.php?page=platforms" style="color:var(--cyan)">Download RetroArch</a>') + '</div>' +
+    '</div></div>' +
+    '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (dolphin.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,180,0,0.08)') + ';border:1px solid ' + (dolphin.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,180,0,0.3)') + ';border-radius:8px">' +
+    '<span style="font-size:28px">' + (dolphin.found ? '✅' : '⚠️') + '</span>' +
+    '<div>' +
+    '<div style="color:#fff;font-weight:bold">Dolphin</div>' +
+    '<div style="color:' + (dolphin.found ? 'var(--green)' : 'var(--yellow)') + ';font-size:14px">' + (dolphin.found ? dolphin.path : 'Not found — required for GameCube only. <a href="https://dolphin-emu.org/download/" style="color:var(--cyan)">Download Dolphin</a>') + '</div>' +
+    '</div></div>' +
+    (!ra.found ? '<div style="color:#ff3c6e;font-size:14px;text-align:center;margin-top:8px">⚠️ RetroArch is required. Please install it before continuing.</div>' : '') +
+    '</div>';
+
+  btn.onclick = () => {
+    localStorage.setItem('easyarc_emulators_checked', '1');
+    modal.classList.add('hidden');
+    if (games.length > 0) {
+      setTimeout(() => ctrlShowStartupModal(), 500);
+    }
+  };
+}
+
+async function showEmulatorCheck() {
+  const modal = document.getElementById('ctrlModal');
+  const title = document.getElementById('ctrlModalTitle');
+  const sub   = document.getElementById('ctrlModalSub');
+  const body  = document.getElementById('ctrlModalBody');
+  const btn   = document.getElementById('ctrlModalBtn');
+  const skip  = document.getElementById('ctrlModalSkipBtn');
+
+  modal.classList.remove('hidden');
+  title.textContent = 'EMULATOR CHECK';
+  sub.textContent = 'EasyArc requires RetroArch and optionally Dolphin.';
+  body.innerHTML = '<div style="text-align:center;padding:20px;font-size:16px;color:#fff">Checking...</div>';
+  btn.textContent = 'CONTINUE →';
+  btn.style.display = 'inline-block';
+  if (skip) skip.style.display = 'none';
+
+  const ra = await window.easyarc.findRetroArch();
+  const dolphin = await window.easyarc.findDolphin();
+
+  body.innerHTML =
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:16px;">' +
+    '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (ra.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,60,110,0.08)') + ';border:1px solid ' + (ra.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,60,110,0.3)') + ';border-radius:8px">' +
+    '<span style="font-size:28px">' + (ra.found ? '✅' : '❌') + '</span>' +
+    '<div>' +
+    '<div style="color:#fff;font-weight:bold">RetroArch</div>' +
+    '<div style="color:' + (ra.found ? 'var(--green)' : '#ff3c6e') + ';font-size:14px">' + (ra.found ? ra.path : 'Not found — <a href="https://www.retroarch.com/index.php?page=platforms" style="color:var(--cyan)">Download RetroArch</a>') + '</div>' +
+    '</div></div>' +
+    '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (dolphin.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,180,0,0.08)') + ';border:1px solid ' + (dolphin.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,180,0,0.3)') + ';border-radius:8px">' +
+    '<span style="font-size:28px">' + (dolphin.found ? '✅' : '⚠️') + '</span>' +
+    '<div>' +
+    '<div style="color:#fff;font-weight:bold">Dolphin</div>' +
+    '<div style="color:' + (dolphin.found ? 'var(--green)' : 'var(--yellow)') + ';font-size:14px">' + (dolphin.found ? dolphin.path : 'Not found — required for GameCube only. <a href="https://dolphin-emu.org/download/" style="color:var(--cyan)">Download Dolphin</a>') + '</div>' +
+    '</div></div>' +
+    (!ra.found ? '<div style="color:#ff3c6e;font-size:14px;text-align:center;margin-top:8px">⚠️ RetroArch is required. Please install it before continuing.</div>' : '') +
+    '</div>';
+
+  btn.onclick = () => {
+    localStorage.setItem('easyarc_emulators_checked', '1');
+    modal.classList.add('hidden');
+    if (games.length > 0) {
+      setTimeout(() => ctrlShowStartupModal(), 500);
+    }
+  };
+}
 
 function showSysReqScreen() {
   const grid = document.getElementById('gameGrid');
@@ -1042,6 +1139,7 @@ function updateCounts() {
     'gbc','gba','nes','snes','n64','gamecube',
     'genesis','gamegear','mastersystem','saturn','dreamcast',
     'atari2600','jaguar',
+    'mame','mame2003','arcade','neogeo',
     'psx','ps2','psp','ps3',
     'wii',
     'wiiu',
@@ -1522,6 +1620,8 @@ if (window.easyarc) {
   // Restore saved games from previous sessions
   const savedFolders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
   if (savedFolders.length > 0 && localStorage.getItem('easyarc_setup_done')) {
+    // Clear games array before startup scan to prevent duplicates
+    games.length = 0;
     savedFolders.forEach(async (folder, fi) => {
       const result = await window.easyarc.scanRoms(folder);
       if (result.success) {
@@ -1634,12 +1734,11 @@ if (splash && shell) {
       splash.remove();
       // Render grid now that splash is gone — welcome message appears if no games
       renderGrid();
-      // Controller modal now triggered by ENTER on welcome screen
-      // If user already has games, show controller modal automatically
-      if (games.length > 0) {
-        setTimeout(() => {
-          ctrlShowStartupModal();
-        }, 2000);
+      // Check emulators on first launch
+      if (!localStorage.getItem('easyarc_emulators_checked')) {
+        setTimeout(() => showEmulatorCheck(), 500);
+      } else if (games.length > 0) {
+        setTimeout(() => ctrlShowStartupModal(), 2000);
       }
     }, 1000);
   }, 3000);

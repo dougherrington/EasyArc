@@ -11,6 +11,7 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   }
 
   handle('bridge:findRetroArch', () => bridge.findRetroArch());
+  handle('bridge:findDolphin',   () => bridge.findDolphin());
   handle('bridge:getConfig',     () => bridge.getConfig());
   handle('bridge:setConfig',     (values) => bridge.setConfig(values));
   handle('bridge:listCores',     () => bridge.listCores());
