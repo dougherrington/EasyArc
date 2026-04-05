@@ -351,7 +351,7 @@ body::after {
 
 .detail-body { display:flex; flex-direction:column; gap:8px; flex:1; overflow-y:auto; min-height:0; justify-content:space-between; }
 .detail-system { font-family:'Orbitron',monospace; font-size:8px; letter-spacing:2px; color:var(--cyan); text-transform:uppercase; }
-.detail-title { font-family:'Orbitron',monospace; font-size:10px; line-height:1.6; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
+.detail-title { font-family:'Orbitron',monospace; font-size:32px; line-height:1.6; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
 .detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:6px; align-content:start; }
 .meta-item { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:7px 10px; }
 .meta-label { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px; }
@@ -1140,7 +1140,8 @@ function selectGame(id) {
     if (meta && meta.year)      rows.push('<div class="meta-item"><div class="meta-label">Year</div><div class="meta-value">' + meta.year + '</div></div>');
     if (meta && meta.publisher) rows.push('<div class="meta-item"><div class="meta-label">Publisher</div><div class="meta-value">' + meta.publisher + '</div></div>');
     if (meta && meta.players)   rows.push('<div class="meta-item"><div class="meta-label">Players</div><div class="meta-value">' + meta.players + '</div></div>');
-    if (meta && meta.synopsis)  rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:13px;font-weight:500;line-height:1.7;color:var(--text);">' + meta.synopsis + '</div></div>');
+    const synopsis = (meta && meta.synopsis) ? meta.synopsis : 'Game description not available.';
+    rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:16px;font-weight:500;line-height:1.7;color:var(--text);">' + synopsis + '</div></div>');
     if (rows.length === 0)      rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
     dm.innerHTML = rows.join('');
   }
@@ -3400,15 +3401,15 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
-const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp'];
+const SCRAPE_SYSTEMS = ['mame2003']; // TESTING MAME ONLY
 
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
   const ssUser = document.getElementById('ssUser').value.trim();
-  const ssPass = document.getElementById('ssPass').value.trim();
-  if (!ssUser || !ssPass) { showToast('Enter ScreenScraper credentials first'); return; }
-  localStorage.setItem('ss_user', ssUser);
-  localStorage.setItem('ss_pass', ssPass);
+  const ssPass = document.getElementById('ssPass') ? document.getElementById('ssPass').value.trim() : '';
+  // Alpha: use TheGamesDB only — no ScreenScraper required
+  // localStorage.setItem('ss_user', ssUser);
+  // localStorage.setItem('ss_pass', ssPass);
 
   const toScrape = games.filter(g => SCRAPE_SYSTEMS.includes(g.system));
   if (toScrape.length === 0) { showToast('All games already scraped!'); return; }

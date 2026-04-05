@@ -420,13 +420,13 @@ class RetroArchBridge {
       const fs = require('fs');
       if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
       const settings = {
-        'input_enable_hotkey': 'select',
-        'input_exit_emulator': 'start',
+        'input_enable_hotkey': 'nul',
+        'input_exit_emulator': 'nul',
         'auto_remaps_enable': 'true',
         'input_menu_toggle': 'nul',
         'input_menu_toggle_btn': 'nul',
         'input_menu_toggle_gamepad_combo': '0',
-        'input_quit_gamepad_combo': '4',
+        'input_quit_gamepad_combo': '0',
         'input_pause_toggle': 'nul',
         'input_pause_toggle_btn': 'nul',
         'input_rewind': 'nul',
@@ -1015,7 +1015,8 @@ Source = 0`;
       genesis:36, gamegear:20, mastersystem:35,
       psx:10, psp:13, ps2:11, ps3:12,
       gamecube:2, wii:9, dreamcast:16, saturn:17,
-      atari2600:22, jaguar:28
+      atari2600:22, jaguar:28,
+      mame:23, mame2003:23, arcade:23, neogeo:24
     };
     const platformId = TGDB_IDS[game.system];
     if (!platformId) return { success:false, error:'Unsupported system' };
@@ -1055,7 +1056,8 @@ Source = 0`;
       // Step 1: Search for game by name and platform
       const searchUrl = 'https://api.thegamesdb.net/v1/Games/ByGameName?apikey=' + apiKey +
         '&name=' + encodeURIComponent(cleanTitle) +
-        '&fields=game_title';
+        '&fields=game_title' +
+        (platformId ? '&filter%5Bplatform%5D=' + platformId : '');
       const searchData = await httpsGet(searchUrl);
       const searchJson = JSON.parse(searchData);
 
