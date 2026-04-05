@@ -1004,10 +1004,39 @@ function showSysReqScreen() {
   const sysReqKey = (e) => {
     if (e.key === 'Enter') {
       document.removeEventListener('keydown', sysReqKey);
-      showEmulatorCheck();
+      showSafetyWarning();
     }
   };
   document.addEventListener('keydown', sysReqKey);
+}
+
+function showSafetyWarning() {
+  const grid = document.getElementById('gameGrid');
+  grid.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
+      <div style="max-width:680px;">
+        <div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:24px;text-align:center;">
+          🛡️ A Note About ROMs
+        </div>
+        <div style="font-family:Calibri,Arial,sans-serif;font-size:16pt;color:#fff;line-height:1.8;text-align:left;">
+          <p style="margin-bottom:16px;">EasyArc is a frontend — it organizes and launches your game files but does not provide or distribute them. Where and how you obtain ROM files is entirely your responsibility.</p>
+          <p style="margin-bottom:16px;font-weight:bold;color:var(--cyan);">Legal considerations:</p>
+          <p style="margin-bottom:16px;">ROMs of games you don't own may violate copyright law in your country. We recommend only using ROM files from games you personally own.</p>
+          <p style="margin-bottom:16px;font-weight:bold;color:var(--cyan);">Stay safe online:</p>
+          <p style="margin-bottom:16px;">Be cautious about where you download ROM files. Malicious software is commonly distributed through fake ROM sites and download links. <strong>Never run terminal commands or scripts from unknown sources</strong> claiming to offer game files — these are almost always attempts to compromise your computer.</p>
+          <p style="margin-bottom:24px;">EasyArc is built for the retro gaming community with love and respect. Play safe out there! 🎮</p>
+          <p style="color:var(--cyan);font-size:14pt;">Press <strong>ENTER</strong> on your keyboard to continue.</p>
+        </div>
+      </div>
+    </div>`;
+
+  const safetyKey = (e) => {
+    if (e.key === 'Enter') {
+      document.removeEventListener('keydown', safetyKey);
+      showEmulatorCheck();
+    }
+  };
+  document.addEventListener('keydown', safetyKey);
 }
 
 function renderGrid() {
@@ -3401,7 +3430,7 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
-const SCRAPE_SYSTEMS = ['mame2003']; // TESTING MAME ONLY
+const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp', 'mame', 'mame2003', 'arcade', 'neogeo'];
 
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
