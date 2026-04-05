@@ -963,11 +963,67 @@ async function showEmulatorCheck() {
   };
 }
 
+// Global onboarding key handler — only one active at a time
+let _onboardingKeyHandler = null;
+function setOnboardingKey(fn) {
+  if (_onboardingKeyHandler) document.removeEventListener('keydown', _onboardingKeyHandler);
+  _onboardingKeyHandler = fn;
+  document.addEventListener('keydown', _onboardingKeyHandler);
+}
+
+function showSupportedSystems() {
+  const grid = document.getElementById('gameGrid');
+  const systems = [
+    {sys:'gbc', name:'Game Boy Color'},
+    {sys:'gba', name:'Game Boy Advance'},
+    {sys:'nes', name:'NES'},
+    {sys:'snes', name:'Super Nintendo'},
+    {sys:'n64', name:'Nintendo 64'},
+    {sys:'gamecube', name:'GameCube'},
+    {sys:'genesis', name:'Sega Genesis'},
+    {sys:'gamegear', name:'Game Gear'},
+    {sys:'mastersystem', name:'Master System'},
+    {sys:'saturn', name:'Sega Saturn'},
+    {sys:'dreamcast', name:'Sega Dreamcast'},
+    {sys:'psx', name:'PlayStation'},
+    {sys:'psp', name:'PlayStation Portable'},
+    {sys:'atari2600', name:'Atari 2600'},
+    {sys:'jaguar', name:'Atari Jaguar'},
+    {sys:'mame2003', name:'MAME Arcade'},
+  ];
+  const cards = systems.map(s =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;' +
+    'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">' +
+    '<span style="font-size:22px">' + (systemIcons[s.sys]||'🎮') + '</span>' +
+    '<span style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:#fff">' + s.name + '</span>' +
+    '</div>'
+  ).join('');
+  grid.innerHTML =
+    '<div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">' +
+    '<div style="max-width:780px;width:100%;">' +
+    '<div style="margin-bottom:16px;"><button onclick="renderGrid()" style="background:transparent;border:1px solid var(--muted);color:var(--muted);font-family:Rajdhani,sans-serif;font-size:13px;padding:6px 14px;border-radius:4px;cursor:pointer;">← Back</button></div>' +
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:8px;text-align:center;">Supported Systems</div>' +
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--muted);text-align:center;margin-bottom:24px;">EasyArc Alpha supports 16 systems — with more coming soon!</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;">' +
+    cards +
+    '</div>' +
+    '<p style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--cyan);text-align:center;">Press <strong>ENTER</strong> on your keyboard to continue.</p>' +
+    '</div></div>';
+
+  setOnboardingKey((e) => {
+    if (e.key === 'Enter') {
+      setOnboardingKey(null);
+      showSysReqScreen();
+    }
+  });
+}
+
 function showSysReqScreen() {
   const grid = document.getElementById('gameGrid');
   grid.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
       <div style="max-width:680px;">
+        <div style="margin-bottom:16px;"><button onclick="showSupportedSystems()" style="background:transparent;border:1px solid var(--muted);color:var(--muted);font-family:Rajdhani,sans-serif;font-size:13px;padding:6px 14px;border-radius:4px;cursor:pointer;">← Back</button></div>
         <div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:24px;text-align:center;">
           System Requirements
         </div>
@@ -1001,14 +1057,12 @@ function showSysReqScreen() {
       </div>
     </div>`;
 
-  // Listen for ENTER to proceed to emulator check
-  const sysReqKey = (e) => {
+  setOnboardingKey((e) => {
     if (e.key === 'Enter') {
-      document.removeEventListener('keydown', sysReqKey);
+      setOnboardingKey(null);
       showSafetyWarning();
     }
-  };
-  document.addEventListener('keydown', sysReqKey);
+  });
 }
 
 function showSafetyWarning() {
@@ -1016,6 +1070,7 @@ function showSafetyWarning() {
   grid.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
       <div style="max-width:680px;">
+        <div style="margin-bottom:16px;"><button onclick="showSysReqScreen()" style="background:transparent;border:1px solid var(--muted);color:var(--muted);font-family:Rajdhani,sans-serif;font-size:13px;padding:6px 14px;border-radius:4px;cursor:pointer;">← Back</button></div>
         <div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:24px;text-align:center;">
           🛡️ A Note About ROMs
         </div>
@@ -1031,13 +1086,14 @@ function showSafetyWarning() {
       </div>
     </div>`;
 
-  const safetyKey = (e) => {
+  setOnboardingKey((e) => {
     if (e.key === 'Enter') {
-      document.removeEventListener('keydown', safetyKey);
+      setOnboardingKey(null);
+      localStorage.setItem('easyarc_setup_done', '1');
+      document.getElementById('gameGrid').innerHTML = '';
       showEmulatorCheck();
     }
-  };
-  document.addEventListener('keydown', safetyKey);
+  });
 }
 
 function renderGrid() {
@@ -1050,7 +1106,7 @@ function renderGrid() {
   document.getElementById('game-count').textContent = filtered.length + ' games';
   document.getElementById('system-title').textContent = systemNames[currentSystem] || 'All Games';
   if (filtered.length === 0) {
-    if (games.length === 0) {
+    if (games.length === 0 && !localStorage.getItem('easyarc_setup_done')) {
       // No games at all — show welcome message
       grid.innerHTML = `
         <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
@@ -1064,6 +1120,7 @@ function renderGrid() {
               <p style="margin-bottom:16px;">EasyArc is heading toward a much wider beta release, and your job is to help us get it ready. We want to know what works, what doesn't, and what just feels off. Nothing is too small to mention. If a button is in the wrong place, tell us. If something confused you, tell us. If something made you smile, tell us that too.</p>
               <p style="margin-bottom:16px;">When you find something — and you will find something, that's why you're here — just make a note of it and send it back to us. No technical knowledge required. Plain English is perfect.</p>
               <p style="margin-bottom:24px;">Thank you for being part of this. Now go play some games. 🎮</p>
+              <p style="margin-bottom:16px;font-size:13pt;color:var(--yellow);font-weight:bold;">📌 Don't worry — you'll only see these screens once. EasyArc remembers that you've been through setup and will take you straight to your games next time. So take a moment to read through — it's worth it!</p>
               <p style="margin-bottom:0;font-size:14pt;color:var(--cyan);">Press <strong>ENTER</strong> on your keyboard to continue.</p>
             </div>
           </div>
@@ -1072,7 +1129,7 @@ function renderGrid() {
       const welcomeKeyHandler = (e) => {
         if (e.key === 'Enter') {
           document.removeEventListener('keydown', welcomeKeyHandler);
-          showSysReqScreen();
+          showSupportedSystems();
         }
       };
       document.addEventListener('keydown', welcomeKeyHandler);
@@ -1383,8 +1440,7 @@ let frwFoundGames  = [];
 
 function frwInit() {
   // Setup wizard disabled for alpha — replaced by welcome message in empty grid
-  // Always mark setup as done so ROM scanning works
-  localStorage.setItem('easyarc_setup_done', '1');
+  // easyarc_setup_done is set after user completes onboarding screens
 }
 
 function frwShow() {
@@ -1827,8 +1883,23 @@ function ctrlShowStartupModal() {
   renderControllers();
   const scanInterval = setInterval(renderControllers, 500);
 
+  // Detect button presses to register controllers
+  const buttonInterval = setInterval(() => {
+    const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    gps.forEach(gp => {
+      const anyPressed = gp.buttons.some(b => b.pressed);
+      if (anyPressed && !connectedControllers[gp.index]) {
+        ctrlHandleConnect(gp);
+        renderControllers();
+      }
+    });
+  }, 100);
+
+  const origDismiss = dismiss;
+
   function dismiss() {
     clearInterval(scanInterval);
+    clearInterval(buttonInterval);
     ctrlModalDismiss();
     setTimeout(() => { ctrlStartupMode = false; }, 800);
   }
@@ -2837,6 +2908,24 @@ function gpNavPoll() {
     requestAnimationFrame(gpNavPoll);
     return;
   }
+
+  // Allow controller scrolling in Test Plan modal
+  const testPlanModal = document.getElementById('instructionsModal');
+  if (testPlanModal && !testPlanModal.classList.contains('hidden')) {
+    const card = document.getElementById('testPlanCard');
+    const gps2 = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    for (const gp of gps2) {
+      if (!gp) continue;
+      const down = gp.buttons[13] && gp.buttons[13].pressed || gp.axes[1] > 0.4;
+      const up2  = gp.buttons[12] && gp.buttons[12].pressed || gp.axes[1] < -0.4;
+      const bBtn = gp.buttons[1]  && gp.buttons[1].pressed;
+      if (gpShouldFire('modalDown', down) && card) card.scrollTop += 80;
+      if (gpShouldFire('modalUp', up2) && card) card.scrollTop -= 80;
+      if (gpShouldFire('modalB', bBtn)) hideInstructionsModal();
+    }
+    requestAnimationFrame(gpNavPoll);
+    return;
+  }
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
   let handled = false;
   for (const gp of gps) {
@@ -3617,8 +3706,11 @@ showView = function(name) {
   </div>
 </div>
   <!-- INSTRUCTIONS MODAL -->
-  <div class="frw-overlay hidden" id="instructionsModal" style="z-index:1000;">
-    <div class="frw-card" style="max-width:700px;width:90%;max-height:80vh;overflow-y:auto;">
+  <div class="frw-overlay hidden" id="instructionsModal" style="z-index:1000;" onkeydown="if(event.key==='Escape')hideInstructionsModal()">
+    <div class="frw-card" style="max-width:700px;width:90%;max-height:80vh;overflow-y:auto;" id="testPlanCard">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button class="action-btn" onclick="hideInstructionsModal()" style="padding:6px 16px;font-size:13px;">✕ CLOSE</button>
+      </div>
       <div class="frw-icon">📋</div>
       <div class="frw-title">EASYARC ALPHA TEST PLAN</div>
       <div style="font-family:Calibri,Arial,sans-serif;font-size:15px;color:#fff;line-height:1.8;text-align:left;margin-top:24px;">
@@ -3636,16 +3728,16 @@ showView = function(name) {
         <p style="margin-bottom:6px;">□ Did the emulator check show RetroArch as found (green)?</p>
         <p style="margin-bottom:20px;">□ Were there any error messages during startup?</p>
 
-        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 2 — ADDING GAMES</p>
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 2 — CONTROLLERS</p>
+        <p style="margin-bottom:6px;">□ Was your controller detected at startup?</p>
+        <p style="margin-bottom:6px;">□ Which controller(s) did you use?</p>
+        <p style="margin-bottom:20px;">□ Did controller navigation work in the game library?</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 3 — ADDING GAMES</p>
         <p style="margin-bottom:6px;">□ Click + Add Games/Collection and import your ROM collection</p>
         <p style="margin-bottom:6px;">□ Did your systems get correctly identified?</p>
         <p style="margin-bottom:6px;">□ Did games appear in the library correctly?</p>
         <p style="margin-bottom:20px;">□ Were any systems NOT detected that should have been?</p>
-
-        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 3 — CONTROLLERS</p>
-        <p style="margin-bottom:6px;">□ Was your controller detected at startup?</p>
-        <p style="margin-bottom:6px;">□ Which controller(s) did you use?</p>
-        <p style="margin-bottom:20px;">□ Did controller navigation work in the game library?</p>
 
         <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 4 — PLAYING GAMES</p>
         <p style="margin-bottom:6px;">□ Launch at least one game from each system you have</p>
@@ -3671,7 +3763,7 @@ showView = function(name) {
         <p style="color:var(--muted);font-size:13px;">Thank you for being part of the EasyArc alpha. Your feedback directly shapes the future of this project! 🎮</p>
       </div>
       <div style="margin-top:32px;text-align:center;">
-        <button class="action-btn" onclick="hideInstructionsModal()">CLOSE</button>
+        <button class="action-btn" onclick="hideInstructionsModal()">✕ CLOSE</button>
       </div>
     </div>
   </div>
