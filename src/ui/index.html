@@ -114,6 +114,7 @@ body::after {
   margin: 0 16px;
 }
 .test-plan-btn:hover { background:#ffdd00; box-shadow:0 0 28px rgba(255,220,0,0.8); transform:translateY(-1px); }
+.test-plan-btn[style*="cyan"] { background:#ffdd00; box-shadow:0 0 32px rgba(255,255,255,0.9), 0 0 16px rgba(255,220,0,1); transform:translateY(-2px) scale(1.05); outline: 3px solid #fff !important; }
 .sys-btn.gp-nav-active { opacity:0.4; }
 .status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -614,18 +615,18 @@ body::after {
   <header class="titlebar">
     <img src="easyarc_logo.webp" style="height:38px;width:auto;object-fit:contain;" alt="EasyArc">
     <nav class="titlebar-nav">
-      <button class="nav-btn active" onclick="showView('library')">Library</button>
-      <button class="nav-btn" onclick="showView('wizard')">Setup</button>
-      <button class="nav-btn" onclick="showView('controller')">Controller</button>
-      <button class="nav-btn" onclick="showView('settings')">Settings</button>
-    </nav>
-    <div style="flex:1;display:flex;justify-content:center;">
-      <button class="test-plan-btn" id="testPlanBtn" onclick="showTestPlanModal()">📋 Instructions</button>
-    </div>
-    <div class="titlebar-right">
       <button class="action-btn" id="rescanBtn" onclick="rescanLibrary()">⟳ Refresh Library</button>
       <button class="action-btn" id="addGamesBtn" onclick="showAddGamesModal()">+ Add Games/Collection</button>
       <button class="action-btn" id="getArtBtn" onclick="showGetArtModal()">🖼 Get Game Art</button>
+    </nav>
+    <div style="flex:1;display:flex;justify-content:center;">
+      <button class="test-plan-btn" id="testPlanBtn" onclick="showTestPlanModal()">📋 Test Plan</button>
+    </div>
+    <div class="titlebar-right">
+      <button class="nav-btn active" onclick="showView('library')">Library</button>
+      <!-- Setup button removed for alpha — replaced by Add Games/Collection -->
+      <button class="nav-btn" onclick="showView('controller')">Controller</button>
+      <button class="nav-btn" onclick="showView('settings')">Developer Options</button>
       <div class="status-dot"></div>
       <span class="status-text" id="statusText">Checking...</span>
     </div>
@@ -2535,7 +2536,9 @@ function gpHandleInput(gp) {
 
   if (up || down || left || right) gpActivate();
 
-  // ── Toolbar mode (Refresh Library, Add Games, Get Game Art) ─────────
+  // ── Toolbar mode ─────────────────────────────────────────────────────
+  // RIGHT: Refresh(0) > Add Games(1) > Get Art(2) > Test Plan(-1) > Library > Controller > Dev Options
+  // LEFT:  reverse
   if (GP_NAV.inToolbar) {
     const instrBtn = document.getElementById('testPlanBtn');
     const toolbarBtns = [
@@ -2543,31 +2546,37 @@ function gpHandleInput(gp) {
       document.getElementById('addGamesBtn'),
       document.getElementById('getArtBtn')
     ];
-    // Helper to highlight correct button (-1 = Instructions, 0-2 = toolbar)
     const highlightToolbar = (idx) => {
       if (instrBtn) instrBtn.style.outline = idx === -1 ? "2px solid var(--cyan)" : "none";
       toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === idx ? "2px solid var(--cyan)" : "none"; });
     };
     if (gpShouldFire("left", left)) {
       if (GP_NAV.toolbarIdx === -1) {
-        // Left from Instructions — back to top nav
-        GP_NAV.inToolbar = false;
-        if (instrBtn) instrBtn.style.outline = "none";
-        GP_NAV.inTopNav = true;
-        GP_NAV.topNavIdx = Array.from(document.querySelectorAll(".nav-btn")).length - 1;
-        const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
-        navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+        // Left from Test Plan — go to Get Art (last toolbar button)
+        GP_NAV.toolbarIdx = toolbarBtns.length - 1;
+        highlightToolbar(GP_NAV.toolbarIdx);
       } else if (GP_NAV.toolbarIdx === 0) {
-        // Left from first toolbar button — go to Instructions
-        GP_NAV.toolbarIdx = -1;
-        highlightToolbar(-1);
+        // Left from Refresh Library — end of navigation
+        // do nothing
       } else {
         GP_NAV.toolbarIdx = Math.max(0, GP_NAV.toolbarIdx - 1);
         highlightToolbar(GP_NAV.toolbarIdx);
       }
     }
     if (gpShouldFire("right", right)) {
-      if (GP_NAV.toolbarIdx < toolbarBtns.length - 1) {
+      if (GP_NAV.toolbarIdx === toolbarBtns.length - 1) {
+        // Right from Get Art — go to Test Plan
+        GP_NAV.toolbarIdx = -1;
+        highlightToolbar(-1);
+      } else if (GP_NAV.toolbarIdx === -1) {
+        // Right from Test Plan — go to Library (first nav button)
+        highlightToolbar(-99);
+        GP_NAV.inToolbar = false;
+        GP_NAV.inTopNav = true;
+        GP_NAV.topNavIdx = 0;
+        const navBtns2 = Array.from(document.querySelectorAll(".nav-btn"));
+        navBtns2.forEach((b,i) => b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none");
+      } else {
         GP_NAV.toolbarIdx = GP_NAV.toolbarIdx + 1;
         highlightToolbar(GP_NAV.toolbarIdx);
       }
@@ -2581,9 +2590,7 @@ function gpHandleInput(gp) {
     if (gpShouldFire("down", down) || gpShouldFire("b", bBtn)) {
       GP_NAV.inToolbar = false;
       highlightToolbar(-99);
-      GP_NAV.inTopNav = true;
-      const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
-      navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+      gpEnterSidebar();
     }
     return;
   }
@@ -2593,24 +2600,23 @@ function gpHandleInput(gp) {
     const views = ["library", "wizard", "controller", "settings"];
     const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
     if (gpShouldFire("left", left)) {
-      GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
-      navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
-    }
-    if (gpShouldFire("right", right)) {
-      if (GP_NAV.topNavIdx === navBtns.length - 1) {
-        // At rightmost nav button — move to Instructions then toolbar
+      if (GP_NAV.topNavIdx === 0) {
+        // Left from Library — go to Test Plan
         navBtns.forEach(b => b.style.outline = "none");
         GP_NAV.inTopNav = false;
         GP_NAV.inToolbar = true;
-        GP_NAV.toolbarIdx = -1; // -1 = Instructions button
-        const instrBtn = document.getElementById('testPlanBtn');
-        const toolbarBtns = [
-          document.getElementById('rescanBtn'),
-          document.getElementById('addGamesBtn'),
-          document.getElementById('getArtBtn')
-        ];
-        if (instrBtn) instrBtn.style.outline = "2px solid var(--cyan)";
-        toolbarBtns.forEach(b => { if(b) b.style.outline = "none"; });
+        GP_NAV.toolbarIdx = -1;
+        const instrBtn2 = document.getElementById('testPlanBtn');
+        if (instrBtn2) instrBtn2.style.outline = "2px solid var(--cyan)";
+      } else {
+        GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
+        navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+      }
+    }
+    if (gpShouldFire("right", right)) {
+      if (GP_NAV.topNavIdx === navBtns.length - 1) {
+        // At rightmost nav button (Developer Options) — end of navigation
+        // do nothing
       } else {
         GP_NAV.topNavIdx = Math.min(navBtns.length - 1, GP_NAV.topNavIdx + 1);
         navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
@@ -3614,9 +3620,55 @@ showView = function(name) {
   <div class="frw-overlay hidden" id="instructionsModal" style="z-index:1000;">
     <div class="frw-card" style="max-width:700px;width:90%;max-height:80vh;overflow-y:auto;">
       <div class="frw-icon">📋</div>
-      <div class="frw-title">INSTRUCTIONS</div>
-      <div class="frw-sub" style="font-size:16px;color:#fff;line-height:1.8;text-align:left;margin-top:24px;">
-        Content to follow.
+      <div class="frw-title">EASYARC ALPHA TEST PLAN</div>
+      <div style="font-family:Calibri,Arial,sans-serif;font-size:15px;color:#fff;line-height:1.8;text-align:left;margin-top:24px;">
+
+        <p style="margin-bottom:12px;color:var(--cyan);font-weight:bold;font-size:17px;">Welcome, Alpha Tester!</p>
+        <p style="margin-bottom:20px;">Thank you for helping test EasyArc. Please work through each section below and note any issues, questions, or suggestions. There are no wrong answers — your honest feedback is exactly what we need.</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">BEFORE YOU BEGIN</p>
+        <p style="margin-bottom:6px;">• Install RetroArch to your Applications folder: <a href="https://www.retroarch.com" style="color:var(--cyan)">retroarch.com</a></p>
+        <p style="margin-bottom:6px;">• Install Dolphin to your Applications folder (GameCube only): <a href="https://dolphin-emu.org" style="color:var(--cyan)">dolphin-emu.org</a></p>
+        <p style="margin-bottom:20px;">• Have at least one Bluetooth controller ready</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 1 — INSTALLATION</p>
+        <p style="margin-bottom:6px;">□ Did EasyArc launch successfully?</p>
+        <p style="margin-bottom:6px;">□ Did the emulator check show RetroArch as found (green)?</p>
+        <p style="margin-bottom:20px;">□ Were there any error messages during startup?</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 2 — ADDING GAMES</p>
+        <p style="margin-bottom:6px;">□ Click + Add Games/Collection and import your ROM collection</p>
+        <p style="margin-bottom:6px;">□ Did your systems get correctly identified?</p>
+        <p style="margin-bottom:6px;">□ Did games appear in the library correctly?</p>
+        <p style="margin-bottom:20px;">□ Were any systems NOT detected that should have been?</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 3 — CONTROLLERS</p>
+        <p style="margin-bottom:6px;">□ Was your controller detected at startup?</p>
+        <p style="margin-bottom:6px;">□ Which controller(s) did you use?</p>
+        <p style="margin-bottom:20px;">□ Did controller navigation work in the game library?</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 4 — PLAYING GAMES</p>
+        <p style="margin-bottom:6px;">□ Launch at least one game from each system you have</p>
+        <p style="margin-bottom:6px;">□ Did games launch successfully?</p>
+        <p style="margin-bottom:6px;">□ Did the controller work in games?</p>
+        <p style="margin-bottom:20px;">□ Note any systems that failed to launch</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 5 — GET GAME ART</p>
+        <p style="margin-bottom:6px;">□ Click Get Game Art and start scraping</p>
+        <p style="margin-bottom:6px;">□ Did artwork appear on your game cards?</p>
+        <p style="margin-bottom:20px;">□ How long did it take to download art?</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 6 — GENERAL FEEDBACK</p>
+        <p style="margin-bottom:6px;">□ What did you like most about EasyArc?</p>
+        <p style="margin-bottom:6px;">□ What confused you or was hard to figure out?</p>
+        <p style="margin-bottom:6px;">□ What features are missing that you'd like to see?</p>
+        <p style="margin-bottom:20px;">□ Would you recommend EasyArc to other Mac retro gamers?</p>
+
+        <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">REPORTING BUGS</p>
+        <p style="margin-bottom:6px;">Please report all findings to our Facebook group:</p>
+        <p style="margin-bottom:20px;"><a href="https://www.facebook.com/groups/1473877984397121" style="color:var(--cyan)">facebook.com/groups/EasyArc</a></p>
+
+        <p style="color:var(--muted);font-size:13px;">Thank you for being part of the EasyArc alpha. Your feedback directly shapes the future of this project! 🎮</p>
       </div>
       <div style="margin-top:32px;text-align:center;">
         <button class="action-btn" onclick="hideInstructionsModal()">CLOSE</button>
