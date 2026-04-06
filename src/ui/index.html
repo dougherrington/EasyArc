@@ -771,7 +771,7 @@ body::after {
         <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
-          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value="dnherrington67"></div>
+          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value=""></div>
         </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
@@ -3550,7 +3550,7 @@ async function startScrape() {
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
     if (gameEl) gameEl.textContent = g.title;
-    const result = await window.easyarc.scrapeGameWithFallback(g, ssUser, ssPass, tgdbKey);
+    const result = await window.easyarc.scrapeGameWithFallback(g, '', '', tgdbKey);
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI('file://' + result.path);
     }

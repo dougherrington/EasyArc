@@ -1,13 +1,34 @@
 {
   "name": "easyarc",
-  "version": "0.1.0",
-  "description": "A better frontend for RetroArch",
+  "version": "0.1.0-alpha",
+  "description": "The easiest way to play your retro game collection",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac dmg"
+  },
+  "build": {
+    "appId": "com.dougherrington.easyarc",
+    "productName": "EasyArc",
+    "mac": {
+      "category": "public.app-category.games",
+      "target": "dmg"
+    },
+    "dmg": {
+      "title": "EasyArc Alpha 0.1.0",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ]
   },
   "devDependencies": {
-    "electron": "^29.0.0"
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0"
   }
 }
