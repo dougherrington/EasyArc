@@ -16,6 +16,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0a0a0f',
+    show: false,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -24,8 +25,11 @@ function createWindow() {
       gamepad: true,
     },
   });
-  mainWindow.maximize();
   mainWindow.loadFile(path.join(__dirname, 'ui/index.html'));
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.maximize();
+    mainWindow.show();
+  });
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }

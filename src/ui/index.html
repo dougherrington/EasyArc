@@ -107,11 +107,11 @@ body::after {
 .titlebar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
 .test-plan-btn {
   background:var(--yellow); border:2px solid #ffaa00; color:#000;
-  font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:800;
-  padding:10px 28px; border-radius:6px; cursor:pointer; transition:all 0.2s;
+  font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700;
+  padding:6px 18px; border-radius:6px; cursor:pointer; transition:all 0.2s;
   text-transform:uppercase; letter-spacing:1px;
   box-shadow:0 0 18px rgba(255,220,0,0.5);
-  margin: 0 16px;
+  margin: 0 8px;
 }
 .test-plan-btn:hover { background:#ffdd00; box-shadow:0 0 28px rgba(255,220,0,0.8); transform:translateY(-1px); }
 .test-plan-btn[style*="cyan"] { background:#ffdd00; box-shadow:0 0 32px rgba(255,255,255,0.9), 0 0 16px rgba(255,220,0,1); transform:translateY(-2px) scale(1.05); outline: 3px solid #fff !important; }
@@ -352,7 +352,7 @@ body::after {
 
 .detail-body { display:flex; flex-direction:column; gap:8px; flex:1; overflow-y:auto; min-height:0; justify-content:space-between; }
 .detail-system { font-family:'Orbitron',monospace; font-size:8px; letter-spacing:2px; color:var(--cyan); text-transform:uppercase; }
-.detail-title { font-family:'Orbitron',monospace; font-size:32px; line-height:1.6; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
+.detail-title { font-family:'Orbitron',monospace; font-size:22px; line-height:1.4; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
 .detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:6px; align-content:start; }
 .meta-item { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:7px 10px; }
 .meta-label { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px; }
@@ -1228,7 +1228,7 @@ function selectGame(id) {
     if (meta && meta.publisher) rows.push('<div class="meta-item"><div class="meta-label">Publisher</div><div class="meta-value">' + meta.publisher + '</div></div>');
     if (meta && meta.players)   rows.push('<div class="meta-item"><div class="meta-label">Players</div><div class="meta-value">' + meta.players + '</div></div>');
     const synopsis = (meta && meta.synopsis) ? meta.synopsis : 'Game description not available.';
-    rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:16px;font-weight:500;line-height:1.7;color:var(--text);">' + synopsis + '</div></div>');
+    rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text);">' + synopsis + '</div></div>');
     if (rows.length === 0)      rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
     dm.innerHTML = rows.join('');
   }
