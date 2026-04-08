@@ -340,7 +340,7 @@ class RetroArchBridge {
 
     // 2. For shared extensions, use folder hints to resolve
     if (SHARED_EXTENSIONS[ext]) {
-      const lower = path.dirname(fullPath).toLowerCase();
+      const lower = fullPath.toLowerCase();
       for (const { hints, system } of FOLDER_HINTS) {
         for (const hint of hints) {
           if (lower.includes(hint)) {

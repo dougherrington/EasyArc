@@ -204,12 +204,48 @@ body::after {
 }
 .system-btn.gp-nav-hover { color:var(--cyan); background:rgba(0,240,255,0.1); border-color:rgba(0,240,255,0.4); }
 .system-icon { font-size:16px; width:22px; text-align:center; flex-shrink:0; }
+.system-remove {
+  margin-left: auto;
+  padding: 4px 8px;
+  font-size: 20px;
+  color: rgba(255,255,255,0.5);
+  border-radius: 4px;
+  line-height: 1;
+  display: none;
+  min-width: 28px;
+  text-align: center;
+}
+.system-btn:hover .system-remove {
+  display: inline;
+}
+.system-remove:hover {
+  color: #ff4444 !important;
+  background: rgba(255,68,68,0.15);
+}
 .system-count {
   margin-left:auto; font-size:10px; color:var(--muted);
   background:var(--bg3); padding:1px 6px; border-radius:8px;
   font-family:'Orbitron',monospace;
 }
-.system-btn.active .system-count { background:rgba(0,240,255,0.14); color:var(--cyan); }
+.system-btn.active .system-remove {
+  margin-left: auto;
+  padding: 4px 8px;
+  font-size: 20px;
+  color: rgba(255,255,255,0.5);
+  border-radius: 4px;
+  line-height: 1;
+  display: none;
+  min-width: 28px;
+  text-align: center;
+}
+.system-btn:hover .system-remove {
+  display: inline;
+}
+.system-remove:hover {
+  color: #ff4444 !important;
+  background: rgba(255,68,68,0.15);
+}
+.system-count { background:rgba(0,240,255,0.14); color:var(--cyan); }
 
 /* ── CENTER PANEL ── */
 .content {
@@ -767,7 +803,7 @@ body::after {
           <div class="setting-control"><select class="setting-select" id="defaultPlayerCount"><option selected>1 Player</option><option>2 Players</option><option>3 Players</option><option>4 Players</option></select></div>
         </div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" style="display:none">
         <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
@@ -1189,17 +1225,52 @@ function updateCounts() {
     if (!populated[sys]) return;
     const btn = document.createElement('button');
     btn.className = 'system-btn' + (currentSystem === sys ? ' active' : '');
-    btn.innerHTML =
-      '<span class="system-icon">' + (systemIcons[sys]||'&#127918;') + '</span>' +
-      (systemNames[sys]||sys) +
-      '<span class="system-count">' + populated[sys] + '</span>';
     btn.dataset.sys = sys;
-    btn.onclick = function() { filterSystem(sys, this); };
+
+    const icon = document.createElement('span');
+    icon.className = 'system-icon';
+    icon.innerHTML = systemIcons[sys]||'&#127918;';
+
+    const label = document.createTextNode(systemNames[sys]||sys);
+
+    const count = document.createElement('span');
+    count.className = 'system-count';
+    count.textContent = populated[sys];
+
+    const removeBtn = document.createElement('span');
+    removeBtn.className = 'system-remove';
+    removeBtn.title = 'Remove console from library. Your game files will not be deleted.';
+    removeBtn.textContent = '×';
+    removeBtn.onclick = function(e) {
+      e.stopPropagation();
+      removeSystem(sys);
+    };
+
+    btn.appendChild(icon);
+    btn.appendChild(label);
+    btn.appendChild(count);
+    btn.appendChild(removeBtn);
+    btn.onclick = function(e) {
+      if (e.target === removeBtn) return;
+      filterSystem(sys, this);
+    };
+
     systemList.appendChild(btn);
   });
 
   // Also update the All Games count
   if (allEl) allEl.textContent = games.length;
+}
+
+function removeSystem(sys) {
+  const count = games.filter(g => g.system === sys).length;
+  games = games.filter(g => g.system !== sys);
+  if (currentSystem === sys) {
+    currentSystem = 'all';
+  }
+  updateCounts();
+  renderGrid();
+  showToast((systemNames[sys]||sys) + ' removed from library (' + count + ' games)');
 }
 
 function selectGame(id) {
@@ -3070,16 +3141,7 @@ function hideInstructionsModal() {
 }
 
 function showGetArtModal() {
-  // TODO: move full scrape UI here from Settings
-  const ssUser = localStorage.getItem('ss_user') || '';
-  const ssPass = localStorage.getItem('ss_pass') || '';
-  if (!ssUser || !ssPass) {
-    showToast('Please set your ScreenScraper credentials in Settings first.');
-    return;
-  }
-  if (confirm('Download artwork for all games? This may take a while.')) {
-    startScrape();
-  }
+  showToast('🎨 Game art scraping coming soon in a future update!');
 }
 
 function showAddGamesModal() {

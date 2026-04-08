@@ -42,7 +42,7 @@ const UNIQUE_EXTENSIONS = {
   genesis:      ['.md', '.gen', '.smd', '.68k'],
   gamegear:     ['.gg'],
   mastersystem: ['.sms'],
-  atari2600:    ['.a26', '.bin'],
+  atari2600:    ['.a26'],
   switch:       ['.nsp', '.xci', '.nca'],
   gamecube:     ['.gcm', '.gcz', '.nkit'],
   wii:          ['.wbfs', '.wad'],
@@ -53,7 +53,6 @@ const UNIQUE_EXTENSIONS = {
 // Extensions shared by multiple systems — need folder hint to resolve
 const SHARED_EXTENSIONS = {
   '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','mame','mame2003','arcade','neogeo'],
-  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','mame','mame2003','arcade','neogeo'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
   '.ciso': ['gamecube','wii'],
@@ -70,19 +69,19 @@ const FOLDER_HINTS = [
   { hints: ['playstation 3','playstation3','ps3'],                          system: 'ps3' },
   { hints: ['playstation 2','playstation2','ps2'],                          system: 'ps2' },
   { hints: ['playstation portable','psp'],                                  system: 'psp' },
-  { hints: ['sony playstation','playstation 1','playstation1','psx','ps1','playstation'], system: 'psx' },
+  { hints: ['sony playstation','playstation 1','playstation1','psx','ps1'], system: 'psx' },
   { hints: ['sega dreamcast','dreamcast','dream cast'],                     system: 'dreamcast' },
   { hints: ['sega saturn','saturn'],                                        system: 'saturn' },
   { hints: ['game boy color','gameboy color','gbc'],                        system: 'gbc' },
   { hints: ['game boy advance','gameboy advance','gba'],                    system: 'gba' },
-  { hints: ['game boy','gameboy','gb'],                                     system: 'gbc' },
+  { hints: ['game boy','gameboy'],                                          system: 'gbc' },
   { hints: ['super nintendo','super nes','superfamicom','snes'],            system: 'snes' },
   { hints: ['nintendo 64','nintendo64','n64'],                              system: 'n64' },
   { hints: ['nintendo wii','wii nintendo','wii games','wii'],               system: 'wii' },
   { hints: ['gamecube','game cube','nintendo gamecube','ngc','gamecube games','cube','gc'], system: 'gamecube' },
-  { hints: ['nintendo entertainment system','nintendo entertainment','nes'], system: 'nes' },
+  { hints: ['nintendo entertainment system','nintendo entertainment'],      system: 'nes' },
   { hints: ['mega drive','megadrive','sega genesis','genesis'],             system: 'genesis' },
-  { hints: ['game gear','gamegear','gg'],                                   system: 'gamegear' },
+  { hints: ['game gear','gamegear'],                                        system: 'gamegear' },
   { hints: ['master system','mastersystem'],                                system: 'mastersystem' },
   { hints: ['atari 2600','atari2600'],                                      system: 'atari2600' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
@@ -193,12 +192,7 @@ const SYSTEM_CORES = {
 };
 
 class RetroArchBridge {
-  constructor() {
-    this.retroarchPath = null;
-    this.retroarchProcess = null;
-    const _fs = require("fs"), _path = require("path"), _os = require("os");
-    ["cores","system","config"].forEach(d => { try { _fs.mkdirSync(_path.join(_os.homedir(),"Library/Application Support/RetroArch/"+d),{recursive:true}); } catch(e) {} });
-  }
+  constructor() { this.retroarchPath = null; this.retroarchProcess = null; }
 
   async findPCSX2() {
     const locations = PCSX2_LOCATIONS[process.platform] || [];
@@ -340,7 +334,7 @@ class RetroArchBridge {
 
     // 2. For shared extensions, use folder hints to resolve
     if (SHARED_EXTENSIONS[ext]) {
-      const lower = path.dirname(fullPath).toLowerCase();
+      const lower = fullPath.toLowerCase();
       for (const { hints, system } of FOLDER_HINTS) {
         for (const hint of hints) {
           if (lower.includes(hint)) {
