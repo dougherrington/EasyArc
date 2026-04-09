@@ -52,7 +52,7 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — need folder hint to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','mame','mame2003','arcade','neogeo'],
+  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
   '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','mame','mame2003','arcade','neogeo'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
@@ -253,7 +253,8 @@ class RetroArchBridge {
     const corePath = path.join(CORES_PATH, coreFile);
     if (fs.existsSync(corePath)) return { success: true, already: true };
 
-    const url = 'https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/' + coreFile + '.zip';
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+    const url = 'https://buildbot.libretro.com/nightly/apple/osx/' + arch + '/latest/' + coreFile + '.zip';
     const zipPath = corePath + '.zip';
 
     return new Promise((resolve) => {

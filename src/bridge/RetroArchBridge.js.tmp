@@ -253,7 +253,8 @@ class RetroArchBridge {
     const corePath = path.join(CORES_PATH, coreFile);
     if (fs.existsSync(corePath)) return { success: true, already: true };
 
-    const url = 'https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/' + coreFile + '.zip';
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+    const url = 'https://buildbot.libretro.com/nightly/apple/osx/' + arch + '/latest/' + coreFile + '.zip';
     const zipPath = corePath + '.zip';
 
     return new Promise((resolve) => {
@@ -340,7 +341,7 @@ class RetroArchBridge {
 
     // 2. For shared extensions, use folder hints to resolve
     if (SHARED_EXTENSIONS[ext]) {
-      const lower = fullPath.toLowerCase();
+      const lower = path.dirname(fullPath).toLowerCase();
       for (const { hints, system } of FOLDER_HINTS) {
         for (const hint of hints) {
           if (lower.includes(hint)) {
