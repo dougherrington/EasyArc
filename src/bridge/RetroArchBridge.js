@@ -33,6 +33,7 @@ const RETROARCH_LOCATIONS = {
 
 // Extensions that uniquely identify a system — no ambiguity
 const UNIQUE_EXTENSIONS = {
+  // Extensions that belong to exactly one system — no folder hint needed
   gbc:          ['.gbc', '.gb', '.gbs'],
   gba:          ['.gba', '.agb'],
   snes:         ['.sfc', '.smc', '.fig', '.bs'],
@@ -42,18 +43,18 @@ const UNIQUE_EXTENSIONS = {
   genesis:      ['.md', '.gen', '.smd', '.68k'],
   gamegear:     ['.gg'],
   mastersystem: ['.sms'],
-  atari2600:    ['.a26', '.bin'],
+  atari2600:    ['.a26'],
   switch:       ['.nsp', '.xci', '.nca'],
   gamecube:     ['.gcm', '.gcz', '.nkit'],
   wii:          ['.wbfs', '.wad'],
   wiiu:         ['.wud', '.wux', '.rpx', '.wua'],
-  gba:          ['.gba', '.agb'],
 };
 
-// Extensions shared by multiple systems — need folder hint to resolve
+// Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
   '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
-  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','mame','mame2003','arcade','neogeo'],
+  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
+  '.bin':  ['atari2600','genesis','psx','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
   '.ciso': ['gamecube','wii'],
@@ -66,32 +67,30 @@ const SHARED_EXTENSIONS = {
 };
 
 // Folder hints in priority order — most specific first
+// Short hints (3 chars or less) require exact folder name match
 const FOLDER_HINTS = [
-  { hints: ['playstation 3','playstation3','ps3'],                          system: 'ps3' },
-  { hints: ['playstation 2','playstation2','ps2'],                          system: 'ps2' },
-  { hints: ['playstation portable','psp'],                                  system: 'psp' },
-  { hints: ['sony playstation','playstation 1','playstation1','psx','ps1','playstation'], system: 'psx' },
-  { hints: ['sega dreamcast','dreamcast','dream cast'],                     system: 'dreamcast' },
-  { hints: ['sega saturn','saturn'],                                        system: 'saturn' },
-  { hints: ['game boy color','gameboy color','gbc'],                        system: 'gbc' },
-  { hints: ['game boy advance','gameboy advance','gba'],                    system: 'gba' },
-  { hints: ['game boy','gameboy','gb'],                                     system: 'gbc' },
-  { hints: ['super nintendo','super nes','superfamicom','snes'],            system: 'snes' },
-  { hints: ['nintendo 64','nintendo64','n64'],                              system: 'n64' },
-  { hints: ['nintendo wii','wii nintendo','wii games','wii'],               system: 'wii' },
-  { hints: ['gamecube','game cube','nintendo gamecube','ngc','gamecube games','cube','gc'], system: 'gamecube' },
+  { hints: ['playstation 3','playstation3','ps3'],                           system: 'ps3' },
+  { hints: ['playstation 2','playstation2','ps2'],                           system: 'ps2' },
+  { hints: ['playstation portable','psp'],                                   system: 'psp' },
+  { hints: ['sony playstation','playstation 1','playstation1','psx','ps1'],  system: 'psx' },
+  { hints: ['sega dreamcast','dreamcast','dream cast'],                      system: 'dreamcast' },
+  { hints: ['sega saturn','saturn'],                                         system: 'saturn' },
+  { hints: ['game boy color','gameboy color','gbc'],                         system: 'gbc' },
+  { hints: ['game boy advance','gameboy advance','gba'],                     system: 'gba' },
+  { hints: ['game boy','gameboy','gb'],                                      system: 'gbc' },
+  { hints: ['super nintendo','super nes','superfamicom','snes'],             system: 'snes' },
+  { hints: ['nintendo 64','nintendo64','n64'],                               system: 'n64' },
   { hints: ['nintendo entertainment system','nintendo entertainment','nes'], system: 'nes' },
-  { hints: ['mega drive','megadrive','sega genesis','genesis'],             system: 'genesis' },
-  { hints: ['game gear','gamegear','gg'],                                   system: 'gamegear' },
-  { hints: ['master system','mastersystem'],                                system: 'mastersystem' },
-  { hints: ['atari 2600','atari2600'],                                      system: 'atari2600' },
+  { hints: ['nintendo wii u','wiiu','wii u'],                                system: 'wiiu' },
+  { hints: ['nintendo wii','wii nintendo','wii games','wii'],                system: 'wii' },
+  { hints: ['nintendo switch','switch','nx'],                                system: 'switch' },
+  { hints: ['nintendo 3ds','3ds'],                                           system: '3ds' },
+  { hints: ['gamecube','game cube','nintendo gamecube','ngc','gc'],          system: 'gamecube' },
+  { hints: ['mega drive','megadrive','sega genesis','genesis'],              system: 'genesis' },
+  { hints: ['game gear','gamegear','gg'],                                    system: 'gamegear' },
+  { hints: ['master system','mastersystem','sms'],                           system: 'mastersystem' },
+  { hints: ['atari 2600','atari2600'],                                       system: 'atari2600' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
-  { hints: ['nintendo switch','switch','nx'],                                system: 'switch' },
-  { hints: ['nintendo wii u','wiiu','wii u'],                                system: 'wiiu' },
-  { hints: ['nintendo 3ds','3ds'],                                           system: '3ds' },
-  { hints: ['nintendo switch','switch','nx'],                                system: 'switch' },
-  { hints: ['nintendo wii u','wiiu','wii u'],                                system: 'wiiu' },
-  { hints: ['nintendo 3ds','3ds'],                                           system: '3ds' },
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
   { hints: ['mame'],                                                         system: 'mame' },
   { hints: ['neogeo','neo geo','neo-geo'],                                   system: 'neogeo' },
@@ -333,6 +332,28 @@ class RetroArchBridge {
     }
   }
 
+  _matchFolderHint(folderPath) {
+    // Shared word-boundary-safe hint matcher used by both _detectSystem and scanCollection
+    // Extract just the last folder name from the path for short hint matching
+    const fullPath = folderPath.toLowerCase();
+    const lastSegment = fullPath.split(/[\/]/).filter(Boolean).pop() || fullPath;
+    for (const hint of FOLDER_HINTS) {
+      if (hint.hints.some(h => {
+        // For short hints (3 chars or less) — exact match against last path segment only
+        if (h.length <= 3) return lastSegment === h;
+        // For longer hints — word boundary check against full path
+        const idx = fullPath.indexOf(h);
+        if (idx === -1) return false;
+        const before = idx === 0 || !/[a-z0-9]/.test(fullPath[idx-1]);
+        const after = idx+h.length >= fullPath.length || !/[a-z0-9]/.test(fullPath[idx+h.length]);
+        return before && after;
+      })) {
+        return hint.system;
+      }
+    }
+    return null;
+  }
+
   _detectSystem(fullPath, ext) {
     // 1. Check unique extensions first — no ambiguity
     for (const [system, exts] of Object.entries(UNIQUE_EXTENSIONS)) {
@@ -341,15 +362,9 @@ class RetroArchBridge {
 
     // 2. For shared extensions, use folder hints to resolve
     if (SHARED_EXTENSIONS[ext]) {
-      const lower = path.dirname(fullPath).toLowerCase();
-      for (const { hints, system } of FOLDER_HINTS) {
-        for (const hint of hints) {
-          if (lower.includes(hint)) {
-            // Confirm this system supports this extension
-            if (SHARED_EXTENSIONS[ext].includes(system)) return system;
-          }
-        }
-      }
+      const folderName = path.dirname(fullPath).toLowerCase();
+      const system = this._matchFolderHint(folderName);
+      if (system && SHARED_EXTENSIONS[ext].includes(system)) return system;
       // 3. If only one system uses this extension, use it directly
       if (SHARED_EXTENSIONS[ext].length === 1) return SHARED_EXTENSIONS[ext][0];
     }
@@ -438,6 +453,9 @@ class RetroArchBridge {
         'input_pause_toggle_btn': 'nul',
         'input_rewind': 'nul',
         'input_rewind_btn': 'nul',
+        'input_player1_select': 'nul',
+        'input_exit_emulator_btn': 'nul',
+        'input_hold_fast_forward_btn': 'nul',
         'ui_companion_start_on_boot': 'false',
         'video_fullscreen': 'true',
         'quit_on_close_content': '2'
@@ -840,25 +858,8 @@ Source = 0`;
         const folderName = entry.name.toLowerCase();
         if (SKIP_FOLDERS.has(folderName)) continue;
         const fullPath = path.join(parentFolder, entry.name);
-        // Try to detect system from folder name
-        let detectedSystem = null;
-        for (const hint of FOLDER_HINTS) {
-          if (hint.hints.some(h => {
-            // Exact match always wins
-            if (folderName === h) return true;
-            // For short hints (3 chars or less), only exact match
-            if (h.length <= 3) return folderName === h;
-            // For longer hints, check if contained with word boundaries
-            const idx = folderName.indexOf(h);
-            if (idx === -1) return false;
-            const before = idx === 0 || !/[a-z0-9]/.test(folderName[idx-1]);
-            const after = idx+h.length >= folderName.length || !/[a-z0-9]/.test(folderName[idx+h.length]);
-            return before && after;
-          })) {
-            detectedSystem = hint.system;
-            break;
-          }
-        }
+        // Try to detect system from folder name using shared hint matcher
+        const detectedSystem = this._matchFolderHint(folderName);
         // Count files in folder
         let fileCount = 0;
         try {
