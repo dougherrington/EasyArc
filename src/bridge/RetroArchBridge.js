@@ -525,6 +525,10 @@ class RetroArchBridge {
       console.log('[Bridge] Launching GameCube/Wii game via Dolphin:', options.romPath);
       try {
         this.retroarchProcess = spawn(dolphin.path, ['--batch', '--exec=' + options.romPath], { detached: false, stdio: 'ignore' });
+        // Hide EasyArc window so controller focus passes to Dolphin
+        const { BrowserWindow: BW } = require('electron');
+        const wins = BW.getAllWindows();
+        if (wins.length > 0) wins[0].hide();
         this.retroarchProcess.on('exit', () => {
           console.log('[Bridge] Dolphin exited');
           this.retroarchProcess = null;
@@ -643,8 +647,13 @@ Device = Quartz/0/Keyboard & Mouse
 [GCPad4]
 Device = Quartz/0/Keyboard & Mouse`;
     try {
-      require('fs').writeFileSync(require('path').join(dolphinConfigDir, 'GCPadNew.ini'), gcpadConfig);
-      console.log('[Bridge] Wrote GameCube controller config');
+      const gcpadPath = require('path').join(dolphinConfigDir, 'GCPadNew.ini');
+      if (!require('fs').existsSync(gcpadPath)) {
+        require('fs').writeFileSync(gcpadPath, gcpadConfig);
+        console.log('[Bridge] Wrote GameCube controller config (first time)');
+      } else {
+        console.log('[Bridge] GCPadNew.ini already exists — leaving user config intact');
+      }
     } catch(e) {
       console.error('[Bridge] Failed to write GCPad config:', e.message);
     }
@@ -680,7 +689,14 @@ Device = Quartz/0/Keyboard & Mouse`;
       let cfg = '';
       const fs = require('fs');
       if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
-      const settings = { 'ConfirmStop': 'False' };
+      const settings = {
+        'ConfirmStop': 'False',
+        'Fullscreen': 'True',
+        'SIDevice0': '6',
+        'SIDevice1': '6',
+        'SIDevice2': '6',
+        'SIDevice3': '6'
+      };
       for (const [key, val] of Object.entries(settings)) {
         const regex = new RegExp('^' + key + '\s*=.*$', 'm');
         const line = key + ' = ' + val;

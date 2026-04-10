@@ -956,7 +956,21 @@ let currentSystem = 'all';
 let currentSearch = '';
 let selectedGame  = null;
 
-async function showEmulatorCheck() {
+async function checkEmulatorsOnStartup() {
+  if (!window.easyarc) { ctrlShowStartupModal(); return; }
+  const ra = await window.easyarc.findRetroArch();
+  const dolphin = await window.easyarc.findDolphin();
+  const currentState = JSON.stringify({ ra: ra.found, dolphin: dolphin.found });
+  const lastState = localStorage.getItem('easyarc_emulator_state');
+  // Always show on first run, if RetroArch is missing, or if state has changed
+  if (!lastState || !ra.found || currentState !== lastState) {
+    showEmulatorCheck(ra, dolphin, currentState);
+  } else {
+    ctrlShowStartupModal();
+  }
+}
+
+async function showEmulatorCheck(ra, dolphin, currentState) {
   const modal = document.getElementById('ctrlModal');
   const title = document.getElementById('ctrlModalTitle');
   const sub   = document.getElementById('ctrlModalSub');
@@ -964,16 +978,18 @@ async function showEmulatorCheck() {
   const btn   = document.getElementById('ctrlModalBtn');
   const skip  = document.getElementById('ctrlModalSkipBtn');
 
+  if (!ra) {
+    ra = await window.easyarc.findRetroArch();
+    dolphin = await window.easyarc.findDolphin();
+    currentState = JSON.stringify({ ra: ra.found, dolphin: dolphin.found });
+  }
+
   modal.classList.remove('hidden');
   title.textContent = 'EMULATOR CHECK';
   sub.textContent = 'EasyArc requires RetroArch and optionally Dolphin.';
-  body.innerHTML = '<div style="text-align:center;padding:20px;font-size:16px;color:#fff">Checking...</div>';
   btn.textContent = 'CONTINUE →';
   btn.style.display = 'inline-block';
   if (skip) skip.style.display = 'none';
-
-  const ra = await window.easyarc.findRetroArch();
-  const dolphin = await window.easyarc.findDolphin();
 
   body.innerHTML =
     '<div style="font-family:Calibri,Arial,sans-serif;font-size:16px;">' +
@@ -994,6 +1010,7 @@ async function showEmulatorCheck() {
 
   btn.onclick = () => {
     localStorage.setItem('easyarc_emulators_checked', '1');
+    localStorage.setItem('easyarc_emulator_state', currentState);
     modal.classList.add('hidden');
     setTimeout(() => ctrlShowStartupModal(), 500);
   };
@@ -1848,8 +1865,8 @@ if (splash && shell) {
       // If user has games and emulators already checked — show controller modal
       // If no games — welcome screen handles the flow via ENTER key
       // If emulators not checked — system requirements → emulator check handles it
-      if (games.length > 0 && localStorage.getItem('easyarc_emulators_checked')) {
-        setTimeout(() => ctrlShowStartupModal(), 2000);
+      if (games.length > 0) {
+        setTimeout(() => checkEmulatorsOnStartup(), 2000);
       }
     }, 1000);
   }, 3000);
@@ -1857,7 +1874,7 @@ if (splash && shell) {
   // No splash screen — render grid directly
   renderGrid();
   if (games.length > 0) {
-    ctrlShowStartupModal();
+    checkEmulatorsOnStartup();
   }
 }
 
