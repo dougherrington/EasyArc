@@ -1992,7 +1992,7 @@ function ctrlShowStartupModal() {
     setTimeout(() => { ctrlStartupMode = false; }, 800);
   }
 
-  // Only LET'S PLAY button or ENTER dismisses — no auto-dismiss on button press
+  // Only LET'S PLAY button, ENTER, or A button dismisses
   btn.textContent = "LET'S PLAY →";
   btn.onclick = () => dismiss();
 
@@ -2003,6 +2003,23 @@ function ctrlShowStartupModal() {
     }
   }
   document.addEventListener("keydown", onKey);
+
+  // Allow A button (button 0) to dismiss after controller registered
+  // Wait for button to be fully released before listening for fresh press
+  let aButtonReady = false;
+  const dismissInterval = setInterval(() => {
+    const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    const anyRegistered = gps.some(gp => connectedControllers[gp.index]);
+    if (!anyRegistered) return;
+    const aPressed = gps.some(gp => gp.buttons[0] && gp.buttons[0].pressed);
+    if (!aPressed) {
+      aButtonReady = true;
+    }
+    if (aButtonReady && aPressed) {
+      clearInterval(dismissInterval);
+      dismiss();
+    }
+  }, 100);
 }
 
 function ctrlInit() {
