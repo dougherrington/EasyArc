@@ -1,6 +1,6 @@
 {
   "name": "easyarc",
-  "version": "0.2.2-alpha",
+  "version": "0.2.4-alpha",
   "description": "The easiest way to play your retro game collection",
   "main": "src/main.js",
   "scripts": {
