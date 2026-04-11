@@ -653,6 +653,7 @@ body::after {
     <nav class="titlebar-nav">
       <button class="action-btn" id="rescanBtn" onclick="rescanLibrary()">⟳ Refresh Library</button>
       <button class="action-btn" id="addGamesBtn" onclick="showAddGamesModal()">+ Add Games/Collection</button>
+      <button class="action-btn" id="removeGamesBtn" onclick="showRemoveGamesModal()">✕ Remove Games</button>
       <button class="action-btn" id="getArtBtn" onclick="showGetArtModal()">🖼 Get Game Art</button>
     </nav>
     <div style="flex:1;display:flex;justify-content:center;">
@@ -2720,6 +2721,7 @@ function gpHandleInput(gp) {
     const toolbarBtns = [
       document.getElementById('rescanBtn'),
       document.getElementById('addGamesBtn'),
+      document.getElementById('removeGamesBtn'),
       document.getElementById('getArtBtn')
     ];
     const highlightToolbar = (idx) => {
@@ -3193,6 +3195,45 @@ function showAddGamesModal() {
 
 function hideAddGamesModal() {
   document.getElementById('addGamesModal').classList.add('hidden');
+}
+
+function showRemoveGamesModal() {
+  const modal = document.getElementById('removeGamesModal');
+  const body = document.getElementById('removeGamesBody');
+  const systems = [...new Set(games.map(g => g.system))].sort();
+  if (systems.length === 0) {
+    showToast('No games in library to remove.');
+    return;
+  }
+  body.innerHTML = systems.map(sys => {
+    const count = games.filter(g => g.system === sys).length;
+    const name = systemNames[sys] || sys;
+    const emoji = systemIcons[sys] || '🎮';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;">' +
+      '<span style="font-size:22px">' + emoji + '</span>' +
+      '<div>' +
+      '<div style="color:#fff;font-size:15px;font-weight:bold;">' + name + '</div>' +
+      '<div style="color:var(--muted);font-size:12px;">' + count + ' game' + (count !== 1 ? 's' : '') + '</div>' +
+      '</div></div>' +
+      '<button class="frw-btn" style="background:rgba(255,60,60,0.2);border:1px solid rgba(255,60,60,0.4);color:#ff6b6b;padding:6px 16px;font-size:12px;min-width:80px;" onclick="confirmRemoveSystem(&apos;' + sys + '&apos;)">' +
+      'REMOVE</button>' +
+      '</div>';
+  }).join('');
+  modal.classList.remove('hidden');
+}
+
+function hideRemoveGamesModal() {
+  document.getElementById('removeGamesModal').classList.add('hidden');
+}
+
+function confirmRemoveSystem(sys) {
+  const name = systemNames[sys] || sys;
+  const count = games.filter(g => g.system === sys).length;
+  if (confirm('Remove ' + name + '? This will remove ' + count + ' game' + (count !== 1 ? 's' : '') + ' from your library. Your ROM files will NOT be deleted.')) {
+    removeSystem(sys);
+    hideRemoveGamesModal();
+  }
 }
 
 // Track wizard state
@@ -3788,6 +3829,17 @@ showView = function(name) {
 
 
 <!-- ADD GAMES MODAL -->
+<div class="frw-overlay hidden" id="removeGamesModal">
+  <div class="frw-box" style="max-width:520px">
+    <span class="frw-icon">✕</span>
+    <div class="frw-title">REMOVE GAMES</div>
+    <div class="frw-sub" style="margin-bottom:16px;">Select a system to remove from your library. Your ROM files will not be deleted.</div>
+    <div id="removeGamesBody" style="max-height:360px;overflow-y:auto;"></div>
+    <div class="frw-btn-row" style="margin-top:16px;">
+      <button class="frw-btn ghost" onclick="hideRemoveGamesModal()">CLOSE</button>
+    </div>
+  </div>
+</div>
 <div class="frw-overlay hidden" id="addGamesModal">
   <div class="frw-box" style="max-width:520px">
     <div class="frw-steps" id="addGamesStepDots"></div>
