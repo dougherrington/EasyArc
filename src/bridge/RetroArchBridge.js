@@ -52,7 +52,7 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
+  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
   '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
   '.bin':  ['atari2600','genesis','psx','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
@@ -334,13 +334,13 @@ class RetroArchBridge {
 
   _matchFolderHint(folderPath) {
     // Shared word-boundary-safe hint matcher used by both _detectSystem and scanCollection
-    // Extract just the last folder name from the path for short hint matching
+    // Check ALL path segments so games in subfolders are correctly identified
     const fullPath = folderPath.toLowerCase();
-    const lastSegment = fullPath.split(/[\/]/).filter(Boolean).pop() || fullPath;
+    const segments = fullPath.split(/[\/]/).filter(Boolean);
     for (const hint of FOLDER_HINTS) {
       if (hint.hints.some(h => {
-        // For short hints (3 chars or less) — exact match against last path segment only
-        if (h.length <= 3) return lastSegment === h;
+        // For short hints (3 chars or less) — exact match against ANY path segment
+        if (h.length <= 3) return segments.some(seg => seg === h);
         // For longer hints — word boundary check against full path
         const idx = fullPath.indexOf(h);
         if (idx === -1) return false;
