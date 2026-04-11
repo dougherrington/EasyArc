@@ -25,9 +25,9 @@ function createWindow() {
       gamepad: true,
     },
   });
+  mainWindow.maximize();
   mainWindow.loadFile(path.join(__dirname, 'ui/index.html'));
   mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow.maximize();
     mainWindow.show();
   });
   if (process.argv.includes('--dev')) {

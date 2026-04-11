@@ -66,7 +66,7 @@ body::after {
 .ea-shell.dimmed { filter:brightness(0.4); }
 .ea-shell {
   position:relative; z-index:10;
-  width:100vw; height:100vh;
+  width:100%; height:100%;
   display:grid;
   grid-template-rows:54px 1fr 50px;
 }
@@ -160,7 +160,7 @@ body::after {
   display:flex; flex-direction:column; gap:5px;
   transform:rotateY(13deg) translateZ(-18px);
   transform-origin:right center;
-  height:calc(100vh - 54px - 50px - 32px);
+  height:calc(100% - 54px - 50px - 32px);
   overflow-y:auto;
   animation:slideInLeft 0.5s cubic-bezier(0.22,1,0.36,1) both;
   padding-right:2px;
@@ -250,7 +250,7 @@ body::after {
 /* ── CENTER PANEL ── */
 .content {
   display:flex; flex-direction:column; gap:12px;
-  height:calc(100vh - 54px - 50px - 32px);
+  height:calc(100% - 54px - 50px - 32px);
   overflow:hidden;
   animation:fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.08s both;
 }
@@ -353,7 +353,7 @@ body::after {
   transform:rotateY(-13deg) translateZ(-18px);
   transform-origin:left center;
   display:flex; flex-direction:column; gap:12px;
-  height:calc(100vh - 54px - 50px - 32px);
+  height:calc(100% - 54px - 50px - 32px);
   animation:slideInRight 0.5s cubic-bezier(0.22,1,0.36,1) 0.04s both;
   flex-shrink:0;
 }
@@ -656,9 +656,6 @@ body::after {
       <button class="action-btn" id="removeGamesBtn" onclick="showRemoveGamesModal()">✕ Remove Games</button>
       <button class="action-btn" id="getArtBtn" onclick="showGetArtModal()">🖼 Get Game Art</button>
     </nav>
-    <div style="flex:1;display:flex;justify-content:center;">
-      <button class="test-plan-btn" id="testPlanBtn" onclick="showTestPlanModal()">📋 Test Plan</button>
-    </div>
     <div class="titlebar-right">
       <button class="nav-btn active" onclick="showView('library')">Library</button>
       <!-- Setup button removed for alpha — replaced by Add Games/Collection -->
@@ -2714,10 +2711,9 @@ function gpHandleInput(gp) {
   if (up || down || left || right) gpActivate();
 
   // ── Toolbar mode ─────────────────────────────────────────────────────
-  // RIGHT: Refresh(0) > Add Games(1) > Get Art(2) > Test Plan(-1) > Library > Controller > Dev Options
+  // RIGHT: Refresh(0) > Add Games(1) > Remove Games(2) > Get Art(3) > Library > Controller > Dev Options
   // LEFT:  reverse
   if (GP_NAV.inToolbar) {
-    const instrBtn = document.getElementById('testPlanBtn');
     const toolbarBtns = [
       document.getElementById('rescanBtn'),
       document.getElementById('addGamesBtn'),
@@ -2725,15 +2721,10 @@ function gpHandleInput(gp) {
       document.getElementById('getArtBtn')
     ];
     const highlightToolbar = (idx) => {
-      if (instrBtn) instrBtn.style.outline = idx === -1 ? "2px solid var(--cyan)" : "none";
       toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === idx ? "2px solid var(--cyan)" : "none"; });
     };
     if (gpShouldFire("left", left)) {
-      if (GP_NAV.toolbarIdx === -1) {
-        // Left from Test Plan — go to Get Art (last toolbar button)
-        GP_NAV.toolbarIdx = toolbarBtns.length - 1;
-        highlightToolbar(GP_NAV.toolbarIdx);
-      } else if (GP_NAV.toolbarIdx === 0) {
+      if (GP_NAV.toolbarIdx === 0) {
         // Left from Refresh Library — end of navigation
         // do nothing
       } else {
@@ -2743,11 +2734,7 @@ function gpHandleInput(gp) {
     }
     if (gpShouldFire("right", right)) {
       if (GP_NAV.toolbarIdx === toolbarBtns.length - 1) {
-        // Right from Get Art — go to Test Plan
-        GP_NAV.toolbarIdx = -1;
-        highlightToolbar(-1);
-      } else if (GP_NAV.toolbarIdx === -1) {
-        // Right from Test Plan — go to Library (first nav button)
+        // Right from Get Art — go to Library (first nav button)
         highlightToolbar(-99);
         GP_NAV.inToolbar = false;
         GP_NAV.inTopNav = true;
@@ -2762,8 +2749,7 @@ function gpHandleInput(gp) {
     if (gpShouldFire("a", aBtn)) {
       GP_NAV.inToolbar = false;
       highlightToolbar(-99);
-      if (GP_NAV.toolbarIdx === -1 && instrBtn) instrBtn.click();
-      else if (toolbarBtns[GP_NAV.toolbarIdx]) toolbarBtns[GP_NAV.toolbarIdx].click();
+      if (toolbarBtns[GP_NAV.toolbarIdx]) toolbarBtns[GP_NAV.toolbarIdx].click();
     }
     if (gpShouldFire("down", down) || gpShouldFire("b", bBtn)) {
       GP_NAV.inToolbar = false;
@@ -2779,13 +2765,18 @@ function gpHandleInput(gp) {
     const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
     if (gpShouldFire("left", left)) {
       if (GP_NAV.topNavIdx === 0) {
-        // Left from Library — go to Test Plan
+        // Left from Library — go to Get Art (last toolbar button)
         navBtns.forEach(b => b.style.outline = "none");
         GP_NAV.inTopNav = false;
         GP_NAV.inToolbar = true;
-        GP_NAV.toolbarIdx = -1;
-        const instrBtn2 = document.getElementById('testPlanBtn');
-        if (instrBtn2) instrBtn2.style.outline = "2px solid var(--cyan)";
+        GP_NAV.toolbarIdx = 3;
+        const toolbarBtns2 = [
+          document.getElementById('rescanBtn'),
+          document.getElementById('addGamesBtn'),
+          document.getElementById('removeGamesBtn'),
+          document.getElementById('getArtBtn')
+        ];
+        toolbarBtns2.forEach((b,i) => { if(b) b.style.outline = i === 3 ? "2px solid var(--cyan)" : "none"; });
       } else {
         GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
         navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
@@ -3916,5 +3907,11 @@ showView = function(name) {
     </div>
   </div>
 
+<script>
+  (function() {
+    const zoom = window.innerWidth / 1920;
+    document.body.style.zoom = zoom;
+  })();
+</script>
 </body>
 </html>
