@@ -1460,7 +1460,8 @@ async function launchGame(game) {
   if (window.easyarc) {
     const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
     const p1id = gps.length > 0 ? gps[0].id : '';
-    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id });
+    const p1profile = ctrlGetProfile(p1id);
+    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id, controllerType: p1profile.type });
     showToast(result.success ? 'Launching ' + g.title + '...' : 'Error: ' + result.error);
   } else {
     showToast('Launching ' + g.title + '...');
@@ -1888,7 +1889,6 @@ const KNOWN_CONTROLLERS = {
   'dualshock 3':                    { name:'DualShock 3',           icon:'&#127918;', type:'ds3' },
   'xbox':                           { name:'Xbox Controller',       icon:'&#127918;', type:'xbox' },
   'xinput':                         { name:'Xbox Controller',       icon:'&#127918;', type:'xbox' },
-  'vendor: 057e product: 2009':         { name:'Teknogame GC Controller', icon:'&#127918;', type:'gc_clone', buttonRemap:{0:1, 1:0, 2:3, 3:2} },
 };
 
 const BUTTON_MAP_DEFS = [
@@ -1923,7 +1923,8 @@ function ctrlGetProfile(id) {
   for (const [key, profile] of entries) {
     if (lower.includes(key)) return profile;
   }
-  return null;
+  // Unknown controller — return generic XInput fallback so UI navigation always works
+  return { name: 'Controller', icon: '&#127918;', type: 'xinput' };
 }
 
 function ctrlShowStartupModal() {

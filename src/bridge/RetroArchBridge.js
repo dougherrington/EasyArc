@@ -435,6 +435,46 @@ class RetroArchBridge {
     }
   }
 
+  writeXInputFallback() {
+    const autoconfigDir = path.join(os.homedir(), 'Library/Application Support/RetroArch/autoconfig');
+    try { fs.mkdirSync(autoconfigDir, { recursive: true }); } catch(e) {}
+    const fallbackPath = path.join(autoconfigDir, 'Generic_XInput_Fallback.cfg');
+    const content = [
+      'input_driver = "udev"',
+      'input_device = "Generic XInput Fallback"',
+      'input_b_btn = "0"',
+      'input_y_btn = "2"',
+      'input_select_btn = "6"',
+      'input_start_btn = "7"',
+      'input_up_btn = "h0up"',
+      'input_down_btn = "h0down"',
+      'input_left_btn = "h0left"',
+      'input_right_btn = "h0right"',
+      'input_a_btn = "1"',
+      'input_x_btn = "3"',
+      'input_l_btn = "4"',
+      'input_r_btn = "5"',
+      'input_l2_axis = "+2"',
+      'input_r2_axis = "+5"',
+      'input_l3_btn = "9"',
+      'input_r3_btn = "10"',
+      'input_l_x_plus_axis = "+0"',
+      'input_l_x_minus_axis = "-0"',
+      'input_l_y_plus_axis = "+1"',
+      'input_l_y_minus_axis = "-1"',
+      'input_r_x_plus_axis = "+3"',
+      'input_r_x_minus_axis = "-3"',
+      'input_r_y_plus_axis = "+4"',
+      'input_r_y_minus_axis = "-4"',
+    ].join('\n');
+    try {
+      fs.writeFileSync(fallbackPath, content);
+      console.log('[Bridge] Wrote XInput fallback autoconfig');
+    } catch(e) {
+      console.error('[Bridge] Failed to write XInput fallback autoconfig:', e.message);
+    }
+  }
+
   writeRetroArchConfig() {
     const cfgPath = require('path').join(require('os').homedir(), 'Library/Application Support/RetroArch/retroarch.cfg');
     try {
@@ -471,6 +511,7 @@ class RetroArchBridge {
     } catch(e) {
       console.error('[Bridge] Failed to write retroarch.cfg:', e.message);
     }
+    this.writeXInputFallback();
   }
 
   async launchGame(options) {
@@ -518,8 +559,8 @@ class RetroArchBridge {
     // GameCube and Wii games launch via Dolphin instead of RetroArch
     if (options.system === 'gamecube' || options.system === 'wii') {
       this.writeDolphinConfig();
-      if (options.system === 'wii') this.writeWiiConfig(options.controllerName);
-      if (options.system === 'gamecube') this.writeGCPadConfig(options.controllerName);
+      if (options.system === 'wii') this.writeWiiConfig(options.controllerName, options.controllerType);
+      if (options.system === 'gamecube') this.writeGCPadConfig(options.controllerName, options.controllerType);
       const dolphin = await this.findDolphin();
       if (!dolphin.found) return { success: false, error: 'Dolphin not found. Please install Dolphin first.' };
       console.log('[Bridge] Launching GameCube/Wii game via Dolphin:', options.romPath);
@@ -607,13 +648,15 @@ class RetroArchBridge {
     }
   }
 
-  writeGCPadConfig(controllerName) {
+  writeGCPadConfig(controllerName, controllerType) {
     const dolphinConfigDir = require('path').join(require('os').homedir(), 'Library/Application Support/Dolphin/Config');
     try { require('fs').mkdirSync(dolphinConfigDir, { recursive: true }); } catch(e) {}
     const lower = (controllerName || '').toLowerCase();
-    let sdlDevice = 'SDL/0/PS4 Controller';
-    if (lower.includes('xbox')) sdlDevice = 'SDL/0/Xbox One S Controller';
-    else if (lower.includes('switch pro') || lower.includes('nintendo switch pro')) sdlDevice = 'SDL/0/Nintendo Switch Pro Controller';
+    const type = (controllerType || '').toLowerCase();
+    let sdlDevice = 'SDL/0/0';
+    if (type === 'xbox' || lower.includes('xbox')) sdlDevice = 'SDL/0/Xbox One S Controller';
+    else if (type === 'ds4' || type === 'dualsense' || lower.includes('dualshock') || lower.includes('dualsense')) sdlDevice = 'SDL/0/PS4 Controller';
+    else if (type === 'switch' || lower.includes('switch pro') || lower.includes('nintendo switch pro')) sdlDevice = 'SDL/0/Nintendo Switch Pro Controller';
     const gcpadConfig = `[GCPad1]
 Device = ${sdlDevice}
 Buttons/A = \`Button S\`
@@ -648,12 +691,8 @@ Device = Quartz/0/Keyboard & Mouse
 Device = Quartz/0/Keyboard & Mouse`;
     try {
       const gcpadPath = require('path').join(dolphinConfigDir, 'GCPadNew.ini');
-      if (!require('fs').existsSync(gcpadPath)) {
-        require('fs').writeFileSync(gcpadPath, gcpadConfig);
-        console.log('[Bridge] Wrote GameCube controller config (first time)');
-      } else {
-        console.log('[Bridge] GCPadNew.ini already exists — leaving user config intact');
-      }
+      require('fs').writeFileSync(gcpadPath, gcpadConfig);
+      console.log('[Bridge] Wrote GameCube controller config');
     } catch(e) {
       console.error('[Bridge] Failed to write GCPad config:', e.message);
     }
@@ -710,13 +749,15 @@ Device = Quartz/0/Keyboard & Mouse`;
     }
   }
 
-  writeWiiConfig(controllerName) {
+  writeWiiConfig(controllerName, controllerType) {
     const dolphinConfigDir = path.join(os.homedir(), 'Library/Application Support/Dolphin/Config');
     try { require('fs').mkdirSync(dolphinConfigDir, { recursive: true }); } catch(e) {}
     const lower = (controllerName || '').toLowerCase();
-    let sdlDevice = 'SDL/0/Nintendo Switch Pro Controller';
-    if (lower.includes('xbox')) sdlDevice = 'SDL/0/Xbox One S Controller';
-    else if (lower.includes('054c') || lower.includes('dualshock') || lower.includes('wireless controller')) sdlDevice = 'SDL/0/PS4 Controller';
+    const type = (controllerType || '').toLowerCase();
+    let sdlDevice = 'SDL/0/0';
+    if (type === 'xbox' || lower.includes('xbox')) sdlDevice = 'SDL/0/Xbox One S Controller';
+    else if (type === 'ds4' || type === 'dualsense' || lower.includes('054c') || lower.includes('dualshock') || lower.includes('wireless controller')) sdlDevice = 'SDL/0/PS4 Controller';
+    else if (type === 'switch' || lower.includes('switch pro') || lower.includes('nintendo switch pro')) sdlDevice = 'SDL/0/Nintendo Switch Pro Controller';
     const wiimoteConfig = `[Wiimote1]
 Device = ${sdlDevice}
 Buttons/A = \`Button E\`
