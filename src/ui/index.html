@@ -433,7 +433,7 @@ body::after {
 
 /* ── SETTINGS PANEL ── */
 .settings-panel { flex:1; overflow-y:auto; padding:24px; display:none; }
-.settings-panel.active { display:block; }
+.settings-panel.active { display:block; overflow-y:auto; max-height:100%; }
 .settings-section { margin-bottom:28px; }
 .settings-heading { font-family:'Orbitron',monospace; font-size:9px; color:var(--cyan); text-shadow:var(--glow-c); letter-spacing:2px; margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
 .setting-row { display:flex; align-items:center; padding:10px 0; border-bottom:1px solid rgba(0,144,255,0.1); }
@@ -801,11 +801,11 @@ body::after {
           <div class="setting-control"><select class="setting-select" id="defaultPlayerCount"><option selected>1 Player</option><option>2 Players</option><option>3 Players</option><option>4 Players</option></select></div>
         </div>
       </div>
-      <div class="settings-section" style="display:none">
+      <div class="settings-section">
         <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
-          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value=""></div>
+          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value="dnherrington67"></div>
         </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
