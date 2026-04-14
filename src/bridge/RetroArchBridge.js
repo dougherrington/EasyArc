@@ -725,25 +725,40 @@ Device = Quartz/0/Keyboard & Mouse`;
   writeDolphinConfig() {
     const cfgPath = require('path').join(require('os').homedir(), 'Library/Application Support/Dolphin/Config/Dolphin.ini');
     try {
-      let cfg = '';
       const fs = require('fs');
-      if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
-      const settings = {
-        'ConfirmStop': 'False',
-        'Fullscreen': 'True',
-        'SIDevice0': '6',
-        'SIDevice1': '6',
-        'SIDevice2': '6',
-        'SIDevice3': '6'
+
+      // Section-aware settings — Dolphin.ini requires keys in correct sections
+      const sectionSettings = {
+        'General': { 'ConfirmStop': 'False' },
+        'Display': { 'Fullscreen': 'True' },
+        'Core': { 'SIDevice0': '6', 'SIDevice1': '6', 'SIDevice2': '6', 'SIDevice3': '6' }
       };
-      for (const [key, val] of Object.entries(settings)) {
-        const regex = new RegExp('^' + key + '\s*=.*$', 'm');
-        const line = key + ' = ' + val;
-        if (regex.test(cfg)) { cfg = cfg.replace(regex, line); }
-        else { cfg += '\n' + line; }
+
+      let cfg = '';
+      if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
+
+      for (const [section, settings] of Object.entries(sectionSettings)) {
+        const sectionHeader = '[' + section + ']';
+        if (!cfg.includes(sectionHeader)) cfg += '\n' + sectionHeader + '\n';
+        for (const [key, val] of Object.entries(settings)) {
+          const line = key + ' = ' + val;
+          const regex = new RegExp('^' + key + '\s*=.*$', 'm');
+          // Find the section and update/insert within it
+          const sectionIdx = cfg.indexOf(sectionHeader);
+          const nextSectionIdx = cfg.indexOf('\n[', sectionIdx + 1);
+          const sectionBlock = nextSectionIdx === -1 ? cfg.slice(sectionIdx) : cfg.slice(sectionIdx, nextSectionIdx);
+          if (regex.test(sectionBlock)) {
+            const updatedBlock = sectionBlock.replace(regex, line);
+            cfg = nextSectionIdx === -1 ? cfg.slice(0, sectionIdx) + updatedBlock : cfg.slice(0, sectionIdx) + updatedBlock + cfg.slice(nextSectionIdx);
+          } else {
+            const insertAt = nextSectionIdx === -1 ? cfg.length : nextSectionIdx;
+            cfg = cfg.slice(0, insertAt) + '\n' + line + cfg.slice(insertAt);
+          }
+        }
       }
+
       fs.writeFileSync(cfgPath, cfg);
-      console.log('[Bridge] Wrote Dolphin config');
+      console.log('[Bridge] Wrote Dolphin config with section-aware settings');
     } catch(e) {
       console.error('[Bridge] Failed to write Dolphin config:', e.message);
     }

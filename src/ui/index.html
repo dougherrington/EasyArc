@@ -461,8 +461,8 @@ body::after {
   background:linear-gradient(90deg,transparent 0%,var(--cyan2) 30%,var(--cyan) 70%,transparent 100%);
   opacity:0.6;
 }
-.ctrl-hint { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
-.ctrl-key { background:rgba(0,144,255,0.14); border:1px solid var(--border2); border-radius:3px; padding:1px 6px; font-family:'Orbitron',monospace; font-size:8px; color:var(--cyan2); }
+.ctrl-hint { display:flex; align-items:center; gap:5px; font-size:22px; color:#ffffff; font-family:'Rajdhani',sans-serif; }
+.ctrl-key { background:rgba(0,144,255,0.14); border:1px solid var(--border2); border-radius:3px; padding:1px 6px; font-family:'Orbitron',monospace; font-size:16px; color:var(--cyan2); }
 .bottombar-status { margin-left:auto; display:flex; align-items:center; gap:14px; font-size:11px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
 
 /* ── TOAST ── */
@@ -950,7 +950,8 @@ async function loadArtworkCache() {
 let games = [];
 let artworkCache = {}; // game.path -> file:// URL
 let metadataCache = {}; // game.path -> metadata object
-let currentSystem = 'all';
+const _initRecent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+let currentSystem = _initRecent.length > 0 ? 'recent' : 'all';
 let currentSearch = '';
 let selectedGame  = null;
 
@@ -1037,6 +1038,7 @@ function showSupportedSystems() {
     {sys:'saturn', name:'Sega Saturn'},
     {sys:'dreamcast', name:'Sega Dreamcast'},
     {sys:'psx', name:'PlayStation'},
+    {sys:'ps2', name:'PlayStation 2'},
     {sys:'psp', name:'PlayStation Portable'},
     {sys:'atari2600', name:'Atari 2600'},
     {sys:'jaguar', name:'Atari Jaguar'},
@@ -1054,10 +1056,11 @@ function showSupportedSystems() {
     '<div style="max-width:780px;width:100%;">' +
     '<div style="margin-bottom:16px;"><button onclick="renderGrid()" style="background:transparent;border:1px solid var(--muted);color:var(--muted);font-family:Rajdhani,sans-serif;font-size:13px;padding:6px 14px;border-radius:4px;cursor:pointer;">← Back</button></div>' +
     '<div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:8px;text-align:center;">Supported Systems</div>' +
-    '<div style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--muted);text-align:center;margin-bottom:24px;">EasyArc Alpha supports 16 systems — with more coming soon!</div>' +
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--muted);text-align:center;margin-bottom:24px;">EasyArc Alpha supports 17 systems — with more coming soon!</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;">' +
     cards +
     '</div>' +
+    '<p style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:var(--muted);text-align:left;margin-bottom:24px;">* PlayStation 2 requires <a href="https://pcsx2.net" style="color:var(--cyan);">PCSX2</a> and a PS2 BIOS file. EasyArc does not provide BIOS files.</p>' +
     '<p style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--cyan);text-align:center;">Press <strong>ENTER</strong> on your keyboard to continue.</p>' +
     '</div></div>';
 
@@ -1355,6 +1358,7 @@ function isFavorite(game) {
 
 function filterFavorites(btn) {
   currentSystem = 'favorites';
+  currentSearch = ''; const si = document.getElementById('searchInput'); if (si) si.value = '';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
@@ -1375,6 +1379,7 @@ function filterFavorites(btn) {
 
 function filterRecent(btn) {
   currentSystem = 'recent';
+  currentSearch = ''; const si = document.getElementById('searchInput'); if (si) si.value = '';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
@@ -1395,6 +1400,7 @@ function filterRecent(btn) {
 
 function filterSystem(sys, btn) {
   currentSystem = sys;
+  currentSearch = ''; const si = document.getElementById('searchInput'); if (si) si.value = '';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
@@ -1730,6 +1736,14 @@ window.frwShow = frwShow;
 // renderGrid() will be called after splash fades out
 updateCounts();
 
+// Activate correct sidebar button to match startup currentSystem
+setTimeout(() => {
+  if (currentSystem === 'recent') {
+    const _rb = document.getElementById('recentBtn');
+    if (_rb) { document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active')); _rb.classList.add('active'); }
+  }
+}, 100);
+
 if (window.easyarc) {
   window.easyarc.findRetroArch().then(result => {
     const dot = document.querySelector('.status-dot');
@@ -1859,6 +1873,13 @@ if (splash && shell) {
     // Step 2: After splash fade completes (1s), remove it
     setTimeout(() => {
       splash.remove();
+      // Default to Recently Played on startup if available, otherwise All Games
+      const _startupRecent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+      if (_startupRecent.length > 0) {
+        currentSystem = 'recent';
+        const _recentBtn = document.getElementById('recentBtn');
+        if (_recentBtn) { document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active')); _recentBtn.classList.add('active'); }
+      }
       // Render grid now that splash is gone — welcome message appears if no games
       renderGrid();
       // If user has games and emulators already checked — show controller modal
@@ -1871,6 +1892,13 @@ if (splash && shell) {
   }, 3000);
 } else {
   // No splash screen — render grid directly
+  // Default to Recently Played on startup if available
+  const _startupRecent2 = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+  if (_startupRecent2.length > 0) {
+    currentSystem = 'recent';
+    const _recentBtn2 = document.getElementById('recentBtn');
+    if (_recentBtn2) { document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active')); _recentBtn2.classList.add('active'); }
+  }
   renderGrid();
   if (games.length > 0) {
     checkEmulatorsOnStartup();
@@ -2608,6 +2636,9 @@ function gpHighlightCard(idx) {
   if (cards[idx]) {
     cards[idx].classList.add('gp-selected');
     cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const onclick = cards[idx].getAttribute('onclick');
+    const idMatch = onclick && onclick.match(/\d+/);
+    if (idMatch) selectGame(parseInt(idMatch[0]));
   }
 }
 
@@ -2900,18 +2931,15 @@ function gpHandleInput(gp) {
       if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
     }
 
-    // A — select card, or launch if already selected
+    // A — launch currently highlighted card
     if (gpShouldFire("a", aBtn)) {
       if (cards[GP_NAV.gridIdx]) {
         const cardOnclick = cards[GP_NAV.gridIdx].getAttribute('onclick');
         const idMatch = cardOnclick && cardOnclick.match(/\d+/);
         const cardId = idMatch ? parseInt(idMatch[0]) : null;
-        if (cardId && selectedGame && selectedGame.id === cardId) {
-          // Already selected — launch it
-          ctestMaybeLaunch(selectedGame);
-        } else {
-          // First press — select and populate detail panel
-          cards[GP_NAV.gridIdx].click();
+        if (cardId) {
+          const game = games.find(g => g.id === cardId);
+          if (game) ctestMaybeLaunch(game);
         }
       }
     }
