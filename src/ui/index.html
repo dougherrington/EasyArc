@@ -947,6 +947,13 @@ async function loadArtworkCache() {
   renderGrid();
 }
 
+// Clear saved state if version has changed — forces fresh start on new alpha
+const _buildVersion = '0.2.6-alpha';
+if (localStorage.getItem('easyarc_build_version') !== _buildVersion) {
+  localStorage.clear();
+  localStorage.setItem('easyarc_build_version', _buildVersion);
+}
+
 let games = [];
 let artworkCache = {}; // game.path -> file:// URL
 let metadataCache = {}; // game.path -> metadata object
