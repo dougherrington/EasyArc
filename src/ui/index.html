@@ -152,7 +152,8 @@ body::after {
   perspective:1600px;
   padding:16px 20px;
   gap:14px;
-  align-items:start;
+  align-items:stretch;
+  height:100%;
 }
 
 /* ── SIDEBAR (left panel — 3D tilted) ── */
@@ -160,7 +161,7 @@ body::after {
   display:flex; flex-direction:column; gap:5px;
   transform:rotateY(13deg) translateZ(-18px);
   transform-origin:right center;
-  height:calc(100% - 54px - 50px - 32px);
+  height:100%;
   overflow-y:auto;
   animation:slideInLeft 0.5s cubic-bezier(0.22,1,0.36,1) both;
   padding-right:2px;
@@ -250,7 +251,7 @@ body::after {
 /* ── CENTER PANEL ── */
 .content {
   display:flex; flex-direction:column; gap:12px;
-  height:calc(100% - 54px - 50px - 32px);
+  height:100%;
   overflow:hidden;
   animation:fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.08s both;
 }
@@ -353,7 +354,7 @@ body::after {
   transform:rotateY(-13deg) translateZ(-18px);
   transform-origin:left center;
   display:flex; flex-direction:column; gap:12px;
-  height:calc(100% - 54px - 50px - 32px);
+  height:100%;
   animation:slideInRight 0.5s cubic-bezier(0.22,1,0.36,1) 0.04s both;
   flex-shrink:0;
 }
@@ -386,7 +387,7 @@ body::after {
   background:radial-gradient(circle at 70% 70%,transparent 40%,rgba(0,0,20,0.55) 100%);
 }
 
-.detail-body { display:flex; flex-direction:column; gap:8px; flex:1; overflow-y:auto; min-height:0; justify-content:space-between; }
+.detail-body { display:flex; flex-direction:column; gap:8px; flex:1; overflow-y:auto; min-height:0; }
 .detail-system { font-family:'Orbitron',monospace; font-size:8px; letter-spacing:2px; color:var(--cyan); text-transform:uppercase; }
 .detail-title { font-family:'Orbitron',monospace; font-size:22px; line-height:1.4; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
 .detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:6px; align-content:start; }
@@ -728,8 +729,7 @@ body::after {
           <div class="detail-system" id="detailSystem"></div>
           <div class="detail-title" id="detailTitle"></div>
           <div class="detail-meta" id="detailMeta"></div>
-          <button class="launch-btn" onclick="ctestMaybeLaunch(selectedGame)">&#9654; LAUNCH GAME</button>
-          <button class="secondary-btn" style="margin-top:8px" onclick="closeDetail()">Close</button>
+          <button class="launch-btn" style="margin-top:auto" onclick="ctestMaybeLaunch(selectedGame)">&#9654; LAUNCH GAME</button>
         </div>
       </div>
     </div>

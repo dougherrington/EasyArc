@@ -729,8 +729,8 @@ Device = Quartz/0/Keyboard & Mouse`;
 
       // Section-aware settings — Dolphin.ini requires keys in correct sections
       const sectionSettings = {
-        'General': { 'ConfirmStop': 'False' },
-        'Display': { 'Fullscreen': 'True' },
+        'Interface': { 'ConfirmStop': 'False' },
+        'Graphics': { 'StartFullscreen': 'True' },
         'Core': { 'SIDevice0': '6', 'SIDevice1': '6', 'SIDevice2': '6', 'SIDevice3': '6' }
       };
 
