@@ -1012,29 +1012,79 @@ Source = 0`;
 
     const baseParams = 'devid=jelos&devpassword=jelos&softname=EasyArc&ssid=' + encodeURIComponent(ssUser) + '&sspassword=' + encodeURIComponent(ssPassword) + '&output=json';
 
+    // Helper: calculate MD5 of ROM file, streaming for large files, zip-aware
+    const getRomCrc = (filePath) => new Promise((resolve, reject) => {
+      const crc32 = require('crc32');
+      const isZip = filePath.toLowerCase().endsWith('.zip');
+      if (!isZip) {
+        const chunks = [];
+        const stream = require('fs').createReadStream(filePath);
+        stream.on('data', chunk => chunks.push(chunk));
+        stream.on('end', () => resolve(crc32(Buffer.concat(chunks)).toUpperCase()));
+        stream.on('error', reject);
+      } else {
+        const yauzl = require('yauzl');
+        yauzl.open(filePath, { lazyEntries: true }, (err, zipfile) => {
+          if (err) return reject(err);
+          zipfile.readEntry();
+          zipfile.on('entry', (entry) => {
+            if (/\/$/.test(entry.fileName)) { zipfile.readEntry(); return; }
+            zipfile.openReadStream(entry, (err, stream) => {
+              if (err) return reject(err);
+              const chunks = [];
+              stream.on('data', chunk => chunks.push(chunk));
+              stream.on('end', () => { zipfile.close(); resolve(crc32(Buffer.concat(chunks)).toUpperCase()); });
+              stream.on('error', reject);
+            });
+          });
+          zipfile.on('error', reject);
+        });
+      }
+    });
+
     try {
-      // Step 1: Clean the title and search for game ID
-      const cleanTitle = game.title
-        .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs|nsp|xci)$/i, '')
-        .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
-        .replace(/\(Disc ?\d+\)/gi, '')
-        .replace(/\[.*?\]/g, '')
-        .replace(/\bv\d+(\.\d+)+\b/gi, '')
-        .replace(/\s+/g, ' ').trim();
-
-      const searchUrl = 'https://api.screenscraper.fr/api2/jeuRecherche.php?' + baseParams + '&recherche=' + encodeURIComponent(cleanTitle) + '&systemeid=' + systemId;
-      const searchData = await httpsGet(searchUrl);
-      const searchJson = JSON.parse(searchData);
-
+      // Step 1a: Try hash-based lookup first
       let gameId = null;
-      if (searchJson.response && searchJson.response.jeux && searchJson.response.jeux.length > 0) {
-        const firstGame = searchJson.response.jeux[0];
-        if (firstGame && firstGame.id) gameId = firstGame.id;
+      let jeuFromHash = null;
+      try {
+        const crc = await getRomCrc(game.path);
+        const romnom = encodeURIComponent(require('path').basename(game.path));
+        const romtaille = require('fs').statSync(game.path).size;
+        console.log('[Bridge] CRC:', crc, '|', game.title);
+        const hashData = await httpsGet('https://api.screenscraper.fr/api2/jeuInfos.php?' + baseParams + '&crc=' + crc + '&systemeid=' + systemId + '&romtype=rom&romnom=' + romnom + '&romtaille=' + romtaille);
+        const hashJson = JSON.parse(hashData);
+        if (hashJson.response && hashJson.response.jeu && hashJson.response.jeu.id) {
+          gameId = hashJson.response.jeu.id;
+          jeuFromHash = hashJson.response.jeu;
+          console.log('[Bridge] Hash hit:', game.title);
+        }
+      } catch(hashErr) {
+        console.log('[Bridge] Hash lookup failed, trying title search:', hashErr.message);
       }
 
-      if (!gameId) return { success:false, error:'Game not found in search' };
+      // Step 1b: Fall back to title search if hash lookup failed
+      if (!gameId) {
+        const cleanTitle = game.title
+          .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs|nsp|xci)$/i, '')
+          .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
+          .replace(/\(Disc ?\d+\)/gi, '')
+          .replace(/\[.*?\]/g, '')
+          .replace(/\bv\d+(\.\d+)+\b/gi, '')
+          .replace(/\s+/g, ' ').trim();
 
-      // Step 2: Get full game info including media using game ID
+        const searchUrl = 'https://api.screenscraper.fr/api2/jeuRecherche.php?' + baseParams + '&recherche=' + encodeURIComponent(cleanTitle) + '&systemeid=' + systemId;
+        const searchData = await httpsGet(searchUrl);
+        const searchJson = JSON.parse(searchData);
+
+        if (searchJson.response && searchJson.response.jeux && searchJson.response.jeux.length > 0) {
+          const firstGame = searchJson.response.jeux[0];
+          if (firstGame && firstGame.id) gameId = firstGame.id;
+        }
+      }
+
+      if (!gameId) return { success:false, error:'Game not found' };
+
+      // Step 2: Get full game info — reuse hash data if available, otherwise fetch
       const infoUrl = 'https://api.screenscraper.fr/api2/jeuInfos.php?' + baseParams + '&gameid=' + gameId;
       const infoData = await httpsGet(infoUrl);
       const infoJson = JSON.parse(infoData);

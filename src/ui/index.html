@@ -809,7 +809,7 @@ body::after {
         </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
-          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password"></div>
+          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password" value="Sammie139485"></div>
         </div>
         <div class="setting-row">
           <div class="setting-info">
@@ -3724,6 +3724,7 @@ async function startScrape() {
     const result = await window.easyarc.scrapeGameWithFallback(g, ssUser, ssPass, tgdbKey);
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI('file://' + result.path);
+      if (result.metadata) metadataCache[g.path] = result.metadata;
     }
     done++;
     // Only delay if we actually made an API call (not cached)
