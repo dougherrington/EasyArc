@@ -1201,7 +1201,7 @@ function renderGrid() {
     return;
   }
   grid.innerHTML = '<div class="game-grid">' + filtered.map((g,i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')">' +
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')" onmouseenter="selectGame(' + g.id + ')">' +
     cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
     '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
   ).join('') + '</div>';
@@ -1383,7 +1383,7 @@ function filterFavorites(btn) {
     return;
   }
   grid.innerHTML = '<div class="game-grid">' + favs.map((g, i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')">' +
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')" onmouseenter="selectGame(' + g.id + ')">' +
     cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
     '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
   ).join('') + '</div>';
@@ -1404,7 +1404,7 @@ function filterRecent(btn) {
     return;
   }
   grid.innerHTML = '<div class="game-grid">' + recent.map((g, i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')">' +
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')" onmouseenter="selectGame(' + g.id + ')">' +
     cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
     '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
   ).join('') + '</div>';
