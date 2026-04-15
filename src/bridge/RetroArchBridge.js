@@ -566,6 +566,10 @@ class RetroArchBridge {
       console.log('[Bridge] Launching GameCube/Wii game via Dolphin:', options.romPath);
       try {
         this.retroarchProcess = spawn(dolphin.path, ['--batch', '--exec=' + options.romPath], { detached: false, stdio: 'ignore' });
+        // Maximize Dolphin window after 3 seconds (handles slow hardware like 2013 Intel MBP)
+        setTimeout(() => {
+          require('child_process').exec('osascript -e \'tell application "Dolphin" to activate\' -e \'tell application "System Events" to keystroke "f" using {command down, control down}\'');
+        }, 3000);
         // Hide EasyArc window so controller focus passes to Dolphin
         const { BrowserWindow: BW } = require('electron');
         const wins = BW.getAllWindows();
