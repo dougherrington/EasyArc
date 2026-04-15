@@ -948,7 +948,7 @@ async function loadArtworkCache() {
 }
 
 // Clear saved state if version has changed — forces fresh start on new alpha
-const _buildVersion = '0.2.6-alpha';
+const _buildVersion = '0.2.7-alpha';
 if (localStorage.getItem('easyarc_build_version') !== _buildVersion) {
   localStorage.clear();
   localStorage.setItem('easyarc_build_version', _buildVersion);
@@ -3696,7 +3696,7 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
-const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp', 'mame', 'mame2003', 'arcade', 'neogeo'];
+const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
