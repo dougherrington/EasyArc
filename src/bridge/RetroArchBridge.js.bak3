@@ -1084,6 +1084,8 @@ Source = 0`;
       `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
       `&crc=${crc}&systemeid=${systemId}&romtype=rom&romnom=${romnom}&romtaille=${romtaille}`;
     console.log('[Bridge] Hash URL:', url);
+    console.log('[Bridge] Hash URL:', url);
+
     let raw = await httpsGet(url);
     let json = safeJson(raw);
     if (!json && raw.includes('Trop de requ')) {

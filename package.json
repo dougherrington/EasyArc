@@ -32,7 +32,7 @@
     "electron-builder": "^24.0.0"
   },
   "dependencies": {
-    "crc32": "^0.2.2",
+    "crc-32": "^1.2.2",
     "yauzl": "^3.3.0"
   }
 }

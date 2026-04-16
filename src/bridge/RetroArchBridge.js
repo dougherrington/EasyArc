@@ -191,6 +191,177 @@ const SYSTEM_CORES = {
   neogeo:       'fbneo_libretro.dylib',
 };
 
+const CRC32 = require('crc-32');
+const yauzl = require('yauzl');
+
+// -----------------------------
+// Scraping helper functions
+// -----------------------------
+
+function httpsGetText(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => resolve(data));
+    }).on('error', reject);
+  });
+}
+
+function httpsGetBinary(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return resolve(httpsGetBinary(res.headers.location));
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    }).on('error', reject);
+  });
+}
+
+function safeJson(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('{')) return null;
+  try { return JSON.parse(trimmed); }
+  catch { return null; }
+}
+
+function scrapeDelay(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function computeCrcFromBuffer(buf) {
+  const crc = (CRC32.buf(buf) >>> 0).toString(16).toUpperCase();
+  return crc.padStart(8, '0');
+}
+
+function readFileBuffer(filePath) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', chunk => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
+
+function readZipLargestFileBuffer(zipPath) {
+  return new Promise((resolve, reject) => {
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      let largest = null;
+      zipfile.readEntry();
+      zipfile.on('entry', (entry) => {
+        if (/\/$/.test(entry.fileName)) { zipfile.readEntry(); return; }
+        if (!largest || entry.uncompressedSize > largest.uncompressedSize) {
+          largest = entry;
+        }
+        zipfile.readEntry();
+      });
+      zipfile.on('end', () => {
+        if (!largest) return reject(new Error('Empty ZIP'));
+        zipfile.openReadStream(largest, (err, stream) => {
+          if (err) return reject(err);
+          const chunks = [];
+          stream.on('data', chunk => chunks.push(chunk));
+          stream.on('end', () => resolve(Buffer.concat(chunks)));
+          stream.on('error', reject);
+        });
+      });
+    });
+  });
+}
+
+async function getRomCrc(filePath) {
+  const lower = filePath.toLowerCase();
+  const buf = lower.endsWith('.zip')
+    ? await readZipLargestFileBuffer(filePath)
+    : await readFileBuffer(filePath);
+  return computeCrcFromBuffer(buf);
+}
+
+function cleanTitleForSearch(title) {
+  return title
+    .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs|nsp|xci)$/i, '')
+    .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
+    .replace(/\(Disc ?\d+\)/gi, '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/\bv\d+(\.\d+)+\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function screenScraperHashLookup(baseParams, systemId, game, crc) {
+  const romnom = encodeURIComponent(path.basename(game.path));
+  const romtaille = fs.statSync(game.path).size;
+  const url =
+    `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
+    `&crc=${crc}&systemeid=${systemId}&romtype=rom&romnom=${romnom}&romtaille=${romtaille}`;
+  console.log('[Bridge] Hash URL:', url);
+  let raw = await httpsGetText(url);
+  let json = safeJson(raw);
+  if (!json && raw.includes('Trop de requ')) {
+    console.log('[Bridge] Rate limit (hash), retrying...');
+    await scrapeDelay(1500);
+    raw = await httpsGetText(url);
+    json = safeJson(raw);
+  }
+  if (json && json.response && json.response.jeu && json.response.jeu.id) {
+    return { ok: true, jeu: json.response.jeu };
+  }
+  return { ok: false, reason: 'No hash match' };
+}
+
+async function screenScraperTitleLookup(baseParams, systemId, game) {
+  const cleanTitle = cleanTitleForSearch(game.title);
+  const url =
+    `https://api.screenscraper.fr/api2/jeuRecherche.php?${baseParams}` +
+    `&recherche=${encodeURIComponent(cleanTitle)}&systemeid=${systemId}`;
+  console.log('[Bridge] Title search URL:', url);
+  let raw = await httpsGetText(url);
+  let json = safeJson(raw);
+  if (!json && raw.includes('Trop de requ')) {
+    console.log('[Bridge] Rate limit (search), retrying...');
+    await scrapeDelay(1500);
+    raw = await httpsGetText(url);
+    json = safeJson(raw);
+  }
+  if (json && json.response && json.response.jeux && json.response.jeux.length > 0) {
+    return { ok: true, jeu: json.response.jeux[0], cleanTitle };
+  }
+  return { ok: false, reason: 'No title match', cleanTitle };
+}
+
+async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath, jeuData) {
+  const mediaTypes = ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
+  for (const type of mediaTypes) {
+    const mediaUrl =
+      `https://api.screenscraper.fr/api2/mediaJeu.php?${baseParams}` +
+      `&media=${type}&jeu=${gameId}`;
+    console.log(`[Bridge] Trying media type: ${type}`);
+    console.log('[Bridge] Media URL:', mediaUrl);
+    try {
+      const img = await httpsGetBinary(mediaUrl);
+      if (img.length < 1000) {
+        console.log(`[Bridge] No image for type: ${type}`);
+        continue;
+      }
+      fs.writeFileSync(artPath, img);
+      fs.writeFileSync(metaPath, JSON.stringify(jeuData, null, 2));
+      console.log(`[Bridge] Artwork saved using type: ${type}`);
+      return true;
+    } catch (err) {
+      console.log(`[Bridge] Failed for type ${type}:`, err.message);
+    }
+  }
+  console.log('[Bridge] No artwork available for this game.');
+  fs.writeFileSync(metaPath, JSON.stringify(jeuData, null, 2));
+  return false;
+}
+
 class RetroArchBridge {
   constructor() {
     this.retroarchPath = null;
@@ -254,6 +425,8 @@ class RetroArchBridge {
 
     const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
     const url = 'https://buildbot.libretro.com/nightly/apple/osx/' + arch + '/latest/' + coreFile + '.zip';
+    console.log('[Bridge] Hash URL:', url);
+    console.log('[Bridge] Hash URL:', url);
     const zipPath = corePath + '.zip';
 
     return new Promise((resolve) => {
@@ -975,160 +1148,63 @@ Source = 0`;
   }
 
   async scrapeGame(game, ssUser, ssPassword) {
-    const SS_IDS = { gbc:33, gba:12, nes:3, snes:4, n64:14, gamecube:13, wii:38, psx:57, ps2:58, switch:203, dreamcast:23, genesis:1, jaguar:27, gamegear:21, mastersystem:2, saturn:22, psp:61, ps3:59 };
-    const systemId = SS_IDS[game.system];
-    if (!systemId) return { success:false, error:'Unsupported system' };
-    const artPath = this.getArtworkPath(game);
-    const metaPath0 = artPath.replace(/\.jpg$/, '.json');
-    if (require('fs').existsSync(artPath) && require('fs').existsSync(metaPath0)) return { success:true, path:artPath, cached:true };
-
-    const https = require('https');
-    const fs = require('fs');
-
-    const httpsGet = (url) => new Promise((resolve, reject) => {
-      https.get(url, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => resolve(data));
-      }).on('error', reject);
-    });
-
-    const httpsGetBinary = (url) => new Promise((resolve, reject) => {
-      https.get(url, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return resolve(httpsGetBinary(res.headers.location));
-        }
-        const chunks = [];
-        res.on('data', c => chunks.push(c));
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-      }).on('error', reject);
-    });
-
-    const getEnglishText = (arr) => {
-      if (!arr) return '';
-      const en = arr.find(x => x.langue === 'en');
-      return en ? en.text : (arr[0] ? arr[0].text : '');
+    const SS_IDS = {
+      gbc: 29, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38,
+      psx: 57, ps2: 58, switch: 225, dreamcast: 23, genesis: 1, jaguar: 27,
+      gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, ps3: 59
     };
-
-    const baseParams = 'devid=jelos&devpassword=jelos&softname=EasyArc&ssid=' + encodeURIComponent(ssUser) + '&sspassword=' + encodeURIComponent(ssPassword) + '&output=json';
-
-    // Helper: calculate MD5 of ROM file, streaming for large files, zip-aware
-    const getRomCrc = (filePath) => new Promise((resolve, reject) => {
-      const crc32 = require('crc32');
-      const isZip = filePath.toLowerCase().endsWith('.zip');
-      if (!isZip) {
-        const chunks = [];
-        const stream = require('fs').createReadStream(filePath);
-        stream.on('data', chunk => chunks.push(chunk));
-        stream.on('end', () => resolve(crc32(Buffer.concat(chunks)).toUpperCase()));
-        stream.on('error', reject);
-      } else {
-        const yauzl = require('yauzl');
-        yauzl.open(filePath, { lazyEntries: true }, (err, zipfile) => {
-          if (err) return reject(err);
-          zipfile.readEntry();
-          zipfile.on('entry', (entry) => {
-            if (/\/$/.test(entry.fileName)) { zipfile.readEntry(); return; }
-            zipfile.openReadStream(entry, (err, stream) => {
-              if (err) return reject(err);
-              const chunks = [];
-              stream.on('data', chunk => chunks.push(chunk));
-              stream.on('end', () => { zipfile.close(); resolve(crc32(Buffer.concat(chunks)).toUpperCase()); });
-              stream.on('error', reject);
-            });
-          });
-          zipfile.on('error', reject);
-        });
-      }
-    });
-
+    const systemId = SS_IDS[game.system];
+    if (!systemId) {
+      console.log('[Bridge] Unsupported system:', game.system);
+      return { success: false, error: 'Unsupported system' };
+    }
+    const artPath = this.getArtworkPath(game);
+    const metaPath = artPath.replace(/\.jpg$/i, '.json');
+    if (fs.existsSync(artPath) && fs.existsSync(metaPath)) {
+      return { success: true, path: artPath, cached: true };
+    }
+    const baseParams =
+      'devid=jelos&devpassword=jelos&softname=EasyArc' +
+      '&ssid=' + encodeURIComponent(ssUser) +
+      '&sspassword=' + encodeURIComponent(ssPassword) +
+      '&output=json';
+    let jeuData = null;
+    // Phase 1: CRC + hash lookup
     try {
-      // Step 1a: Try hash-based lookup first
-      let gameId = null;
-      let jeuFromHash = null;
-      try {
-        const crc = await getRomCrc(game.path);
-        const romnom = encodeURIComponent(require('path').basename(game.path));
-        const romtaille = require('fs').statSync(game.path).size;
-        console.log('[Bridge] CRC:', crc, '|', game.title);
-        const hashData = await httpsGet('https://api.screenscraper.fr/api2/jeuInfos.php?' + baseParams + '&crc=' + crc + '&systemeid=' + systemId + '&romtype=rom&romnom=' + romnom + '&romtaille=' + romtaille);
-        const hashJson = JSON.parse(hashData);
-        if (hashJson.response && hashJson.response.jeu && hashJson.response.jeu.id) {
-          gameId = hashJson.response.jeu.id;
-          jeuFromHash = hashJson.response.jeu;
-          console.log('[Bridge] Hash hit:', game.title);
-        }
-      } catch(hashErr) {
-        console.log('[Bridge] Hash lookup failed, trying title search:', hashErr.message);
+      const crc = await getRomCrc(game.path);
+      console.log('[Bridge] CRC:', crc, '|', game.title);
+      const hashResult = await screenScraperHashLookup(baseParams, systemId, game, crc);
+      if (hashResult.ok) {
+        jeuData = hashResult.jeu;
+        console.log('[Bridge] Hash hit:', game.title);
+      } else {
+        console.log('[Bridge] Hash lookup failed:', hashResult.reason);
       }
-
-      // Step 1b: Fall back to title search if hash lookup failed
-      if (!gameId) {
-        const cleanTitle = game.title
-          .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs|nsp|xci)$/i, '')
-          .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
-          .replace(/\(Disc ?\d+\)/gi, '')
-          .replace(/\[.*?\]/g, '')
-          .replace(/\bv\d+(\.\d+)+\b/gi, '')
-          .replace(/\s+/g, ' ').trim();
-
-        const searchUrl = 'https://api.screenscraper.fr/api2/jeuRecherche.php?' + baseParams + '&recherche=' + encodeURIComponent(cleanTitle) + '&systemeid=' + systemId;
-        const searchData = await httpsGet(searchUrl);
-        const searchJson = JSON.parse(searchData);
-
-        if (searchJson.response && searchJson.response.jeux && searchJson.response.jeux.length > 0) {
-          const firstGame = searchJson.response.jeux[0];
-          if (firstGame && firstGame.id) gameId = firstGame.id;
-        }
+    } catch (err) {
+      console.log('[Bridge] CRC/hash error:', err.message);
+    }
+    // Phase 2: Title fallback
+    if (!jeuData) {
+      const titleResult = await screenScraperTitleLookup(baseParams, systemId, game);
+      if (titleResult.ok) {
+        jeuData = titleResult.jeu;
+        console.log('[Bridge] Title hit:', titleResult.cleanTitle);
+      } else {
+        console.log('[Bridge] No match for:', titleResult.cleanTitle);
+        return { success: false, error: 'No match found' };
       }
-
-      if (!gameId) return { success:false, error:'Game not found' };
-
-      // Step 2: Get full game info — reuse hash data if available, otherwise fetch
-      const infoUrl = 'https://api.screenscraper.fr/api2/jeuInfos.php?' + baseParams + '&gameid=' + gameId;
-      const infoData = await httpsGet(infoUrl);
-      const infoJson = JSON.parse(infoData);
-
-      if (!infoJson.response || !infoJson.response.jeu) return { success:false, error:'No game info found' };
-
-      const jeu = infoJson.response.jeu;
-      const medias = jeu.medias || [];
-
-      // Find best box art
-      let mediaUrl = null;
-      for (const type of ['box-2D-US', 'box-2D', 'box-3D-US', 'box-3D']) {
-        const m = medias.find(m => m.type === type);
-        if (m && m.url) { mediaUrl = m.url; break; }
-      }
-      if (!mediaUrl) return { success:false, error:'No media found' };
-
-      // Extract metadata
-      const mainGenre = jeu.genres ? jeu.genres.find(g => g.principale === '1') : null;
-      const metadata = {
-        title:     jeu.noms ? getEnglishText(jeu.noms) : '',
-        genre:     mainGenre ? getEnglishText(mainGenre.noms) : '',
-        year:      jeu.dates ? ((jeu.dates.find(d => d.region === 'us') || jeu.dates[0] || {}).text || '').substring(0,4) : '',
-        publisher: (jeu.editeur && jeu.editeur.text) || '',
-        players:   (jeu.joueurs && jeu.joueurs.text) || '',
-        synopsis:  (jeu.synopsis && getEnglishText(jeu.synopsis)) || (jeu.synopsis_en && jeu.synopsis_en.text) || '',
-      };
-
-      // Save metadata JSON
-      const metaPath = artPath.replace(/\.jpg$/, '.json');
-      fs.writeFileSync(metaPath, JSON.stringify(metadata));
-
-      // Download and save image
-      const imgBuf = await httpsGetBinary(mediaUrl);
-      fs.writeFileSync(artPath, imgBuf);
-
-      return { success:true, path:artPath, metadata };
-
-    } catch(e) {
-      return { success:false, error:e.message };
+    }
+    // Phase 3: Download media + metadata
+    try {
+      await downloadArtworkAndMetadata(baseParams, jeuData.id, artPath, metaPath, jeuData);
+      return { success: true, path: artPath, cached: false };
+    } catch (err) {
+      console.log('[Bridge] Media download failed:', err.message);
+      return { success: false, error: 'Media download failed' };
     }
   }
 
-  async scrapeGameWithFallback(game, ssUser, ssPassword, tgdbKey) {
+    async scrapeGameWithFallback(game, ssUser, ssPassword, tgdbKey) {
     // Try ScreenScraper first if credentials provided
     if (ssUser && ssPassword) {
       const ssResult = await this.scrapeGame(game, ssUser, ssPassword);
