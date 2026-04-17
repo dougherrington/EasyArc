@@ -4,6 +4,13 @@ const os = require('os');
 const { spawn } = require('child_process');
 const https = require('https');
 
+// --- Scraper Subsystem ---
+const ScraperPipeline = require('../scraper/ScraperPipeline');
+
+
+
+
+
 const PCSX2_LOCATIONS = {
   darwin: ['/Applications/PCSX2.app/Contents/MacOS/PCSX2'],
   win32:  ['C:\\Program Files\\PCSX2\\pcsx2-qt.exe'],
@@ -337,16 +344,19 @@ async function screenScraperTitleLookup(baseParams, systemId, game) {
 
 async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath, jeuData) {
   const mediaTypes = ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
+  const medias = jeuData.medias || [];
+
   for (const type of mediaTypes) {
-    const mediaUrl =
-      `https://api.screenscraper.fr/api2/mediaJeu.php?${baseParams}` +
-      `&media=${type}&jeu=${gameId}`;
-    console.log(`[Bridge] Trying media type: ${type}`);
-    console.log('[Bridge] Media URL:', mediaUrl);
+    const media = medias.find(m => m.type === type);
+    if (!media || !media.url) {
+      console.log(`[Bridge] No media entry for type: ${type}`);
+      continue;
+    }
+    console.log(`[Bridge] Trying media type: ${type} — URL: ${media.url}`);
     try {
-      const img = await httpsGetBinary(mediaUrl);
-      if (img.length < 1000) {
-        console.log(`[Bridge] No image for type: ${type}`);
+      const img = await httpsGetBinary(media.url);
+      if (!img || img.length < 1000) {
+        console.log(`[Bridge] Image too small for type: ${type}`);
         continue;
       }
       fs.writeFileSync(artPath, img);
@@ -363,11 +373,21 @@ async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath,
 }
 
 class RetroArchBridge {
-  constructor() {
+  constructor(config = {}) {
+    this.config = config;
     this.retroarchPath = null;
     this.retroarchProcess = null;
     const _fs = require("fs"), _path = require("path"), _os = require("os");
     ["cores","system","config"].forEach(d => { try { _fs.mkdirSync(_path.join(_os.homedir(),"Library/Application Support/RetroArch/"+d),{recursive:true}); } catch(e) {} });
+    // --- ScraperPipeline integration ---
+    this.scraper = new ScraperPipeline({
+      baseDir: config.artworkDir || _path.join(_os.homedir(), 'Library/Application Support/EasyArc/artwork'),
+      regionOrder: config.regionOrder,
+      devId: config.devId || 'jelos',
+      devPassword: config.devPassword || 'jelos',
+      ssid: config.ssid || '',
+      ssPassword: config.ssPassword || ''
+    });
   }
 
   async findPCSX2() {
@@ -1232,6 +1252,13 @@ Source = 0`;
     if (!platformId) return { success:false, error:'Unsupported system' };
 
     const https = require('https');
+
+// --- Scraper Subsystem ---
+const ScraperPipeline = require('../scraper/ScraperPipeline');
+
+
+
+
     const fs = require('fs');
     const artPath = this.getArtworkPath(game);
     if (fs.existsSync(artPath)) return { success:true, path:artPath, cached:true };
@@ -1315,6 +1342,31 @@ Source = 0`;
 
   async listControllers() { return []; }
   async saveMapping(mapping) { return { success: true }; }
+
+  // --- ScraperPipeline integration ---
+  async scrapeOne(romEntry) {
+    const { systemId, romPath } = romEntry;
+    const result = await this.scraper.scrape({
+      systemId,
+      romPath,
+      regionOrder: this.config.regionOrder,
+      overrides: {}
+    });
+    if (this.config.enableScrapeLogs && typeof this.writeScrapeLog === 'function') {
+      this.writeScrapeLog(result);
+    }
+    return result;
+  }
+
+  writeScrapeLog(result) {
+    try {
+      const logDir = this.config.logDir || path.join(process.cwd(), 'logs', 'scraper');
+      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+      const fileName = `${Date.now()}-${result.gameId || 'unknown'}.json`;
+      const full = path.join(logDir, fileName);
+      fs.writeFileSync(full, JSON.stringify(result, null, 2));
+    } catch {}
+  }
 }
 
 module.exports = RetroArchBridge;
