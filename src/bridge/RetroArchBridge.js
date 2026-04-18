@@ -287,23 +287,27 @@ async function getRomCrc(filePath) {
   const buf = lower.endsWith('.zip')
     ? await readZipLargestFileBuffer(filePath)
     : await readFileBuffer(filePath);
-  return computeCrcFromBuffer(buf);
+  return { crc: computeCrcFromBuffer(buf), size: buf.length };
 }
 
-function cleanTitleForSearch(title) {
-  return title
-    .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs|nsp|xci)$/i, '')
-    .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
-    .replace(/\(Disc ?\d+\)/gi, '')
-    .replace(/\[.*?\]/g, '')
-    .replace(/\bv\d+(\.\d+)+\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+function cleanTitleForSearch(raw) {
+  if (!raw) return "";
+  let title = raw;
+  title = title.replace(/\.[a-z0-9]{2,4}$/i, "");
+  title = title.replace(/\((USA|Europe|Japan|World|En|En,Ja|Ja|Fr|De|Es|It|Nl|Pt|Zh|Ko)\)/gi, "");
+  title = title.replace(/\((En|Ja|Fr|De|Es|It|Nl|Pt|Zh|Ko)(,[A-Za-z]{2})+\)/gi, "");
+  title = title.replace(/\((GBC Mode|GB Compatible|SGB Enhanced|SGB Compatible)\)/gi, "");
+  title = title.replace(/\((Rev [A-Z0-9]+|Rev [0-9]+)\)/gi, "");
+  title = title.replace(/\((Proto|Prototype|Sample|Demo|Beta)\)/gi, "");
+  title = title.replace(/\[[^\]]+\]/g, "");
+  title = title.replace(/\(v[0-9.]+\)/gi, "");
+  title = title.replace(/\s+/g, " ").trim();
+  return title;
 }
 
-async function screenScraperHashLookup(baseParams, systemId, game, crc) {
+async function screenScraperHashLookup(baseParams, systemId, game, crc, size) {
   const romnom = encodeURIComponent(path.basename(game.path));
-  const romtaille = fs.statSync(game.path).size;
+  const romtaille = size;
   const url =
     `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
     `&crc=${crc}&systemeid=${systemId}&romtype=rom&romnom=${romnom}&romtaille=${romtaille}`;
@@ -337,9 +341,30 @@ async function screenScraperTitleLookup(baseParams, systemId, game) {
     json = safeJson(raw);
   }
   if (json && json.response && json.response.jeux && json.response.jeux.length > 0) {
-    return { ok: true, jeu: json.response.jeux[0], cleanTitle };
+    const match = json.response.jeux.find(j => j.id && String(j.systemeid) === String(systemId));
+    if (match) return { ok: true, jeu: match, cleanTitle };
+    const anyValid = json.response.jeux.find(j => j.id);
+    if (anyValid) return { ok: true, jeu: anyValid, cleanTitle };
   }
   return { ok: false, reason: 'No title match', cleanTitle };
+}
+
+async function screenScraperGameIdLookup(baseParams, gameId) {
+  const url =
+    `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}&gameid=${gameId}`;
+  console.log('[Bridge] Full metadata URL:', url);
+  let raw = await httpsGetText(url);
+  let json = safeJson(raw);
+  if (!json && raw.includes('Trop de requ')) {
+    console.log('[Bridge] Rate limit (gameid), retrying...');
+    await scrapeDelay(1500);
+    raw = await httpsGetText(url);
+    json = safeJson(raw);
+  }
+  if (json && json.response && json.response.jeu && json.response.jeu.id) {
+    return { ok: true, jeu: json.response.jeu };
+  }
+  return { ok: false, reason: 'No full metadata found' };
 }
 
 async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath, jeuData) {
@@ -1169,8 +1194,8 @@ Source = 0`;
 
   async scrapeGame(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 29, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38,
-      psx: 57, ps2: 58, switch: 225, dreamcast: 23, genesis: 1, jaguar: 27,
+      gbc: 10, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38,
+      psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, ps3: 59
     };
     const systemId = SS_IDS[game.system];
@@ -1184,16 +1209,16 @@ Source = 0`;
       return { success: true, path: artPath, cached: true };
     }
     const baseParams =
-      'devid=jelos&devpassword=jelos&softname=EasyArc' +
+      'devid=dnherrington67&devpassword=LpQS8obmTnC&softname=EasyArc' +
       '&ssid=' + encodeURIComponent(ssUser) +
       '&sspassword=' + encodeURIComponent(ssPassword) +
       '&output=json';
     let jeuData = null;
     // Phase 1: CRC + hash lookup
     try {
-      const crc = await getRomCrc(game.path);
-      console.log('[Bridge] CRC:', crc, '|', game.title);
-      const hashResult = await screenScraperHashLookup(baseParams, systemId, game, crc);
+      const { crc, size } = await getRomCrc(game.path);
+      console.log('[Bridge] CRC:', crc, 'size:', size, '|', game.title);
+      const hashResult = await screenScraperHashLookup(baseParams, systemId, game, crc, size);
       if (hashResult.ok) {
         jeuData = hashResult.jeu;
         console.log('[Bridge] Hash hit:', game.title);
@@ -1207,8 +1232,10 @@ Source = 0`;
     if (!jeuData) {
       const titleResult = await screenScraperTitleLookup(baseParams, systemId, game);
       if (titleResult.ok) {
-        jeuData = titleResult.jeu;
         console.log('[Bridge] Title hit:', titleResult.cleanTitle);
+        const fullResult = await screenScraperGameIdLookup(baseParams, titleResult.jeu.id);
+        jeuData = fullResult.ok ? fullResult.jeu : titleResult.jeu;
+        if (!fullResult.ok) console.log('[Bridge] Full metadata fetch failed, using summary');
       } else {
         console.log('[Bridge] No match for:', titleResult.cleanTitle);
         return { success: false, error: 'No match found' };

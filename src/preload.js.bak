@@ -22,7 +22,6 @@ contextBridge.exposeInMainWorld('easyarc', {
   moveFiles:      (filePaths, destFolder) => ipcRenderer.invoke('bridge:moveFiles', filePaths, destFolder),
   pickFiles:      () => ipcRenderer.invoke('bridge:pickFiles'),
   artworkExists: (game) => ipcRenderer.invoke('bridge:artworkExists', game),
-  writeScrapeLog: (logText) => ipcRenderer.invoke('bridge:writeScrapeLog', logText),
   getArtworkPath: (game) => ipcRenderer.invoke('bridge:getArtworkPath', game),
   getMetadata:    (game) => ipcRenderer.invoke('bridge:getMetadata', game),
   saveArtwork:    (game, data) => ipcRenderer.invoke('bridge:saveArtwork', game, data),
