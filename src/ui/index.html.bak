@@ -3724,6 +3724,14 @@ async function startScrape() {
 
   const tgdbKey = 'c38da12dde0715b5f9f349cf5859e096ed4fe9c20e034364b83444b5e7998e11';
   let done = 0;
+  let succeeded = 0;
+  let failed = 0;
+  const logLines = [];
+  const scrapeStart = new Date().toLocaleString();
+  logLines.push('EasyArc Scrape Log — ' + scrapeStart);
+  logLines.push('Total to scrape: ' + toScrape.length);
+  logLines.push('');
+
   for (const g of toScrape) {
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
@@ -3732,6 +3740,11 @@ async function startScrape() {
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI('file://' + result.path);
       if (result.metadata) metadataCache[g.path] = result.metadata;
+      succeeded++;
+      logLines.push('OK     ' + g.system + ' | ' + g.title);
+    } else {
+      failed++;
+      logLines.push('FAIL   ' + g.system + ' | ' + g.title + ' | ' + (result.error || 'unknown'));
     }
     done++;
     // Only delay if we actually made an API call (not cached)
@@ -3740,10 +3753,22 @@ async function startScrape() {
     }
   }
 
+  const pct = done > 0 ? Math.round((succeeded / done) * 100) : 0;
+  logLines.push('');
+  logLines.push('--- SUMMARY ---');
+  logLines.push('Scraped:  ' + done);
+  logLines.push('Success:  ' + succeeded);
+  logLines.push('Failed:   ' + failed);
+  logLines.push('Success rate: ' + pct + '%');
+
   scrapeRunning = false;
   if (row) row.style.display = 'none';
-  showToast('Scraped ' + done + ' games!');
+  showToast('Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)');
   renderGrid();
+
+  if (window.easyarc && window.easyarc.writeScrapeLog) {
+    await window.easyarc.writeScrapeLog(logLines.join('\n'));
+  }
 }
 
 function stopScrape() {

@@ -3736,7 +3736,12 @@ async function startScrape() {
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
     if (gameEl) gameEl.textContent = g.title;
-    const result = await window.easyarc.scrapeGameWithFallback(g, ssUser, ssPass, tgdbKey);
+    let result;
+    try {
+      result = await window.easyarc.scrapeGameWithFallback(g, ssUser, ssPass, tgdbKey);
+    } catch (err) {
+      result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
+    }
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI('file://' + result.path);
       if (result.metadata) metadataCache[g.path] = result.metadata;

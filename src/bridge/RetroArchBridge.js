@@ -247,13 +247,40 @@ function computeCrcFromBuffer(buf) {
 
 function readFileBuffer(filePath) {
   return new Promise((resolve, reject) => {
-    const chunks = [];
     const stream = fs.createReadStream(filePath);
-    stream.on('data', chunk => chunks.push(chunk));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    let crc = 0;
+    const sha1 = require('crypto').createHash('sha1');
+    const md5 = require('crypto').createHash('md5');
+    let size = 0;
+    stream.on('data', chunk => {
+      size += chunk.length;
+      sha1.update(chunk);
+      md5.update(chunk);
+      let c = crc ^ 0xffffffff;
+      for (let i = 0; i < chunk.length; i++) {
+        c = CRC32_TABLE[(c ^ chunk[i]) & 0xff] ^ (c >>> 8);
+      }
+      crc = (c ^ 0xffffffff) >>> 0;
+    });
+    stream.on('end', () => {
+      const crcHex = crc.toString(16).toUpperCase().padStart(8, '0');
+      resolve({ crc: crcHex, sha1: sha1.digest('hex'), md5: md5.digest('hex'), size });
+    });
     stream.on('error', reject);
   });
 }
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
 
 function readZipLargestFileBuffer(zipPath) {
   return new Promise((resolve, reject) => {
@@ -272,9 +299,25 @@ function readZipLargestFileBuffer(zipPath) {
         if (!largest) return reject(new Error('Empty ZIP'));
         zipfile.openReadStream(largest, (err, stream) => {
           if (err) return reject(err);
-          const chunks = [];
-          stream.on('data', chunk => chunks.push(chunk));
-          stream.on('end', () => resolve(Buffer.concat(chunks)));
+          let crc = 0;
+          const sha1 = require('crypto').createHash('sha1');
+          const md5 = require('crypto').createHash('md5');
+          let size = 0;
+          stream.on('data', chunk => {
+            size += chunk.length;
+            sha1.update(chunk);
+            md5.update(chunk);
+            let c = crc ^ 0xffffffff;
+            for (let i = 0; i < chunk.length; i++) {
+              c = CRC32_TABLE[(c ^ chunk[i]) & 0xff] ^ (c >>> 8);
+            }
+            crc = (c ^ 0xffffffff) >>> 0;
+          });
+          stream.on('end', () => {
+            zipfile.close();
+            const crcHex = crc.toString(16).toUpperCase().padStart(8, '0');
+            resolve({ crc: crcHex, sha1: sha1.digest('hex'), md5: md5.digest('hex'), size });
+          });
           stream.on('error', reject);
         });
       });
@@ -284,10 +327,9 @@ function readZipLargestFileBuffer(zipPath) {
 
 async function getRomCrc(filePath) {
   const lower = filePath.toLowerCase();
-  const buf = lower.endsWith('.zip')
+  return lower.endsWith('.zip')
     ? await readZipLargestFileBuffer(filePath)
     : await readFileBuffer(filePath);
-  return { crc: computeCrcFromBuffer(buf), size: buf.length };
 }
 
 function cleanTitleForSearch(raw) {
@@ -367,8 +409,63 @@ async function screenScraperGameIdLookup(baseParams, gameId) {
   return { ok: false, reason: 'No full metadata found' };
 }
 
+async function screenScraperMameLookup(baseParams, game) {
+  const romnom = encodeURIComponent(path.basename(game.path, '.zip').toLowerCase());
+  const url =
+    `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
+    `&systemeid=75&romtype=rom&romnom=${romnom}`;
+  console.log('[Bridge] MAME URL:', url);
+  let raw = await httpsGetText(url);
+  let json = safeJson(raw);
+  if (!json && raw && raw.includes('Trop de requ')) {
+    console.log('[Bridge] Rate limit (MAME), retrying...');
+    await scrapeDelay(1500);
+    raw = await httpsGetText(url);
+    json = safeJson(raw);
+  }
+  if (json && json.response && json.response.jeu && json.response.jeu.id) {
+    const jeu = json.response.jeu;
+    if (jeu.cloneofid && jeu.cloneofid !== '0') {
+      const parent = await screenScraperFetchParent(baseParams, jeu.cloneofid);
+      if (parent) {
+        const mergedMedias = {
+          media: [
+            ...(parent.medias?.media || []),
+            ...(jeu.medias?.media || [])
+          ]
+        };
+        const merged = {
+          ...parent,
+          roms: jeu.roms,
+          medias: mergedMedias
+        };
+        return { ok: true, jeu: merged };
+      }
+    }
+    return { ok: true, jeu };
+  }
+  return { ok: false, reason: 'No MAME match' };
+}
+
+async function screenScraperFetchParent(baseParams, parentId) {
+  const url =
+    `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
+    `&gameid=${encodeURIComponent(parentId)}`;
+  try {
+    const raw = await httpsGetText(url);
+    const json = safeJson(raw);
+    return json && json.response && json.response.jeu ? json.response.jeu : null;
+  } catch (err) {
+    console.log('[Bridge] Parent fetch error:', err.message);
+    return null;
+  }
+}
+
 async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath, jeuData) {
-  const mediaTypes = ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
+  const isMame = jeuData && jeuData.systeme && String(jeuData.systeme.id) === '75';
+  const mediaTypes = isMame
+    ? ['wheel', 'marquee', 'snap', 'cabinet', 'flyer', 'title', 'box-2D', 'box-3D']
+    : ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
   const medias = jeuData.medias || [];
 
   for (const type of mediaTypes) {
@@ -1194,7 +1291,7 @@ Source = 0`;
 
   async scrapeGame(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38,
+      gbc: 10, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75,
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, ps3: 59
     };
@@ -1214,6 +1311,22 @@ Source = 0`;
       '&sspassword=' + encodeURIComponent(ssPassword) +
       '&output=json';
     let jeuData = null;
+    // MAME: romnom-based lookup, no hash needed
+    if (['mame', 'mame2003', 'mame2010', 'mame2015', 'arcade'].includes(game.system)) {
+      try {
+        const mameResult = await screenScraperMameLookup(baseParams, game);
+        if (mameResult.ok) {
+          jeuData = mameResult.jeu;
+          console.log('[Bridge] MAME hit:', game.title);
+        } else {
+          console.log('[Bridge] MAME no match, falling back:', game.title);
+          jeuData = null;
+        }
+      } catch (err) {
+        console.log('[Bridge] MAME error:', err.message);
+        jeuData = null;
+      }
+    }
     // Phase 1: CRC + hash lookup
     try {
       const { crc, size } = await getRomCrc(game.path);
