@@ -409,8 +409,63 @@ async function screenScraperGameIdLookup(baseParams, gameId) {
   return { ok: false, reason: 'No full metadata found' };
 }
 
+async function screenScraperMameLookup(baseParams, game) {
+  const romnom = encodeURIComponent(path.basename(game.path, '.zip').toLowerCase());
+  const url =
+    `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
+    `&systemeid=75&romtype=rom&romnom=${romnom}`;
+  console.log('[Bridge] MAME URL:', url);
+  let raw = await httpsGetText(url);
+  let json = safeJson(raw);
+  if (!json && raw && raw.includes('Trop de requ')) {
+    console.log('[Bridge] Rate limit (MAME), retrying...');
+    await scrapeDelay(1500);
+    raw = await httpsGetText(url);
+    json = safeJson(raw);
+  }
+  if (json && json.response && json.response.jeu && json.response.jeu.id) {
+    const jeu = json.response.jeu;
+    if (jeu.cloneofid && jeu.cloneofid !== '0') {
+      const parent = await screenScraperFetchParent(baseParams, jeu.cloneofid);
+      if (parent) {
+        const mergedMedias = {
+          media: [
+            ...(parent.medias?.media || []),
+            ...(jeu.medias?.media || [])
+          ]
+        };
+        const merged = {
+          ...parent,
+          roms: jeu.roms,
+          medias: mergedMedias
+        };
+        return { ok: true, jeu: merged };
+      }
+    }
+    return { ok: true, jeu };
+  }
+  return { ok: false, reason: 'No MAME match' };
+}
+
+async function screenScraperFetchParent(baseParams, parentId) {
+  const url =
+    `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
+    `&gameid=${encodeURIComponent(parentId)}`;
+  try {
+    const raw = await httpsGetText(url);
+    const json = safeJson(raw);
+    return json && json.response && json.response.jeu ? json.response.jeu : null;
+  } catch (err) {
+    console.log('[Bridge] Parent fetch error:', err.message);
+    return null;
+  }
+}
+
 async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath, jeuData) {
-  const mediaTypes = ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
+  const isMame = jeuData && jeuData.systeme && String(jeuData.systeme.id) === '75';
+  const mediaTypes = isMame
+    ? ['wheel', 'marquee', 'snap', 'cabinet', 'flyer', 'title', 'box-2D', 'box-3D']
+    : ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
   const medias = jeuData.medias || [];
 
   for (const type of mediaTypes) {
@@ -1256,6 +1311,22 @@ Source = 0`;
       '&sspassword=' + encodeURIComponent(ssPassword) +
       '&output=json';
     let jeuData = null;
+    // MAME: romnom-based lookup, no hash needed
+    if (['mame', 'mame2003', 'mame2010', 'mame2015', 'arcade'].includes(game.system)) {
+      try {
+        const mameResult = await screenScraperMameLookup(baseParams, game);
+        if (mameResult.ok) {
+          jeuData = mameResult.jeu;
+          console.log('[Bridge] MAME hit:', game.title);
+        } else {
+          console.log('[Bridge] MAME no match, falling back:', game.title);
+          jeuData = null;
+        }
+      } catch (err) {
+        console.log('[Bridge] MAME error:', err.message);
+        jeuData = null;
+      }
+    }
     // Phase 1: CRC + hash lookup
     try {
       const { crc, size } = await getRomCrc(game.path);

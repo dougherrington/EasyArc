@@ -245,6 +245,25 @@ function computeCrcFromBuffer(buf) {
   return crc.padStart(8, '0');
 }
 
+const MAME2003_ALIASES = {
+  puckman:   'pacman',
+  mspacmnf:  'mspacman',
+  galagamw:  'galaga',
+  galaxiana: 'galaxian',
+  froggers:  'frogger',
+  pooyans:   'pooyan',
+  scramblb:  'scramble',
+  superpcm:  'superpac',
+  digdugat:  'digdug',
+  digdug2o:  'digdug2',
+  bombjac2:  'bombjack',
+  popeyebl:  'popeye',
+  joustr:    'joust',
+  trackfldc: 'trackfld',
+  circusc2:  'circusc',
+  contrab:   'contra'
+};
+
 function readFileBuffer(filePath) {
   return new Promise((resolve, reject) => {
     const stream = fs.createReadStream(filePath);
@@ -410,7 +429,9 @@ async function screenScraperGameIdLookup(baseParams, gameId) {
 }
 
 async function screenScraperMameLookup(baseParams, game) {
-  const romnom = encodeURIComponent(path.basename(game.path, '.zip').toLowerCase());
+  const rawRomnom = path.basename(game.path, '.zip').toLowerCase();
+  const resolvedRomnom = (game.system === 'mame2003' && MAME2003_ALIASES[rawRomnom]) ? MAME2003_ALIASES[rawRomnom] : rawRomnom;
+  const romnom = encodeURIComponent(resolvedRomnom);
   const url =
     `https://api.screenscraper.fr/api2/jeuInfos.php?${baseParams}` +
     `&systemeid=75&romtype=rom&romnom=${romnom}`;
