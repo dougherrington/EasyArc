@@ -3726,6 +3726,7 @@ async function startScrape() {
   let done = 0;
   let succeeded = 0;
   let failed = 0;
+  let skipped = 0;
   const logLines = [];
   const scrapeStart = new Date().toLocaleString();
   logLines.push('EasyArc Scrape Log — ' + scrapeStart);
@@ -3747,6 +3748,9 @@ async function startScrape() {
       if (result.metadata) metadataCache[g.path] = result.metadata;
       succeeded++;
       logLines.push('OK     ' + g.system + ' | ' + g.title);
+    } else if (result.error && result.error.startsWith('Skipped')) {
+      skipped++;
+      logLines.push('SKIP   ' + g.system + ' | ' + g.title);
     } else {
       failed++;
       logLines.push('FAIL   ' + g.system + ' | ' + g.title + ' | ' + (result.error || 'unknown'));
@@ -3758,13 +3762,16 @@ async function startScrape() {
     }
   }
 
-  const pct = done > 0 ? Math.round((succeeded / done) * 100) : 0;
+  const attempted = done - skipped;
+  const pct = attempted > 0 ? Math.round((succeeded / attempted) * 100) : 0;
   logLines.push('');
   logLines.push('--- SUMMARY ---');
-  logLines.push('Scraped:  ' + done);
+  logLines.push('Total:    ' + done);
+  logLines.push('Skipped:  ' + skipped);
+  logLines.push('Attempted:' + attempted);
   logLines.push('Success:  ' + succeeded);
   logLines.push('Failed:   ' + failed);
-  logLines.push('Success rate: ' + pct + '%');
+  logLines.push('Success rate: ' + pct + '% (of attempted)');
 
   scrapeRunning = false;
   if (row) row.style.display = 'none';

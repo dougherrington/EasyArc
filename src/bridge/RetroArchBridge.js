@@ -351,7 +351,7 @@ async function getRomCrc(filePath) {
     : await readFileBuffer(filePath);
 }
 
-function cleanTitleForSearch(raw) {
+function cleanTitleForSearch(raw, system) {
   if (!raw) return "";
   let title = raw;
   title = title.replace(/\.[a-z0-9]{2,4}$/i, "");
@@ -362,6 +362,15 @@ function cleanTitleForSearch(raw) {
   title = title.replace(/\((Proto|Prototype|Sample|Demo|Beta)\)/gi, "");
   title = title.replace(/\[[^\]]+\]/g, "");
   title = title.replace(/\(v[0-9.]+\)/gi, "");
+  if (system === 'atari2600') {
+    title = title.replace(/\(\d{4}\)/gi, "");
+    title = title.replace(/\(PAL(?:-[0-9]+)?\)/gi, "");
+    title = title.replace(/\((?:Atari|Activision|Parker\s*Bros|Mattel|Coleco|Imagic|Tigervision|M\s*Network|CBS\s*Electronics|Data\s*Age|Apollo|Salu|HES|Sears|Mystique|CCE|20th\s*Century\s*Fox|Telegames|TNT\s*Games|Bitcorp|Rentacom|Starsoft|HomeVision|Funvision|Dynamics|Goliath|Zellers|Ariola|Rainbow\s*Vision|Spectravideo|Telesys|Supervision|UA|U\.S\.\s*Games)\)/gi, "");
+    title = title.replace(/\([^)]*hack[^)]*\)/gi, "");
+    title = title.replace(/\([^)]*in-1[^)]*\)/gi, "");
+    title = title.replace(/\([^)]*demo[^)]*\)/gi, "");
+    title = title.replace(/\((?:proto(?:type)?|beta|demo)\)/gi, "");
+  }
   title = title.replace(/\s+/g, " ").trim();
   return title;
 }
@@ -388,7 +397,7 @@ async function screenScraperHashLookup(baseParams, systemId, game, crc, size) {
 }
 
 async function screenScraperTitleLookup(baseParams, systemId, game) {
-  const cleanTitle = cleanTitleForSearch(game.title);
+  const cleanTitle = cleanTitleForSearch(game.title, game.system);
   const url =
     `https://api.screenscraper.fr/api2/jeuRecherche.php?${baseParams}` +
     `&recherche=${encodeURIComponent(cleanTitle)}&systemeid=${systemId}`;
@@ -1312,7 +1321,7 @@ Source = 0`;
 
   async scrapeGame(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75,
+      gbc: 10, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26,
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, ps3: 59
     };
@@ -1326,6 +1335,21 @@ Source = 0`;
     if (fs.existsSync(artPath) && fs.existsSync(metaPath)) {
       return { success: true, path: artPath, cached: true };
     }
+    // Atari 2600: skip guaranteed non-matches before any API call
+    if (game.system === 'atari2600') {
+      const lower = (game.title || '').toLowerCase();
+      const skipPatterns = [
+        'pd', 'demo', 'hack', 'in-1', 'pak', 'v0.', 'v1.',
+        'test', 'sprite', 'clock', 'frame', 'scroll', 'animation',
+        '2001', '2002', '2003'
+      ];
+      const shouldSkip = skipPatterns.some(p => lower.includes(p));
+      if (shouldSkip) {
+        console.log('[Bridge] Skipping non-game ROM:', game.title);
+        return { success: false, error: 'Skipped: non-game ROM' };
+      }
+    }
+
     const baseParams =
       'devid=dnherrington67&devpassword=LpQS8obmTnC&softname=EasyArc' +
       '&ssid=' + encodeURIComponent(ssUser) +
