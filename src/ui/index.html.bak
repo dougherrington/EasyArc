@@ -3709,7 +3709,6 @@ async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
   const ssUser = document.getElementById('ssUser').value.trim();
   const ssPass = document.getElementById('ssPass') ? document.getElementById('ssPass').value.trim() : '';
-  // Alpha: use TheGamesDB only — no ScreenScraper required
   // localStorage.setItem('ss_user', ssUser);
   // localStorage.setItem('ss_pass', ssPass);
 
@@ -3722,10 +3721,10 @@ async function startScrape() {
   const gameEl = document.getElementById('scrapeProgressGame');
   if (row) row.style.display = '';
 
-  const tgdbKey = 'c38da12dde0715b5f9f349cf5859e096ed4fe9c20e034364b83444b5e7998e11';
   let done = 0;
   let succeeded = 0;
   let failed = 0;
+  let skipped = 0;
   const logLines = [];
   const scrapeStart = new Date().toLocaleString();
   logLines.push('EasyArc Scrape Log — ' + scrapeStart);
@@ -3738,7 +3737,7 @@ async function startScrape() {
     if (gameEl) gameEl.textContent = g.title;
     let result;
     try {
-      result = await window.easyarc.scrapeGameWithFallback(g, ssUser, ssPass, tgdbKey);
+      result = await window.easyarc.scrapeGame(g, ssUser, ssPass);
     } catch (err) {
       result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
     }
@@ -3747,6 +3746,9 @@ async function startScrape() {
       if (result.metadata) metadataCache[g.path] = result.metadata;
       succeeded++;
       logLines.push('OK     ' + g.system + ' | ' + g.title);
+    } else if (result.error && result.error.startsWith('Skipped')) {
+      skipped++;
+      logLines.push('SKIP   ' + g.system + ' | ' + g.title);
     } else {
       failed++;
       logLines.push('FAIL   ' + g.system + ' | ' + g.title + ' | ' + (result.error || 'unknown'));
@@ -3758,13 +3760,16 @@ async function startScrape() {
     }
   }
 
-  const pct = done > 0 ? Math.round((succeeded / done) * 100) : 0;
+  const attempted = done - skipped;
+  const pct = attempted > 0 ? Math.round((succeeded / attempted) * 100) : 0;
   logLines.push('');
   logLines.push('--- SUMMARY ---');
-  logLines.push('Scraped:  ' + done);
+  logLines.push('Total:    ' + done);
+  logLines.push('Skipped:  ' + skipped);
+  logLines.push('Attempted:' + attempted);
   logLines.push('Success:  ' + succeeded);
   logLines.push('Failed:   ' + failed);
-  logLines.push('Success rate: ' + pct + '%');
+  logLines.push('Success rate: ' + pct + '% (of attempted)');
 
   scrapeRunning = false;
   if (row) row.style.display = 'none';

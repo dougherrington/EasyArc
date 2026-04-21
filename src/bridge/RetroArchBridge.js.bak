@@ -61,7 +61,7 @@ const UNIQUE_EXTENSIONS = {
 const SHARED_EXTENSIONS = {
   '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
   '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
-  '.bin':  ['atari2600','genesis','psx','mastersystem','gamegear','saturn'],
+  '.bin':  ['atari2600','genesis','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
   '.ciso': ['gamecube','wii'],
@@ -346,9 +346,39 @@ function readZipLargestFileBuffer(zipPath) {
 
 async function getRomCrc(filePath) {
   const lower = filePath.toLowerCase();
-  return lower.endsWith('.zip')
-    ? await readZipLargestFileBuffer(filePath)
-    : await readFileBuffer(filePath);
+  if (lower.endsWith('.zip')) {
+    return await readZipLargestFileBuffer(filePath);
+  }
+  // Use buffered read for small ROMs (cartridge systems) — streaming fails on small files
+  // Use streaming for large disc images (PS1 CHD, PS2 ISO etc.) to avoid memory issues
+  const STREAM_THRESHOLD = 32 * 1024 * 1024; // 32MB
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.size <= STREAM_THRESHOLD) {
+      return await readFileBuffered(filePath);
+    }
+  } catch {}
+  return await readFileBuffer(filePath);
+}
+
+function readFileBuffered(filePath) {
+  return new Promise((resolve, reject) => {
+    fs.readFile(filePath, (err, data) => {
+      if (err) return reject(err);
+      const sha1 = require('crypto').createHash('sha1');
+      const md5 = require('crypto').createHash('md5');
+      sha1.update(data);
+      md5.update(data);
+      let crc = 0;
+      let c = crc ^ 0xffffffff;
+      for (let i = 0; i < data.length; i++) {
+        c = CRC32_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+      }
+      crc = (c ^ 0xffffffff) >>> 0;
+      const crcHex = crc.toString(16).toUpperCase().padStart(8, '0');
+      resolve({ crc: crcHex, sha1: sha1.digest('hex'), md5: md5.digest('hex'), size: data.length });
+    });
+  });
 }
 
 function cleanTitleForSearch(raw, system) {
@@ -365,7 +395,9 @@ function cleanTitleForSearch(raw, system) {
   if (system === 'atari2600') {
     title = title.replace(/\(\d{4}\)/gi, "");
     title = title.replace(/\(PAL(?:-[0-9]+)?\)/gi, "");
-    title = title.replace(/\((?:Atari|Activision|Parker\s*Bros|Mattel|Coleco|Imagic|Tigervision|M\s*Network|CBS\s*Electronics|Data\s*Age|Apollo|Salu|HES|Sears|Mystique|CCE|20th\s*Century\s*Fox|Telegames|TNT\s*Games|Bitcorp|Rentacom|Starsoft|HomeVision|Funvision|Dynamics|Goliath|Zellers|Ariola|Rainbow\s*Vision|Spectravideo|Telesys|Supervision|UA|U\.S\.\s*Games)\)/gi, "");
+    title = title.replace(/\((?:Atari|Activision|Parker\s*Bros|Mattel|Coleco|Imagic|Tigervision|M\s*Network|CBS\s*Electronics|Data\s*Age|Apollo|Salu|HES|Sears|Mystique|CCE|20th\s*Century\s*Fox|Telegames|TNT\s*Games|Bitcorp|Rentacom|Starsoft|HomeVision|Funvision|Dynamics|Goliath|Zellers|Ariola|Rainbow\s*Vision|Spectravideo|Telesys|Supervision|UA|U\.S\.\s*Games|Xonox|Retroactive|ITT\s*Family\s*Games|Spectravision|Starpath|Sega|CommaVid|Bomb|Zimag|Froggo|Panda|Video\s*Gems|Epyx|Dimax|High-Score\s*Games|Gameworld|Answer\s*Software|First\s*Star\s*Software)\)/gi, "");
+    title = title.replace(/\(AKA[^)]*\)/gi, "");
+    title = title.replace(/\((?:NTSC|PAL)[^)]*(?:by|Conversion)\)/gi, "");
     title = title.replace(/\([^)]*hack[^)]*\)/gi, "");
     title = title.replace(/\([^)]*in-1[^)]*\)/gi, "");
     title = title.replace(/\([^)]*demo[^)]*\)/gi, "");
@@ -494,12 +526,12 @@ async function screenScraperFetchParent(baseParams, parentId) {
 async function downloadArtworkAndMetadata(baseParams, gameId, artPath, metaPath, jeuData) {
   const isMame = jeuData && jeuData.systeme && String(jeuData.systeme.id) === '75';
   const mediaTypes = isMame
-    ? ['wheel', 'marquee', 'snap', 'cabinet', 'flyer', 'title', 'box-2D', 'box-3D']
-    : ['box-2D', 'box-3D', 'screenshot', 'fanart', 'wheel', 'mix', 'title'];
+    ? ['wheel', 'marquee', 'snap', 'cabinet', 'flyer', 'sstitle', 'box-2D', 'box-3D']
+    : ['box-2D', 'box-3D', 'box-texture', 'mixrbv1', 'mixrbv2', 'ss', 'sstitle', 'fanart', 'wheel', 'screenmarquee', 'title'];
   const medias = jeuData.medias || [];
 
   for (const type of mediaTypes) {
-    const media = medias.find(m => m.type === type);
+    const media = medias.find(m => m.type === type || m.type.startsWith(type + '('));
     if (!media || !media.url) {
       console.log(`[Bridge] No media entry for type: ${type}`);
       continue;
@@ -1335,6 +1367,37 @@ Source = 0`;
     if (fs.existsSync(artPath) && fs.existsSync(metaPath)) {
       return { success: true, path: artPath, cached: true };
     }
+    // PS1: skip BIOS, demo discs, prototypes and preproduction builds
+    if (game.system === 'psx') {
+      const lower = (game.title || '').toLowerCase();
+      const ps1SkipPatterns = [
+        '[bios]', '(beta)', '(proto)', '(trial)', '(preproduction)',
+        'demo disc', 'euro demo', 'essential playstation',
+        'jampack', 'pizza hut', 'interactive cd sampler'
+      ];
+      if (ps1SkipPatterns.some(p => lower.includes(p))) {
+        console.log('[Bridge] Skipping non-game ROM:', game.title);
+        return { success: false, error: 'Skipped: non-game ROM' };
+      }
+    }
+
+    // Atari 2600: skip guaranteed non-matches before any API call
+    if (game.system === 'atari2600') {
+      const lower = (game.title || '').toLowerCase();
+      const skipPatterns = [
+        'pd', 'demo', 'hack', 'in-1', 'v0.', 'v1.',
+        'test', 'sprite', 'clock', 'frame', 'scroll', 'animation',
+        '2001', '2002', '2003',
+        '[h1]', '[h2]', '[h3]', '[h4]', '[h5]',
+        '(preproduction)', '(prototype)', 'pre-release', 'wip'
+      ];
+      const shouldSkip = skipPatterns.some(p => lower.includes(p));
+      if (shouldSkip) {
+        console.log('[Bridge] Skipping non-game ROM:', game.title);
+        return { success: false, error: 'Skipped: non-game ROM' };
+      }
+    }
+
     const baseParams =
       'devid=dnherrington67&devpassword=LpQS8obmTnC&softname=EasyArc' +
       '&ssid=' + encodeURIComponent(ssUser) +
@@ -1387,109 +1450,16 @@ Source = 0`;
     // Phase 3: Download media + metadata
     try {
       await downloadArtworkAndMetadata(baseParams, jeuData.id, artPath, metaPath, jeuData);
-      return { success: true, path: artPath, cached: false };
+      if (fs.existsSync(artPath)) {
+        return { success: true, path: artPath, cached: false };
+      } else {
+        return { success: true, partial: true, error: 'No artwork available' };
+      }
     } catch (err) {
       console.log('[Bridge] Media download failed:', err.message);
       return { success: false, error: 'Media download failed' };
     }
   }
-
-    async scrapeGameWithFallback(game, ssUser, ssPassword, tgdbKey) {
-    // Try ScreenScraper first if credentials provided
-    if (ssUser && ssPassword) {
-      const ssResult = await this.scrapeGame(game, ssUser, ssPassword);
-      if (ssResult.success) return ssResult;
-    }
-    // Fall back to TheGamesDB
-    if (tgdbKey) {
-      const tgdbResult = await this.scrapeGameTGDB(game, tgdbKey);
-      if (tgdbResult.success) return tgdbResult;
-    }
-    return { success:false, error:'Not found in any scraper' };
-  }
-
-
-  async scrapeGameTGDB(game, apiKey) {
-    const TGDB_IDS = {
-      nes:3, snes:6, n64:3, gba:5, gbc:41, gb:41,
-      genesis:36, gamegear:20, mastersystem:35,
-      psx:10, psp:13, ps2:11, ps3:12,
-      gamecube:2, wii:9, dreamcast:16, saturn:17,
-      atari2600:22, jaguar:28,
-      mame:23, mame2003:23, arcade:23, neogeo:24
-    };
-    const platformId = TGDB_IDS[game.system];
-    if (!platformId) return { success:false, error:'Unsupported system' };
-
-    const https = require('https');
-
-// --- Scraper Subsystem ---
-const ScraperPipeline = require('../scraper/ScraperPipeline');
-
-
-
-
-    const fs = require('fs');
-    const artPath = this.getArtworkPath(game);
-    if (fs.existsSync(artPath)) return { success:true, path:artPath, cached:true };
-
-    const httpsGet = (url) => new Promise((resolve, reject) => {
-      https.get(url, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => resolve(data));
-      }).on('error', reject);
-    });
-
-    const httpsGetBinary = (url) => new Promise((resolve, reject) => {
-      https.get(url, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return resolve(httpsGetBinary(res.headers.location));
-        }
-        const chunks = [];
-        res.on('data', c => chunks.push(c));
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-      }).on('error', reject);
-    });
-
-    try {
-      const cleanTitle = game.title
-        .replace(/\.(pbp|zip|iso|bin|cue|img|rom|gba|gbc|nes|sfc|smc|n64|z64|v64|gcm|gcz|rvz|wbfs)$/i, '')
-        .replace(/\(USA\)|\(Europe\)|\(Japan\)|\(World\)|\(En.*?\)|\(Rev.*?\)/gi, '')
-        .replace(/\(Disc ?\d+\)/gi, '')
-        .replace(/\[.*?\]/g, '')
-        .replace(/\s+/g, ' ').trim();
-
-      // Step 1: Search for game by name and platform
-      const searchUrl = 'https://api.thegamesdb.net/v1/Games/ByGameName?apikey=' + apiKey +
-        '&name=' + encodeURIComponent(cleanTitle) +
-        '&fields=game_title' +
-        (platformId ? '&filter%5Bplatform%5D=' + platformId : '');
-      const searchData = await httpsGet(searchUrl);
-      const searchJson = JSON.parse(searchData);
-
-      if (!searchJson.data || !searchJson.data.games || searchJson.data.games.length === 0) {
-        return { success:false, error:'Game not found in TheGamesDB' };
-      }
-
-      const gameId = searchJson.data.games[0].id;
-
-      // Step 2: Try direct CDN URL for box art
-      const imgUrl = 'https://cdn.thegamesdb.net/images/medium/boxart/front/' + gameId + '-1.jpg';
-      const imgBuf = await httpsGetBinary(imgUrl);
-
-      if (!imgBuf || imgBuf.length < 1000) {
-        return { success:false, error:'No box art found in TheGamesDB' };
-      }
-
-      fs.writeFileSync(artPath, imgBuf);
-      return { success:true, path:artPath };
-
-    } catch(e) {
-      return { success:false, error:e.message };
-    }
-  }
-
   async scrapeLibrary(games, ssUser, ssPassword, progressCallback) {
     const results = { success:0, failed:0, cached:0 };
     for (let i = 0; i < games.length; i++) {

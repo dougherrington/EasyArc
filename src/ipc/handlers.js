@@ -23,7 +23,6 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   handle('bridge:listControllers', () => bridge.listControllers());
   handle('bridge:saveMapping',   (mapping) => bridge.saveMapping(mapping));
   handle('bridge:scrapeGame',    (game, ssUser, ssPassword) => bridge.scrapeGame(game, ssUser, ssPassword));
-  handle('bridge:scrapeGameWithFallback', (game, ssUser, ssPassword, tgdbKey) => bridge.scrapeGameWithFallback(game, ssUser, ssPassword, tgdbKey));
   handle('bridge:createFolder',  (folderPath) => bridge.createFolder(folderPath));
   handle('bridge:scanCollection', (parentFolder) => bridge.scanCollection(parentFolder));
   handle('bridge:moveFiles',     (filePaths, destFolder) => bridge.moveFiles(filePaths, destFolder));
