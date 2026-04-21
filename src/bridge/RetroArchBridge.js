@@ -41,7 +41,8 @@ const RETROARCH_LOCATIONS = {
 // Extensions that uniquely identify a system — no ambiguity
 const UNIQUE_EXTENSIONS = {
   // Extensions that belong to exactly one system — no folder hint needed
-  gbc:          ['.gbc', '.gb', '.gbs'],
+  gbc:          ['.gbc', '.gbs'],
+  gb:           ['.gb'],
   gba:          ['.gba', '.agb'],
   snes:         ['.sfc', '.smc', '.fig', '.bs'],
   nes:          ['.nes', '.fds', '.unf', '.unif'],
@@ -59,7 +60,7 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
+  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
   '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
   '.bin':  ['atari2600','genesis','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
@@ -84,7 +85,7 @@ const FOLDER_HINTS = [
   { hints: ['sega saturn','saturn'],                                         system: 'saturn' },
   { hints: ['game boy color','gameboy color','gbc'],                         system: 'gbc' },
   { hints: ['game boy advance','gameboy advance','gba'],                     system: 'gba' },
-  { hints: ['game boy','gameboy','gb'],                                      system: 'gbc' },
+  { hints: ['game boy','gameboy','gb'],                                      system: 'gb' },
   { hints: ['super nintendo','super nes','superfamicom','snes'],             system: 'snes' },
   { hints: ['nintendo 64','nintendo64','n64'],                               system: 'n64' },
   { hints: ['nintendo entertainment system','nintendo entertainment','nes'], system: 'nes' },
@@ -119,6 +120,7 @@ const REMAPS_PATH = path.join(os.homedir(), 'Library/Application Support/RetroAr
 // Core folder names for remap files (must match RetroArch's core display name)
 const CORE_REMAP_FOLDERS = {
   gbc:         'Gambatte',
+  gb:          'Gambatte',
   gba:         'mGBA',
   nes:         'Mesen',
   snes:        'Snes9x',
@@ -148,6 +150,7 @@ const SYSTEM_DEVICE_TYPES = {
   n64:      { p1: '5',   p2: '5'   },  // 5 = N64 controller
   jaguar:   { p1: '1',   p2: '1'   },  // 1 = RetroPad
   gbc:      { p1: '1',   p2: '1'   },
+  gb:       { p1: '1',   p2: '1'   },
   gba:      { p1: '1',   p2: '1'   },
   snes:     { p1: '1',   p2: '1'   },
   nes:      { p1: '1',   p2: '1'   },
@@ -166,6 +169,7 @@ const SYSTEM_ANALOG_MODES = {
   n64:      { p1: '0', p2: '0' },
   jaguar:   { p1: '1', p2: '3' },
   gbc:      { p1: '1', p2: '1' },
+  gb:       { p1: '1', p2: '1' },
   gba:      { p1: '1', p2: '1' },
   snes:     { p1: '0', p2: '0' },
   nes:      { p1: '1', p2: '1' },
@@ -177,6 +181,7 @@ const SYSTEM_ANALOG_MODES = {
 
 const SYSTEM_CORES = {
   gbc:          'gambatte_libretro.dylib',
+  gb:           'gambatte_libretro.dylib',
   gba:          'mgba_libretro.dylib',
   nes:          'mesen_libretro.dylib',
   snes:         'snes9x_libretro.dylib',
@@ -1353,7 +1358,7 @@ Source = 0`;
 
   async scrapeGame(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26,
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26,
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, ps3: 59
     };
@@ -1451,9 +1456,9 @@ Source = 0`;
     try {
       await downloadArtworkAndMetadata(baseParams, jeuData.id, artPath, metaPath, jeuData);
       if (fs.existsSync(artPath)) {
-        return { success: true, path: artPath, cached: false };
+        return { success: true, path: artPath, cached: false, metadata: jeuData };
       } else {
-        return { success: true, partial: true, error: 'No artwork available' };
+        return { success: true, partial: true, error: 'No artwork available', metadata: jeuData };
       }
     } catch (err) {
       console.log('[Bridge] Media download failed:', err.message);

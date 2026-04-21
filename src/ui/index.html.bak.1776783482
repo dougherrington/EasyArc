@@ -68,7 +68,7 @@ body::after {
   position:relative; z-index:10;
   width:100%; height:100%;
   display:grid;
-  grid-template-rows:54px auto 1fr 50px;
+  grid-template-rows:54px 1fr 50px;
 }
 
 /* ── TOPBAR ── */
@@ -90,19 +90,21 @@ body::after {
 }
 .titlebar-logo span { color:var(--accent); text-shadow:var(--glow-r); }
 
+.titlebar-nav { display:flex; gap:4px; margin-left:16px; }
 .nav-btn {
   background:rgba(0,20,60,0.9); border:1px solid var(--border); color:#fff;
   font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700;
   letter-spacing:1.5px; text-transform:uppercase; padding:10px 22px;
   cursor:pointer; border-radius:6px; transition:all 0.2s;
 }
-.nav-btn:hover, .nav-btn:focus { background:var(--cyan); color:#fff; border-color:var(--cyan); box-shadow:0 0 24px rgba(0,240,255,0.6); transform:translateY(-1px); }
+.nav-btn:hover { border-color:var(--cyan); box-shadow:0 0 18px rgba(0,240,255,0.4); transform:translateY(-1px); }
 .nav-btn.active {
   color:var(--cyan); border-color:var(--cyan);
   background:rgba(0,40,100,0.95);
   box-shadow:0 0 18px rgba(0,240,255,0.4), inset 0 0 6px rgba(0,240,255,0.04);
 }
 
+.titlebar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
 .test-plan-btn {
   background:var(--yellow); border:2px solid #ffaa00; color:#000;
   font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700;
@@ -138,7 +140,7 @@ body::after {
   text-transform:uppercase; letter-spacing:1px;
   box-shadow:0 0 12px rgba(0,240,255,0.2);
 }
-.action-btn:hover, .action-btn:focus { background:var(--cyan); color:#fff; border-color:var(--cyan); box-shadow:0 0 24px rgba(0,240,255,0.6); transform:translateY(-1px); }
+.action-btn:hover { background:rgba(0,40,100,0.95); border-color:var(--cyan); box-shadow:0 0 18px rgba(0,240,255,0.4); transform:translateY(-1px); }
 .action-btn.active { background:var(--green); color:#000; border-color:var(--green); box-shadow:0 0 18px rgba(0,255,136,0.4); }
 .action-btn.scanning { background:var(--green); color:#000; border-color:var(--green); box-shadow:0 0 18px rgba(0,255,136,0.4); }
 
@@ -160,7 +162,6 @@ body::after {
   transform:rotateY(13deg) translateZ(-18px);
   transform-origin:right center;
   height:100%;
-  min-height:0;
   overflow-y:auto;
   animation:slideInLeft 0.5s cubic-bezier(0.22,1,0.36,1) both;
   padding-right:2px;
@@ -606,45 +607,6 @@ body::after {
 .view-toggle { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
 .view-btn { background:none; border:none; color:var(--muted); padding:7px 10px; cursor:pointer; font-size:14px; transition:all 0.15s; }
 .view-btn.active { background:var(--bg3); color:var(--cyan); }
-
-/* ── TOOLBAR SYSTEM ── */
-.scrape-led {
-  width:8px; height:8px; border-radius:50%;
-  background:var(--muted); display:inline-block;
-  margin-left:8px; vertical-align:middle;
-  transition:background 0.3s;
-}
-.scrape-led.active {
-  background:var(--green);
-  box-shadow:0 0 8px var(--green);
-  animation:pulse 1s ease-in-out infinite;
-}
-.titlebar-status { margin-left:auto; display:flex; align-items:center; gap:10px; }
-.toolbar-row {
-  grid-column:1/-1;
-  display:flex; align-items:stretch;
-  padding:6px 0;
-  background:rgba(0,10,30,0.6);
-  border-bottom:1px solid var(--border);
-  min-height:70px;
-}
-.toolbar-left  { display:flex; flex-direction:column; gap:4px; justify-content:center; width:160px; margin-left:24px; flex-shrink:0; align-items:flex-start; }
-.toolbar-center { display:flex; flex-direction:row; gap:16px; flex:1; align-items:stretch; justify-content:center; padding:0 16px; }
-.toolbar-right { display:flex; flex-direction:column; gap:4px; justify-content:center; width:160px; margin-right:24px; flex-shrink:0; align-items:flex-end; }
-.toolbar-btn {
-  background:rgba(0,20,60,0.9); border:1px solid var(--cyan); color:#fff;
-  font-family:'Rajdhani',sans-serif; font-size:15px; font-weight:700;
-  padding:0 18px; height:38px; border-radius:6px; cursor:pointer;
-  text-transform:uppercase; letter-spacing:1px;
-  display:inline-flex; align-items:center; justify-content:center;
-  white-space:nowrap; transition:all 0.2s;
-  box-shadow:0 0 8px rgba(0,240,255,0.15);
-}
-.toolbar-btn:hover, .toolbar-btn:focus { background:var(--cyan); color:#fff; border-color:var(--cyan); box-shadow:0 0 24px rgba(0,240,255,0.6); transform:translateY(-1px); }
-.toolbar-add    { border-color:var(--green); box-shadow:0 0 8px rgba(0,255,136,0.15); }
-.toolbar-remove { border-color:var(--accent); box-shadow:0 0 8px rgba(255,0,80,0.15); }
-.toolbar-center-btn { font-size:20px; padding:0 40px; align-self:stretch; height:auto; }
-
 </style>
 </head>
 <body>
@@ -686,31 +648,24 @@ body::after {
 
 <div class="ea-shell dimmed" id="eaShell">
 
-    <!-- TOPBAR -->
+  <!-- TOPBAR -->
   <header class="titlebar">
-    <img src="easyarc_logo.webp" alt="EasyArc" style="height:38px;width:auto;object-fit:contain;">
-    <div class="titlebar-status">
+    <img src="easyarc_logo.webp" style="height:38px;width:auto;object-fit:contain;" alt="EasyArc">
+    <nav class="titlebar-nav">
+      <button class="action-btn" id="rescanBtn" onclick="rescanLibrary()">⟳ Refresh Library</button>
+      <button class="action-btn" id="addGamesBtn" onclick="showAddGamesModal()">+ Add Games/Collection</button>
+      <button class="action-btn" id="removeGamesBtn" onclick="showRemoveGamesModal()">✕ Remove Games</button>
+      <button class="action-btn" id="getArtBtn" onclick="showGetArtModal()">🖼 Get Game Art</button>
+    </nav>
+    <div class="titlebar-right">
+      <button class="nav-btn active" onclick="showView('library')">Library</button>
+      <!-- Setup button removed for alpha — replaced by Add Games/Collection -->
+      <button class="nav-btn" onclick="showView('controller')">Controller</button>
+      <button class="nav-btn" onclick="showView('settings')">Developer Options</button>
       <div class="status-dot"></div>
       <span class="status-text" id="statusText">Checking...</span>
     </div>
   </header>
-
-  <!-- TOOLBAR -->
-  <div class="toolbar-row">
-    <div class="toolbar-left">
-      <button class="toolbar-btn toolbar-add" id="addGamesBtn" onclick="playClick();showAddGamesModal()">&#xff0b; Add Games</button>
-      <button class="toolbar-btn toolbar-remove" id="removeGamesBtn" onclick="playClick();showRemoveGamesModal()">&#x2715; Remove Games</button>
-    </div>
-    <div class="toolbar-center">
-      <button class="toolbar-btn toolbar-center-btn" id="rescanBtn" onclick="playClick();rescanLibrary()">&#x27f3; Refresh Library</button>
-      <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();showGetArtModal()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span>
-    </div>
-    <div class="toolbar-right">
-      <button class="toolbar-btn nav-btn" onclick="playClick();showView('controller')">&#x1f3ae; Map Controllers</button>
-      <button class="toolbar-btn nav-btn" onclick="playClick();showView('settings')">&#x2699; Advanced Options</button>
-      <button class="toolbar-btn nav-btn active" onclick="showView('library')" style="display:none">Library</button>
-    </div>
-  </div>
 
   <!-- MAIN BODY -->
   <div class="main" id="mainBody">
@@ -754,7 +709,7 @@ body::after {
         <div style="display:flex;gap:8px;margin-left:auto;align-items:center;">
           <div class="search-box">
             <span class="search-icon">&#128269;</span>
-            <input class="search-input" type="text" placeholder="Search games..." id="searchInput" oninput="filterSearch(this.value)" onkeydown="if(event.key==='Enter'||event.key==='ArrowDown'){const c=document.querySelector('.game-card');if(c){c.focus();c.click();}}">
+            <input class="search-input" type="text" placeholder="Search games..." id="searchInput" oninput="filterSearch(this.value)">
           </div>
         </div>
       </div>
@@ -908,7 +863,7 @@ body::after {
 <script>
 const systemNames = {
   all:'All Games',
-  gbc:'Game Boy Color', gb:'Game Boy', gba:'Game Boy Advance',
+  gbc:'Game Boy Color', gba:'Game Boy Advance',
   snes:'Super Nintendo', nes:'NES', n64:'Nintendo 64',
   gamecube:'GameCube',
   dreamcast:'Sega Dreamcast',
@@ -924,7 +879,7 @@ const systemNames = {
   switch:'Nintendo Switch',
 };
 const systemColors = {
-  gbc:'#1a2a1a', gb:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
+  gbc:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
   n64:'#2a2a1a', gamecube:'#1a2a2a', jaguar:'#0a0a0a', genesis:'#0a1a0a',
   gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a',
   psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', ps3:'#0a0a1a',
@@ -933,7 +888,6 @@ const systemColors = {
 };
 const systemIcons = {
   gbc:String.fromCodePoint(0x1F7E2),
-  gb:String.fromCodePoint(0x1F7E2),
   gba:String.fromCodePoint(0x1F537),
   snes:String.fromCodePoint(0x1F7E3),
   nes:String.fromCodePoint(0x1F534),
@@ -1283,7 +1237,7 @@ function updateCounts() {
 
   // Add one button per populated system in a defined order
   const order = [
-    'gbc','gb','gba','nes','snes','n64','gamecube',
+    'gbc','gba','nes','snes','n64','gamecube',
     'genesis','gamegear','mastersystem','saturn','dreamcast',
     'atari2600','jaguar',
     'mame','mame2003','arcade','neogeo',
@@ -1341,9 +1295,6 @@ function removeSystem(sys) {
   toRemove.forEach(g => { if (!excluded.includes(g.path)) excluded.push(g.path); });
   localStorage.setItem('easyarc_excluded_paths', JSON.stringify(excluded));
   games = games.filter(g => g.system !== sys);
-  // Remove any favorites from this system
-  const updatedFavs = getFavorites().filter(f => f.system !== sys);
-  localStorage.setItem('easyarc_favorites', JSON.stringify(updatedFavs));
   if (currentSystem === sys) {
     currentSystem = 'all';
   }
@@ -1423,6 +1374,7 @@ function isFavorite(game) {
 
 function filterFavorites(btn) {
   currentSystem = 'favorites';
+  currentSearch = ''; const si = document.getElementById('searchInput'); if (si) si.value = '';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
@@ -1443,6 +1395,7 @@ function filterFavorites(btn) {
 
 function filterRecent(btn) {
   currentSystem = 'recent';
+  currentSearch = ''; const si = document.getElementById('searchInput'); if (si) si.value = '';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
@@ -1463,13 +1416,14 @@ function filterRecent(btn) {
 
 function filterSystem(sys, btn) {
   currentSystem = sys;
+  currentSearch = ''; const si = document.getElementById('searchInput'); if (si) si.value = '';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
   renderGrid();
 }
 
-function filterSearch(val) { currentSearch = val; if (val) showView('library'); renderGrid(); }
+function filterSearch(val) { currentSearch = val; renderGrid(); }
 function closeDetail() {
   selectedGame = null;
   const da = document.getElementById('detailArt');
@@ -1554,11 +1508,10 @@ function showView(name) {
 }
 
 async function rescanLibrary() {
-  showView('library');
   const folders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
   if (folders.length === 0) { showToast('No folders set. Run Setup first.'); return; }
   const btn = document.getElementById('rescanBtn');
-  if (btn) { btn.classList.add('active'); btn.textContent = '⟳ Refreshing...'; btn.disabled = true; }
+  if (btn) { btn.classList.add('active'); btn.textContent = '⟳ Refreshing...'; }
   let newCount = 0;
   for (const folder of folders) {
     if (!window.easyarc) break;
@@ -1576,7 +1529,7 @@ async function rescanLibrary() {
   updateCounts();
   renderGrid();
   loadArtworkCache();
-  if (btn) { btn.classList.remove('active'); btn.textContent = '⟳ Refresh Library'; btn.disabled = false; }
+  if (btn) { btn.classList.remove('active'); btn.textContent = '⟳ Refresh Library'; }
   showToast(newCount > 0 ? 'Found ' + newCount + ' new games!' : 'No new games found.');
 }
 
@@ -1708,8 +1661,8 @@ function frwRenderStep() {
     const total  = frwFoundGames.length;
     const bySys  = {};
     frwFoundGames.forEach(g => { bySys[g.system] = (bySys[g.system]||0)+1; });
-    const sNames = { gbc:'Game Boy Color', gb:'Game Boy', gba:'Game Boy Advance', snes:'Super Nintendo', nes:'NES', n64:'Nintendo 64', jaguar:'Atari Jaguar', psx:'PlayStation', genesis:'Genesis' };
-    const sIcons = { gbc:String.fromCodePoint(0x1F7E2), gb:String.fromCodePoint(0x1F7E2), gba:String.fromCodePoint(0x1F537), snes:String.fromCodePoint(0x1F7E3), nes:String.fromCodePoint(0x1F534), n64:String.fromCodePoint(0x1F7E1), jaguar:String.fromCodePoint(0x26AB), psx:String.fromCodePoint(0x2B1C), genesis:String.fromCodePoint(0x1F535) };
+    const sNames = { gbc:'Game Boy Color', gba:'Game Boy Advance', snes:'Super Nintendo', nes:'NES', n64:'Nintendo 64', jaguar:'Atari Jaguar', psx:'PlayStation', genesis:'Genesis' };
+    const sIcons = { gbc:String.fromCodePoint(0x1F7E2), gba:String.fromCodePoint(0x1F537), snes:String.fromCodePoint(0x1F7E3), nes:String.fromCodePoint(0x1F534), n64:String.fromCodePoint(0x1F7E1), jaguar:String.fromCodePoint(0x26AB), psx:String.fromCodePoint(0x2B1C), genesis:String.fromCodePoint(0x1F535) };
     if (total === 0) {
       sub.textContent = 'No games found yet. Add ROM files to your folder and use Scan for New Games anytime.';
       body.innerHTML  = '<div class="frw-status">Your Games folder is ready whenever you add ROMs.</div>';
@@ -1828,23 +1781,20 @@ if (window.easyarc) {
   if (savedFolders.length > 0 && localStorage.getItem('easyarc_setup_done')) {
     // Clear games array before startup scan to prevent duplicates
     games.length = 0;
-    (async () => {
-      for (let fi = 0; fi < savedFolders.length; fi++) {
-        const folder = savedFolders[fi];
-        const result = await window.easyarc.scanRoms(folder);
-        if (result.success) {
-          const excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
-          result.roms.forEach((rom,i) => {
-            if (!games.find(g => g.path === rom.path) && !excluded.includes(rom.path)) {
-              games.push({ id: fi*10000+i, title:rom.title, system:rom.system, path:rom.path });
-            }
-          });
-        }
+    savedFolders.forEach(async (folder, fi) => {
+      const result = await window.easyarc.scanRoms(folder);
+      if (result.success) {
+        const excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
+        result.roms.forEach((rom,i) => {
+          if (!games.find(g => g.path === rom.path) && !excluded.includes(rom.path)) {
+            games.push({ id: fi*10000+i, title:rom.title, system:rom.system, path:rom.path });
+          }
+        });
+        updateCounts();
+        renderGrid();
+        loadArtworkCache();
       }
-      updateCounts();
-      renderGrid();
-      loadArtworkCache();
-    })();
+    });
   }
 } else {
   document.getElementById('statusText').textContent = 'Browser Preview';
@@ -3243,8 +3193,6 @@ const ADD_GAMES_SYSTEMS = [
   { id:'nes',         name:'NES' },
   { id:'gba',         name:'Game Boy Advance' },
   { id:'gbc',         name:'Game Boy Color' },
-  { id:'gb',          name:'Game Boy' },
-  { id:'gb',          name:'Game Boy' },
   { id:'genesis',     name:'Sega Genesis' },
   { id:'saturn',      name:'Sega Saturn' },
   { id:'dreamcast',   name:'Sega Dreamcast' },
@@ -3296,47 +3244,26 @@ function showRemoveGamesModal() {
     showToast('No games in library to remove.');
     return;
   }
-  const selectAllId = 'removeSelectAll';
-  body.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;margin-bottom:12px;">' +
-    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--cyan);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">' +
-    '<input type="checkbox" id="' + selectAllId + '" onchange="removeToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;"> Select All</label>' +
-    '<button class="frw-btn" style="background:rgba(255,60,60,0.2);border:1px solid rgba(255,60,60,0.4);color:#ff6b6b;padding:6px 20px;font-size:13px;" onclick="confirmRemoveSelected()">REMOVE SELECTED</button>' +
-    '</div>' +
-    systems.map(sys => {
-      const count = games.filter(g => g.system === sys).length;
-      const name = systemNames[sys] || sys;
-      const emoji = systemIcons[sys] || '🎮';
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">' +
-        '<label style="display:flex;align-items:center;gap:12px;cursor:pointer;flex:1;">' +
-        '<input type="checkbox" class="remove-sys-check" data-sys="' + sys + '" style="width:16px;height:16px;cursor:pointer;">' +
-        '<span style="font-size:22px">' + emoji + '</span>' +
-        '<div>' +
-        '<div style="color:#fff;font-size:15px;font-weight:bold;">' + name + '</div>' +
-        '<div style="color:var(--muted);font-size:12px;">' + count + ' game' + (count !== 1 ? 's' : '') + '</div>' +
-        '</div></label>' +
-        '</div>';
-    }).join('');
+  body.innerHTML = systems.map(sys => {
+    const count = games.filter(g => g.system === sys).length;
+    const name = systemNames[sys] || sys;
+    const emoji = systemIcons[sys] || '🎮';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;">' +
+      '<span style="font-size:22px">' + emoji + '</span>' +
+      '<div>' +
+      '<div style="color:#fff;font-size:15px;font-weight:bold;">' + name + '</div>' +
+      '<div style="color:var(--muted);font-size:12px;">' + count + ' game' + (count !== 1 ? 's' : '') + '</div>' +
+      '</div></div>' +
+      '<button class="frw-btn" style="background:rgba(255,60,60,0.2);border:1px solid rgba(255,60,60,0.4);color:#ff6b6b;padding:6px 16px;font-size:12px;min-width:80px;" onclick="confirmRemoveSystem(&apos;' + sys + '&apos;)">' +
+      'REMOVE</button>' +
+      '</div>';
+  }).join('');
   modal.classList.remove('hidden');
-}
-
-function removeToggleAll(checked) {
-  document.querySelectorAll('.remove-sys-check').forEach(cb => cb.checked = checked);
 }
 
 function hideRemoveGamesModal() {
   document.getElementById('removeGamesModal').classList.add('hidden');
-}
-
-function confirmRemoveSelected() {
-  const checked = [...document.querySelectorAll('.remove-sys-check:checked')];
-  if (checked.length === 0) { showToast('No systems selected.'); return; }
-  const names = checked.map(cb => systemNames[cb.dataset.sys] || cb.dataset.sys);
-  const totalGames = checked.reduce((sum, cb) => sum + games.filter(g => g.system === cb.dataset.sys).length, 0);
-  if (confirm('Remove ' + names.join(', ') + '?\n\nThis will remove ' + totalGames + ' game' + (totalGames !== 1 ? 's' : '') + ' from your library. Your ROM files will NOT be deleted.')) {
-    checked.forEach(cb => removeSystem(cb.dataset.sys));
-    hideRemoveGamesModal();
-  }
 }
 
 function confirmRemoveSystem(sys) {
@@ -3776,7 +3703,7 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
-const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
+const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
@@ -3789,8 +3716,6 @@ async function startScrape() {
   if (toScrape.length === 0) { showToast('All games already scraped!'); return; }
 
   scrapeRunning = true;
-  const led = document.getElementById('scrapeLed');
-  if (led) led.classList.add('active');
   const row = document.getElementById('scrapeProgressRow');
   const title = document.getElementById('scrapeProgressTitle');
   const gameEl = document.getElementById('scrapeProgressGame');
@@ -3852,8 +3777,6 @@ async function startScrape() {
   logLines.push('Success rate: ' + pct + '% (of attempted)');
 
   scrapeRunning = false;
-  const led2 = document.getElementById('scrapeLed');
-  if (led2) led2.classList.remove('active');
   if (row) row.style.display = 'none';
   showToast('Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)');
   renderGrid();
@@ -3865,8 +3788,6 @@ async function startScrape() {
 
 function stopScrape() {
   scrapeRunning = false;
-  const led = document.getElementById('scrapeLed');
-  if (led) led.classList.remove('active');
   const row = document.getElementById('scrapeProgressRow');
   if (row) row.style.display = 'none';
   showToast('Scraping stopped.');
