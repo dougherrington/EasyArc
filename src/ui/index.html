@@ -295,6 +295,24 @@ body::after {
 
 .game-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
 
+/* Phase 2 Step 4: Virtual scroller container structure.
+   Sits inside .game-grid-wrap. Scrollbar lives on #vs-container, not the outer wrapper. */
+#vs-container {
+  position:relative; width:100%; height:100%; overflow-y:auto; will-change:transform;
+}
+#vs-container::-webkit-scrollbar { width:3px; }
+#vs-container::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+#vs-sentinel { position:relative; width:100%; }
+#vs-card-window {
+  position:absolute; top:0; left:0; width:100%; will-change:transform;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px;
+}
+/* Disable the cardIn entrance animation for cards inside the virtual scroller.
+   The animation replays on every scroll-triggered rebind, causing a compounded
+   black flash as fresh elements restart their opacity:0 fade. Confirmed via
+   hypothesis test (Apr 24) — this is the sole cause of the flash we saw on Apr 23. */
+#vs-card-window .game-card { animation: none; }
+
 .game-card {
   background:linear-gradient(145deg,rgba(6,18,40,0.96),rgba(3,10,24,0.98));
   border:1px solid rgba(0,144,255,0.2); border-radius:10px; overflow:hidden;
@@ -1203,6 +1221,220 @@ function showSafetyWarning() {
   });
 }
 
+// =============================================================
+// VIRTUAL SCROLLER — Approach 1 (React-Window Style)
+// Architecture spec: EasyArc Virtual Scroller Architecture v1.0
+// Phase 2 Step 2: Non-destructive scaffolding.
+// This block defines functions and state but calls nothing and
+// attaches no listeners. Existing behavior is unaffected.
+// Activation happens in a later step.
+// =============================================================
+
+// --- CONSTANTS ---
+const VS_BUFFER_SIZE = 5;                  // buffer rows above and below viewport
+const VS_CARD_HEIGHT_FALLBACK = 280;       // used only until probe measurement completes
+
+// --- MODULE STATE ---
+let VS_CARD_HEIGHT = VS_CARD_HEIGHT_FALLBACK;
+let VS_COLUMN_COUNT = 1;
+let vsContainerHeight = 0;
+let vsVisibleRows = 0;
+let vsFilteredList = [];           // slice of `games` the VS currently renders from
+let vsLastStartIndex = -1;
+let vsRafPending = false;
+let vsResizeTimeout = null;
+let vsInitialized = false;
+let vsSelectedId = null;           // game.id of selected card, or null
+                                   // Tracked by stable ID (not index) so selection
+                                   // survives filter changes, sorts, and re-renders.
+
+// --- PROBE MEASUREMENT: card height ---
+// Must be called outside any scroll handler. Per spec Section 11.
+function vsMeasureCardHeight() {
+  const cardWindow = document.getElementById('vs-card-window');
+  if (!cardWindow) return VS_CARD_HEIGHT;
+
+  // Derive realistic render width so aspect-ratio resolves identically to real cards.
+  const innerWidth = cardWindow.clientWidth;
+  const minCardWidth = 140; // from grid-template-columns minmax(140px, 1fr)
+  const columnCount = Math.max(1, Math.floor(innerWidth / minCardWidth));
+  const gap = 12;
+  const cardWidth = Math.floor((innerWidth - (columnCount - 1) * gap) / columnCount);
+
+  const probe = document.createElement('div');
+  probe.className = 'game-card';
+  probe.style.position = 'absolute';
+  probe.style.top = '-9999px';
+  probe.style.left = '-9999px';
+  probe.style.visibility = 'hidden';
+  probe.style.width = cardWidth + 'px';
+  probe.innerHTML =
+    '<div class="card-art"><div class="vs-card-placeholder">probe</div></div>' +
+    '<div class="card-info">' +
+      '<div class="card-title">probe title</div>' +
+      '<div class="card-meta">probe meta</div>' +
+    '</div>';
+  document.body.appendChild(probe);
+  const h = probe.offsetHeight;
+  document.body.removeChild(probe);
+
+  return h > 0 ? h : VS_CARD_HEIGHT;
+}
+
+// --- PROBE MEASUREMENT: column count ---
+// Read browser-resolved grid columns. Per Copilot's approved directive.
+function vsMeasureColumnCount() {
+  const cardWindow = document.getElementById('vs-card-window');
+  if (!cardWindow) return 1;
+  const computed = getComputedStyle(cardWindow).gridTemplateColumns;
+  if (!computed || computed === 'none') return 1;
+  const cols = computed.trim().split(/\s+/).length;
+  return Math.max(1, cols);
+}
+
+// --- SCROLL HANDLER ---
+// Gated by requestAnimationFrame. Per spec Section 7 and multi-column update.
+function vsOnScroll() {
+  if (vsRafPending) return;
+  vsRafPending = true;
+  requestAnimationFrame(() => {
+    vsRafPending = false;
+    if (!vsInitialized) return;
+    const container = document.getElementById('vs-container');
+    if (!container) return;
+
+    const scrollTop = container.scrollTop;
+    const totalRows = Math.ceil(vsFilteredList.length / VS_COLUMN_COUNT);
+    let startRow = Math.floor(scrollTop / VS_CARD_HEIGHT) - VS_BUFFER_SIZE;
+    startRow = Math.max(0, startRow);
+    let endRow = startRow + vsVisibleRows + (2 * VS_BUFFER_SIZE);
+    endRow = Math.min(endRow, totalRows);
+
+    const startIndex = startRow * VS_COLUMN_COUNT;
+    const endIndex = Math.min(endRow * VS_COLUMN_COUNT, vsFilteredList.length);
+
+    if (startIndex === vsLastStartIndex) return;
+    vsLastStartIndex = startIndex;
+    const slice = vsFilteredList.slice(startIndex, endIndex);
+    vsRenderCards(slice, startIndex, startRow);
+  });
+}
+
+// --- RENDER ---
+// Atomic swap via replaceChildren. Per Copilot's approved fix.
+function vsRenderCards(slice, startIndex, startRow) {
+  const cardWindow = document.getElementById('vs-card-window');
+  if (!cardWindow) return;
+
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < slice.length; i++) {
+    const g = slice[i];
+    const dataIndex = startIndex + i;
+    const card = document.createElement('div');
+    card.className = 'game-card' + (g.id === vsSelectedId ? ' gp-selected' : '');
+    card.dataset.vsIndex = String(dataIndex);
+    card.dataset.gameId = String(g.id);
+    card.style.animationDelay = (i * 20) + 'ms';
+    card.onclick = (function(gid) { return function() { selectGame(gid); }; })(g.id);
+    card.onmouseenter = (function(gid) { return function() { selectGame(gid); }; })(g.id);
+    card.innerHTML =
+      cardArtHtml(g) +
+      '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
+      '<div class="card-meta">' + (systemNames[g.system] || g.system) + '</div></div>';
+    frag.appendChild(card);
+  }
+
+  cardWindow.style.transform = 'translateY(' + (startRow * VS_CARD_HEIGHT) + 'px)';
+  cardWindow.replaceChildren(frag);
+}
+
+// --- SELECTION ---
+// Update selected game ID and reapply cyan highlight across currently rendered cards.
+// Tracked by stable game ID, not position — survives filter changes and re-sorts.
+// Does NOT rebind card data — only toggles the class. Per Approach 2 lessons.
+function vsSetSelection(gameId) {
+  vsSelectedId = gameId;
+  const cardWindow = document.getElementById('vs-card-window');
+  if (!cardWindow) return;
+  const cards = cardWindow.children;
+  for (let i = 0; i < cards.length; i++) {
+    const id = parseInt(cards[i].dataset.gameId, 10);
+    if (id === vsSelectedId) {
+      cards[i].classList.add('gp-selected');
+    } else {
+      cards[i].classList.remove('gp-selected');
+    }
+  }
+}
+
+// --- PIPELINE ---
+// The single entry point by which renderGrid() (when activated) will hand
+// filtered data to the VS. Sets sentinel height, resets scroll if requested,
+// triggers one render.
+function vsSetFilteredList(list, resetScroll) {
+  vsFilteredList = list;
+  // Clear selection only if the selected game is no longer in the filtered list.
+  // This preserves selection across most filter changes when the selected game
+  // still matches the new filter.
+  if (vsSelectedId !== null && !vsFilteredList.some(g => g.id === vsSelectedId)) {
+    vsSelectedId = null;
+  }
+
+  const sentinel = document.getElementById('vs-sentinel');
+  const container = document.getElementById('vs-container');
+  if (!sentinel || !container) return;
+
+  const totalRows = Math.ceil(vsFilteredList.length / VS_COLUMN_COUNT);
+  sentinel.style.height = (totalRows * VS_CARD_HEIGHT) + 'px';
+  if (resetScroll) container.scrollTop = 0;
+  vsLastStartIndex = -1;
+  vsOnScroll();
+}
+
+// --- RESIZE HANDLER ---
+// Debounced 150ms. Per spec Section 11.
+function vsOnResize() {
+  if (vsResizeTimeout) clearTimeout(vsResizeTimeout);
+  vsResizeTimeout = setTimeout(() => {
+    vsResizeTimeout = null;
+    if (!vsInitialized) return;
+    VS_CARD_HEIGHT = vsMeasureCardHeight();
+    VS_COLUMN_COUNT = vsMeasureColumnCount();
+    const container = document.getElementById('vs-container');
+    if (container) {
+      vsContainerHeight = container.clientHeight;
+      vsVisibleRows = Math.ceil(vsContainerHeight / VS_CARD_HEIGHT);
+    }
+    vsSetFilteredList(vsFilteredList, false);
+  }, 150);
+}
+
+// --- INITIALIZATION ---
+// Must be called AFTER the VS DOM structure exists and AFTER the CSS that
+// defines .game-card dimensions has loaded. Phase 2 Step 3 will wire this.
+function vsInit() {
+  const container = document.getElementById('vs-container');
+  if (!container) {
+    console.warn('vsInit: #vs-container not found — VS DOM not yet in place');
+    return false;
+  }
+  VS_CARD_HEIGHT = vsMeasureCardHeight();
+  VS_COLUMN_COUNT = vsMeasureColumnCount();
+  vsContainerHeight = container.clientHeight;
+  vsVisibleRows = Math.ceil(vsContainerHeight / VS_CARD_HEIGHT);
+  vsInitialized = true;
+  return true;
+}
+
+// =============================================================
+// END VIRTUAL SCROLLER scaffolding
+// =============================================================
+
+// Phase 2 Step 3: Attach the VS resize listener.
+// vsOnResize internally guards on vsInitialized — since the VS DOM does
+// not yet exist, this listener takes no action. Activation happens in Step 4.
+window.addEventListener('resize', vsOnResize);
+
 function renderGrid() {
   const grid = document.getElementById('gameGrid');
   const filtered = games.filter(g => {
@@ -1246,11 +1478,18 @@ function renderGrid() {
     }
     return;
   }
-  grid.innerHTML = '<div class="game-grid">' + filtered.map((g,i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')" onmouseenter="selectGame(' + g.id + ')">' +
-    cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
-    '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
-  ).join('') + '</div>';
+  // --- VS RENDERING PATH (Phase 2 Step 4) ---
+  // Build the VS DOM once on first call, or rebuild if a prior empty-state
+  // message wiped it. On subsequent calls, the existing VS DOM is reused and
+  // we just hand the new filtered list to vsSetFilteredList.
+  let vsContainerEl = document.getElementById('vs-container');
+  if (!vsContainerEl) {
+    grid.innerHTML = '<div id="vs-container"><div id="vs-sentinel"><div id="vs-card-window"></div></div></div>';
+    vsContainerEl = document.getElementById('vs-container');
+    vsContainerEl.addEventListener('scroll', vsOnScroll);
+    vsInit();
+  }
+  vsSetFilteredList(filtered, false);
 }
 
 function updateCounts() {
@@ -1386,16 +1625,9 @@ function selectGame(id) {
     if (rows.length === 0)    rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
     dm.innerHTML = rows.join('');
   }
-  // Highlight selected card — exact ID match only
-  document.querySelectorAll('.game-card').forEach(c => c.classList.remove('gp-selected'));
-  const cards = document.querySelectorAll('.game-card');
-  cards.forEach(c => {
-    const onclick = c.getAttribute('onclick');
-    if (onclick) {
-      const match = onclick.match(/selectGame\((\d+)\)/);
-      if (match && parseInt(match[1]) === id) c.classList.add('gp-selected');
-    }
-  });
+  // Highlight selected card via VS selection system (Phase 2 Step 4).
+  // Tracked by stable game ID — survives filter changes and re-renders.
+  vsSetSelection(id);
 }
 
 function getFavorites() {
