@@ -1305,7 +1305,9 @@ function vsOnScroll() {
 
     const scrollTop = container.scrollTop;
     const totalRows = Math.ceil(vsFilteredList.length / VS_COLUMN_COUNT);
-    let startRow = Math.floor(scrollTop / VS_CARD_HEIGHT) - VS_BUFFER_SIZE;
+    // FIX_A_COMBINED_HOTFIX: live pitch
+    const _scrollPitch = vsLivePitch().pitch;
+    let startRow = Math.floor(scrollTop / _scrollPitch) - VS_BUFFER_SIZE;
     startRow = Math.max(0, startRow);
     let endRow = startRow + vsVisibleRows + (2 * VS_BUFFER_SIZE);
     endRow = Math.min(endRow, totalRows);
@@ -1344,7 +1346,9 @@ function vsRenderCards(slice, startIndex, startRow) {
     frag.appendChild(card);
   }
 
-  cardWindow.style.transform = 'translateY(' + (startRow * VS_CARD_HEIGHT) + 'px)';
+  // FIX_A_COMBINED_HOTFIX: live pitch for translateY
+  const _renderPitch = vsLivePitch().pitch;
+  cardWindow.style.transform = 'translateY(' + (startRow * _renderPitch) + 'px)';
   cardWindow.replaceChildren(frag);
 }
 
@@ -1364,6 +1368,49 @@ function vsSetSelection(gameId) {
     } else {
       cards[i].classList.remove('gp-selected');
     }
+  }
+}
+
+// FIX_A_GAMEPAD_REWRITE: New VS API for index-based selection and scrolling.
+// Boundary between gamepad subsystem (data indices) and VS (DOM ownership).
+
+function vsSetSelectedIndex(idx) {
+  if (idx < 0 || idx >= vsFilteredList.length) {
+    vsSetSelection(null);
+    return;
+  }
+  vsSetSelection(vsFilteredList[idx].id);
+}
+
+// FIX_A_COMBINED_HOTFIX: shared live-pitch helper.
+function vsLivePitch() {
+  const cardWindow = document.getElementById('vs-card-window');
+  let cardHeight = VS_CARD_HEIGHT;
+  if (cardWindow && cardWindow.firstElementChild) {
+    const live = cardWindow.firstElementChild.offsetHeight;
+    if (live > 0) cardHeight = live;
+  }
+  const rowGap = cardWindow ? parseFloat(getComputedStyle(cardWindow).rowGap) || 0 : 0;
+  return { cardHeight: cardHeight, rowGap: rowGap, pitch: cardHeight + rowGap };
+}
+
+function vsScrollToIndex(idx) {
+  const total = vsFilteredList.length;
+  if (total === 0) return;
+  if (idx < 0) idx = 0;
+  if (idx >= total) idx = total - 1;
+  const container = document.getElementById('vs-container');
+  if (!container) return;
+  const p = vsLivePitch();
+  const cols = VS_COLUMN_COUNT || 1;
+  const targetRow = Math.floor(idx / cols);
+  const targetTop = targetRow * p.pitch;
+  const visibleTop = container.scrollTop;
+  const visibleBottom = visibleTop + container.clientHeight;
+  if (targetTop < visibleTop) {
+    container.scrollTop = targetTop;
+  } else if (targetTop + p.cardHeight > visibleBottom) {
+    container.scrollTop = targetTop + p.cardHeight - container.clientHeight;
   }
 }
 
@@ -1591,11 +1638,10 @@ function removeSystem(sys) {
   showToast((systemNames[sys]||sys) + ' removed from library (' + count + ' games)');
 }
 
-function selectGame(id) {
-  const game = games.find(g => g.id === id);
-  if (!game) return;
-  selectedGame = game;
-  // Populate detail panel
+// FIX_A_GAMEPAD_REWRITE: Extracted helper for both selectGame (mouse path)
+// and selectGameByIndex (gamepad path). Body identical to original selectGame's
+// panel-population block.
+function _populateDetailFromGame(game) {
   const da = document.getElementById('detailArt');
   const dt = document.getElementById('detailTitle');
   const ds = document.getElementById('detailSystem');
@@ -1625,9 +1671,24 @@ function selectGame(id) {
     if (rows.length === 0)    rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
     dm.innerHTML = rows.join('');
   }
-  // Highlight selected card via VS selection system (Phase 2 Step 4).
-  // Tracked by stable game ID — survives filter changes and re-renders.
+}
+
+function selectGame(id) {
+  const game = games.find(g => g.id === id);
+  if (!game) return;
+  selectedGame = game;
+  _populateDetailFromGame(game);
   vsSetSelection(id);
+}
+
+// FIX_A_GAMEPAD_REWRITE: Gamepad-side selection. Reads vsFilteredList directly,
+// bypassing the broken games.find lookup. Mouse path (selectGame) unchanged.
+function selectGameByIndex(idx) {
+  if (idx < 0 || idx >= vsFilteredList.length) return;
+  const game = vsFilteredList[idx];
+  selectedGame = game;
+  _populateDetailFromGame(game);
+  vsSetSelectedIndex(idx);
 }
 
 function getFavorites() {
@@ -2893,61 +2954,41 @@ const GP_NAV = {
 // Standard gamepad button indices
 const GPB = { a:0, b:1, x:2, y:3, l1:4, r1:5, l2:6, r2:7, select:8, start:9, l3:10, r3:11, up:12, down:13, left:14, right:15 };
 
-function gpGetCards() {
-  return Array.from(document.querySelectorAll('#gameGrid .game-card'));
-}
+// FIX_A_GAMEPAD_REWRITE: gpGetCards removed. Gamepad no longer reads DOM.
 
 function gpGetSysBtns() {
   return Array.from(document.querySelectorAll('#systemList .system-btn'));
 }
 
 // Find card directly above/below/left/right using actual screen positions
-function gpFindNeighbour(cards, fromIdx, dir) {
-  if (cards.length === 0) return -1;
-  const from = cards[fromIdx].getBoundingClientRect();
-  const cx = from.left + from.width / 2;
-  const cy = from.top + from.height / 2;
-
-  let best = -1;
-  let bestScore = Infinity;
-
-  cards.forEach((card, i) => {
-    if (i === fromIdx) return;
-    const r = card.getBoundingClientRect();
-    const tx = r.left + r.width / 2;
-    const ty = r.top + r.height / 2;
-    const dx = tx - cx;
-    const dy = ty - cy;
-
-    let valid = false;
-    if (dir === "up"    && dy < -10) valid = true;
-    if (dir === "down"  && dy >  10) valid = true;
-    if (dir === "left"  && dx < -10) valid = true;
-    if (dir === "right" && dx >  10) valid = true;
-
-    if (!valid) return;
-
-    // Score: prefer cards that are close in the primary axis and aligned in secondary
-    let score;
-    if (dir === "up"   || dir === "down")  score = Math.abs(dy) + Math.abs(dx) * 3;
-    if (dir === "left" || dir === "right") score = Math.abs(dx) + Math.abs(dy) * 3;
-
-    if (score < bestScore) { bestScore = score; best = i; }
-  });
-
-  return best;
+// FIX_A_GAMEPAD_REWRITE: Pure index arithmetic. No DOM access.
+function gpFindNeighbour(fromIdx, dir) {
+  const total = vsFilteredList.length;
+  if (total === 0) return -1;
+  const cols = VS_COLUMN_COUNT || 1;
+  let newIdx = fromIdx;
+  if (dir === "left")  newIdx = fromIdx - 1;
+  if (dir === "right") newIdx = fromIdx + 1;
+  if (dir === "up")    newIdx = fromIdx - cols;
+  if (dir === "down")  newIdx = fromIdx + cols;
+  if ((dir === "left" || dir === "up") && newIdx < 0) return -1;
+  if (newIdx < 0) newIdx = 0;
+  if (newIdx >= total) newIdx = total - 1;
+  if (newIdx === fromIdx) return -1;
+  return newIdx;
 }
 
+// FIX_A_GAMEPAD_REWRITE: Data-driven, no DOM queries.
+// idx is a list index into vsFilteredList. -1 clears selection.
+// Order: scroll first (may rebind), then apply selection + metadata.
 function gpHighlightCard(idx) {
-  const cards = gpGetCards();
-  cards.forEach(c => c.classList.remove('gp-selected'));
-  if (cards[idx]) {
-    cards[idx].classList.add('gp-selected');
-    cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    const onclick = cards[idx].getAttribute('onclick');
-    const idMatch = onclick && onclick.match(/\d+/);
-    if (idMatch) selectGame(parseInt(idMatch[0]));
+  if (idx === -1) {
+    vsSetSelection(null);
+    return;
   }
+  if (idx < 0 || idx >= vsFilteredList.length) return;
+  vsScrollToIndex(idx);
+  selectGameByIndex(idx);
 }
 
 function gpHighlightSys(idx) {
@@ -3207,66 +3248,49 @@ function gpHandleInput(gp) {
     }
 
   } else {
-    // ── Grid navigation ─────────────────────────────────────────────────
-    const cards = gpGetCards();
+    // FIX_A_GAMEPAD_REWRITE: Index-arithmetic navigation, data-driven launch/fav.
 
     if (gpShouldFire("left", left)) {
-      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "left");
+      const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "left");
       if (neighbour >= 0) {
         GP_NAV.gridIdx = neighbour;
         gpHighlightCard(GP_NAV.gridIdx);
       } else {
-        // At leftmost — enter sidebar
         gpEnterSidebar();
       }
     }
     if (gpShouldFire("right", right)) {
-      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "right");
+      const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "right");
       if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
     }
     if (gpShouldFire("up", up)) {
-      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "up");
+      const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "up");
       if (neighbour >= 0) {
         GP_NAV.gridIdx = neighbour;
         gpHighlightCard(GP_NAV.gridIdx);
       } else {
-        // At top of grid — enter sidebar
         gpEnterSidebar();
       }
     }
     if (gpShouldFire("down", down)) {
-      const neighbour = gpFindNeighbour(cards, GP_NAV.gridIdx, "down");
+      const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "down");
       if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
     }
 
-    // A — launch currently highlighted card
     if (gpShouldFire("a", aBtn)) {
-      if (cards[GP_NAV.gridIdx]) {
-        const cardOnclick = cards[GP_NAV.gridIdx].getAttribute('onclick');
-        const idMatch = cardOnclick && cardOnclick.match(/\d+/);
-        const cardId = idMatch ? parseInt(idMatch[0]) : null;
-        if (cardId) {
-          const game = games.find(g => g.id === cardId);
-          if (game) ctestMaybeLaunch(game);
-        }
-      }
+      const game = vsFilteredList[GP_NAV.gridIdx];
+      if (game) ctestMaybeLaunch(game);
     }
 
-    // B — close detail panel
     if (gpShouldFire("b", bBtn)) {
       const panel = document.getElementById("detailPanel");
       if (panel && !panel.classList.contains("hidden")) closeDetail();
     }
 
-    // Y — toggle favorite on currently highlighted card
     const yBtn = btns[GPB.y].pressed;
     if (gpShouldFire("y", yBtn)) {
-      const cards = gpGetCards();
-      if (cards[GP_NAV.gridIdx]) {
-        const gameId = parseInt(cards[GP_NAV.gridIdx].getAttribute('onclick').match(/\d+/)[0]);
-        const game = games.find(g => g.id === gameId);
-        if (game) toggleFavorite(game);
-      }
+      const game = vsFilteredList[GP_NAV.gridIdx];
+      if (game) toggleFavorite(game);
     }
   }
 
@@ -3386,8 +3410,8 @@ document.addEventListener("keydown", (e) => {
   if (!document.getElementById("frwOverlay").classList.contains("hidden")) return;
   if (!document.getElementById("ctrlModal").classList.contains("hidden")) return;
 
-  const cards = gpGetCards();
-  if (cards.length === 0) return;
+  // FIX_A_GAMEPAD_REWRITE: data-driven, no DOM enumeration.
+  if (vsFilteredList.length === 0) return;
 
   gpActivate();
 
@@ -3397,7 +3421,7 @@ document.addEventListener("keydown", (e) => {
         GP_NAV.sidebarIdx = Math.max(0, GP_NAV.sidebarIdx - 1);
         gpHighlightSys(GP_NAV.sidebarIdx);
       } else {
-        const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "up");
+        const n = gpFindNeighbour(GP_NAV.gridIdx, "up");
         if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
       }
       break;
@@ -3408,14 +3432,14 @@ document.addEventListener("keydown", (e) => {
         GP_NAV.sidebarIdx = Math.min(btns.length - 1, GP_NAV.sidebarIdx + 1);
         gpHighlightSys(GP_NAV.sidebarIdx);
       } else {
-        const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "down");
+        const n = gpFindNeighbour(GP_NAV.gridIdx, "down");
         if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
       }
       break;
     }
     case "ArrowLeft":  e.preventDefault(); {
       if (GP_NAV.inSidebar) break;
-      const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "left");
+      const n = gpFindNeighbour(GP_NAV.gridIdx, "left");
       if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
       else gpEnterSidebar();
       break;
@@ -3426,7 +3450,7 @@ document.addEventListener("keydown", (e) => {
         if (btns[GP_NAV.sidebarIdx]) btns[GP_NAV.sidebarIdx].click();
         gpExitSidebar();
       } else {
-        const n = gpFindNeighbour(cards, GP_NAV.gridIdx, "right");
+        const n = gpFindNeighbour(GP_NAV.gridIdx, "right");
         if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
       }
       break;
@@ -3437,7 +3461,8 @@ document.addEventListener("keydown", (e) => {
         if (btns[GP_NAV.sidebarIdx]) btns[GP_NAV.sidebarIdx].click();
         gpExitSidebar();
       } else {
-        if (cards[GP_NAV.gridIdx]) cards[GP_NAV.gridIdx].click();
+        const game = vsFilteredList[GP_NAV.gridIdx];
+        if (game) ctestMaybeLaunch(game);
       }
       break;
     }
@@ -3450,12 +3475,18 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// Reset grid selection when library re-renders
+// FIX_A_GAMEPAD_REWRITE: Enhanced state sync on every renderGrid call.
 const _origRenderGrid = renderGrid;
 renderGrid = function() {
   _origRenderGrid.apply(this, arguments);
   GP_NAV.gridIdx = 0;
-  // Don't reset inSidebar — preserve sidebar focus during preview
+  if (vsFilteredList.length > 0) {
+    selectedGame = vsFilteredList[0];
+    _populateDetailFromGame(vsFilteredList[0]);
+    vsSetSelectedIndex(0);
+  } else {
+    selectedGame = null;
+  }
   if (GP_NAV.active && !GP_NAV.inSidebar) setTimeout(() => gpHighlightCard(0), 60);
 };
 
