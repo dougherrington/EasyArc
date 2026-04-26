@@ -1026,6 +1026,70 @@ let currentSystem = _initRecent.length > 0 ? 'recent' : 'all';
 let currentSearch = '';
 let selectedGame  = null;
 
+// FIX_C_ID_REDESIGN: Canonical ID generation. Single source of truth.
+function makeGameId(system, path) {
+  return (system || '').toLowerCase() + ':' + (path || '').replace(/\\/g, '/');
+}
+
+// FIX_C_ID_REDESIGN: Escape helper for inline onclick handlers.
+function escapeForAttr(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+// FIX_C_ID_REDESIGN: O(1) game lookup by ID.
+let gamesById = new Map();
+
+function buildGamesIndex() {
+  gamesById = new Map();
+  for (const g of games) {
+    gamesById.set(g.id, g);
+  }
+}
+
+function lookupGameById(id) {
+  return gamesById.get(id);
+}
+
+// FIX_C_ID_REDESIGN: Self-healing reconciliation of persisted user data.
+// Runs on every renderGrid. Walks favorites/recent, looks up each by path,
+// updates ID to current value, drops orphans. Idempotent. Skips localStorage
+// writes when nothing changed.
+function reconcileFavoritesAndRecent() {
+  // FIX_C_GUARD_EMPTY_GAMES: don't drop entries as orphans when the library
+  // hasn't loaded yet. Without this guard, reconciliation against empty games[]
+  // nukes all favorites/recent entries as path-not-found orphans.
+  if (!games || games.length === 0) return;
+  if (!localStorage.getItem('easyarc_prefixc_backup')) {
+    localStorage.setItem('easyarc_prefixc_backup', JSON.stringify({
+      favorites: JSON.parse(localStorage.getItem('easyarc_favorites') || '[]'),
+      recent: JSON.parse(localStorage.getItem('easyarc_recent') || '[]'),
+      ts: Date.now()
+    }));
+  }
+  const gamesByPath = new Map();
+  for (const g of games) gamesByPath.set(g.path, g);
+
+  const oldFavsRaw = localStorage.getItem('easyarc_favorites') || '[]';
+  const oldFavs = JSON.parse(oldFavsRaw);
+  const newFavs = [];
+  for (const f of oldFavs) {
+    const game = gamesByPath.get(f.path);
+    if (game) newFavs.push({ id: game.id, title: game.title, system: game.system, path: game.path });
+  }
+  const newFavsRaw = JSON.stringify(newFavs);
+  if (newFavsRaw !== oldFavsRaw) localStorage.setItem('easyarc_favorites', newFavsRaw);
+
+  const oldRecentRaw = localStorage.getItem('easyarc_recent') || '[]';
+  const oldRecent = JSON.parse(oldRecentRaw);
+  const newRecent = [];
+  for (const r of oldRecent) {
+    const game = gamesByPath.get(r.path);
+    if (game) newRecent.push({ id: game.id, title: game.title, system: game.system, path: game.path });
+  }
+  const newRecentRaw = JSON.stringify(newRecent);
+  if (newRecentRaw !== oldRecentRaw) localStorage.setItem('easyarc_recent', newRecentRaw);
+}
+
 async function checkEmulatorsOnStartup() {
   if (!window.easyarc) { ctrlShowStartupModal(); return; }
   const ra = await window.easyarc.findRetroArch();
@@ -1362,7 +1426,8 @@ function vsSetSelection(gameId) {
   if (!cardWindow) return;
   const cards = cardWindow.children;
   for (let i = 0; i < cards.length; i++) {
-    const id = parseInt(cards[i].dataset.gameId, 10);
+    // FIX_C_ID_REDESIGN: string compare; parseInt would produce NaN with string IDs.
+    const id = cards[i].dataset.gameId;
     if (id === vsSelectedId) {
       cards[i].classList.add('gp-selected');
     } else {
@@ -1483,6 +1548,10 @@ function vsInit() {
 window.addEventListener('resize', vsOnResize);
 
 function renderGrid() {
+  // FIX_C_ID_REDESIGN: keep the index fresh and reconcile persisted user data.
+  buildGamesIndex();
+  reconcileFavoritesAndRecent();
+
   const grid = document.getElementById('gameGrid');
   const filtered = games.filter(g => {
     const sysMatch = currentSystem === 'all' || g.system === currentSystem;
@@ -1675,7 +1744,8 @@ function _populateDetailFromGame(game) {
 }
 
 function selectGame(id) {
-  const game = games.find(g => g.id === id);
+  // FIX_C_ID_REDESIGN: O(1) Map lookup replaces O(n) games.find.
+  const game = lookupGameById(id);
   if (!game) return;
   selectedGame = game;
   _populateDetailFromGame(game);
@@ -1728,8 +1798,9 @@ function filterFavorites(btn) {
     grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO FAVORITES YET<br><span style="font-size:9px;opacity:0.5">Press Y on a game to add it</span></div>';
     return;
   }
+  // FIX_C_ID_REDESIGN: escape string IDs for safe inline onclick interpolation.
   grid.innerHTML = '<div class="game-grid">' + favs.map((g, i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')" onmouseenter="selectGame(' + g.id + ')">' +
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(\'' + escapeForAttr(g.id) + '\')" onmouseenter="selectGame(\'' + escapeForAttr(g.id) + '\')">' +
     cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
     '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
   ).join('') + '</div>';
@@ -1748,8 +1819,9 @@ function filterRecent(btn) {
     grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO RECENTLY PLAYED GAMES<br><span style="font-size:9px;opacity:0.5">Launch a game to get started</span></div>';
     return;
   }
+  // FIX_C_ID_REDESIGN: escape string IDs for safe inline onclick interpolation.
   grid.innerHTML = '<div class="game-grid">' + recent.map((g, i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(' + g.id + ')" onmouseenter="selectGame(' + g.id + ')">' +
+    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(\'' + escapeForAttr(g.id) + '\')" onmouseenter="selectGame(\'' + escapeForAttr(g.id) + '\')">' +
     cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
     '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
   ).join('') + '</div>';
@@ -1861,7 +1933,7 @@ async function rescanLibrary() {
       const excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
       result.roms.forEach((rom,i) => {
         if (!games.find(g => g.path === rom.path) && !excluded.includes(rom.path)) {
-          games.push({ id: Date.now()+i, title: rom.title, system: rom.system, path: rom.path });
+          games.push({ id: makeGameId(rom.system, rom.path), title: rom.title, system: rom.system, path: rom.path });
           newCount++;
         }
       });
@@ -2073,7 +2145,7 @@ async function frwRunScan() {
   frwFoundGames = roms;
   roms.forEach((rom,i) => {
     if (!games.find(g => g.path === rom.path)) {
-      games.push({ id: Date.now()+i, title:rom.title, system:rom.system, path:rom.path });
+      games.push({ id: makeGameId(rom.system, rom.path), title:rom.title, system:rom.system, path:rom.path });
     }
   });
   updateCounts();
@@ -2132,7 +2204,7 @@ if (window.easyarc) {
           // Clear from unavailable if it was previously missing
           result.roms.forEach((rom,i) => {
             if (!games.find(g => g.path === rom.path) && !excluded.includes(rom.path)) {
-              games.push({ id: fi*10000+i, title:rom.title, system:rom.system, path:rom.path });
+              games.push({ id: makeGameId(rom.system, rom.path), title:rom.title, system:rom.system, path:rom.path });
             }
           });
         } else {
@@ -3938,7 +4010,7 @@ async function addGamesImportAll() {
         localStorage.setItem('easyarc_excluded_paths', JSON.stringify(excluded));
         result.roms.forEach((rom, i) => {
           if (!games.find(g => g.path === rom.path)) {
-            games.push({ id: Date.now()+i+totalAdded, title: rom.title, system: r.selectedSystem, path: rom.path });
+            games.push({ id: makeGameId(r.selectedSystem, rom.path), title: rom.title, system: r.selectedSystem, path: rom.path });
             totalAdded++;
           }
         });
@@ -4007,7 +4079,7 @@ async function addGamesScanAndAdd() {
       localStorage.setItem('easyarc_excluded_paths', JSON.stringify(excluded));
       result.roms.forEach((rom, i) => {
         if (!games.find(g => g.path === rom.path)) {
-          games.push({ id: Date.now()+i, title:rom.title, system:addGamesSystem, path:rom.path });
+          games.push({ id: makeGameId(addGamesSystem, rom.path), title:rom.title, system:addGamesSystem, path:rom.path });
           newCount++;
         }
       });
