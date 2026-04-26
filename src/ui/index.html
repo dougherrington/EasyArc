@@ -1536,7 +1536,8 @@ function renderGrid() {
     vsContainerEl.addEventListener('scroll', vsOnScroll);
     vsInit();
   }
-  vsSetFilteredList(filtered, false);
+  // FIX_B_RESET_SCROLL: pass true so system switches/search/etc. reset to top.
+  vsSetFilteredList(filtered, true);
 }
 
 function updateCounts() {
