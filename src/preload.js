@@ -3,6 +3,17 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('easyarc', {
   findRetroArch: () => ipcRenderer.invoke('bridge:findRetroArch'),
   findDolphin:   () => ipcRenderer.invoke('bridge:findDolphin'),
+  launchPPSSPP:  (romPath) => ipcRenderer.invoke('bridge:launchPPSSPP', romPath),
+  // FIX_2026-06-19_PSP_LIFECYCLE: game-running lifecycle events from main process.
+  onGameStarted: (callback) => ipcRenderer.on('game-started', () => callback()),
+  onGameExited:  (callback) => ipcRenderer.on('game-exited',  () => callback()),
+  findDuckStation: () => ipcRenderer.invoke('bridge:findDuckStation'),
+  installDuckStation: () => ipcRenderer.invoke('bridge:installDuckStation'),
+  scanForPSXBios: () => ipcRenderer.invoke('bridge:scanForPSXBios'),
+  configureDuckStationBios: (biosDir) => ipcRenderer.invoke('bridge:configureDuckStationBios', biosDir),
+  browseForBiosFolder: () => ipcRenderer.invoke('bridge:browseForBiosFolder'),
+  onDuckStationDownloadProgress: (callback) => ipcRenderer.on('duckstation:downloadProgress', (_e, data) => callback(data)),
+  offDuckStationDownloadProgress: (callback) => ipcRenderer.removeListener('duckstation:downloadProgress', callback),
   getConfig: () => ipcRenderer.invoke('bridge:getConfig'),
   setConfig: (values) => ipcRenderer.invoke('bridge:setConfig', values),
   listCores: () => ipcRenderer.invoke('bridge:listCores'),
@@ -27,4 +38,8 @@ contextBridge.exposeInMainWorld('easyarc', {
   saveArtwork:    (game, data) => ipcRenderer.invoke('bridge:saveArtwork', game, data),
   onProgress: (callback) => ipcRenderer.on('progress', (_e, data) => callback(data)),
   offProgress: (callback) => ipcRenderer.removeListener('progress', callback),
+  ensureDolphinReady: () => ipcRenderer.invoke('bridge:ensureDolphinReady'),
+  launchDolphinBare: () => ipcRenderer.invoke('bridge:launchDolphinBare'),
+  // FIX_2026-06-07_DOLPHIN_DETECTION_RESTORE: pass controllerType through IPC
+  launchDolphin: (romPath, controllerType) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType),
 });

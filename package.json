@@ -1,12 +1,14 @@
 {
   "name": "easyarc",
-  "version": "0.2.6-alpha",
+  "version": "0.3.1-alpha",
   "description": "The easiest way to play your retro game collection",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder --mac dmg"
+    "build": "electron-builder --mac dmg",
+    "build-win": "electron-builder --win nsis",
+    "build-win-zip": "electron-builder --win zip --arm64"
   },
   "build": {
     "appId": "com.dougherrington.easyarc",
@@ -15,8 +17,14 @@
       "category": "public.app-category.games",
       "target": "dmg"
     },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
     "dmg": {
-      "title": "EasyArc Alpha 2.4",
+      "title": "EasyArc 0.3.1 Alpha",
       "window": {
         "width": 540,
         "height": 380
@@ -25,6 +33,15 @@
     "files": [
       "src/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/win/",
+        "to": "win/",
+        "filter": [
+          "**/*"
+        ]
+      }
     ]
   },
   "devDependencies": {

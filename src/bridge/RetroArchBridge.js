@@ -23,6 +23,12 @@ const DOLPHIN_LOCATIONS = {
   linux:  ['/usr/bin/dolphin-emu'],
 };
 
+const DUCKSTATION_LOCATIONS = {
+  darwin: ['/Applications/DuckStation.app/Contents/MacOS/DuckStation'],
+  win32:  ['C:\\Program Files\\DuckStation\\duckstation-qt-x64-ReleaseLTCG.exe'],
+  linux:  ['/usr/bin/duckstation-qt'],
+};
+
 const RYUJINX_LOCATIONS = {
   darwin: ['/Applications/Ryujinx.app/Contents/MacOS/Ryujinx'],
   win32:  ['C:\\Ryujinx\\Ryujinx.exe'],
@@ -34,7 +40,8 @@ const RETROARCH_LOCATIONS = {
     '/Applications/RetroArch.app/Contents/MacOS/RetroArch',
     path.join(os.homedir(), 'Applications/RetroArch.app/Contents/MacOS/RetroArch'),
   ],
-  win32:  ['C:\\RetroArch-Win64\\retroarch.exe'],
+  // FIX_2026-06-13_RETROARCH_WIN_PORT: bundled portable location under easyarc APPDATA.
+  win32:  [path.join(process.env.APPDATA || os.homedir(), 'easyarc', 'retroarch', 'retroarch.exe')],
   linux:  ['/usr/bin/retroarch'],
 };
 
@@ -114,7 +121,13 @@ const SKIP_FOLDERS = new Set([
   '.fseventsd','.spotlight-v100','.trashes','.ds_store',
 ]);
 
-const CORES_PATH = path.join(os.homedir(), 'Library/Application Support/RetroArch/cores');
+// FIX_2026-06-13_RETROARCH_WIN_PORT: platform-aware cores dir. Windows uses the
+// self-contained portable layout %APPDATA%\\easyarc\\retroarch\\cores (cores as a
+// subfolder under the bundled RetroArch). Mac keeps its existing full-install path.
+const RETROARCH_WIN_DIR = path.join(process.env.APPDATA || os.homedir(), 'easyarc', 'retroarch');
+const CORES_PATH = process.platform === 'win32'
+  ? path.join(RETROARCH_WIN_DIR, 'cores')
+  : path.join(os.homedir(), 'Library/Application Support/RetroArch/cores');
 const REMAPS_PATH = path.join(os.homedir(), 'Library/Application Support/RetroArch/config/remaps');
 
 // Core folder names for remap files (must match RetroArch's core display name)
@@ -129,7 +142,7 @@ const CORE_REMAP_FOLDERS = {
   genesis:     'Genesis Plus GX',
   gamegear:    'Genesis Plus GX',
   mastersystem:'Genesis Plus GX',
-  psx:         'Beetle PSX',
+  psx:         'DuckStation',
   ps2:         'PCSX2',
   psp:         'PPSSPP',
   saturn:      'Beetle Saturn',
@@ -570,13 +583,22 @@ class RetroArchBridge {
     ["cores","system","config"].forEach(d => { try { _fs.mkdirSync(_path.join(_os.homedir(),"Library/Application Support/RetroArch/"+d),{recursive:true}); } catch(e) {} });
     // --- ScraperPipeline integration ---
     this.scraper = new ScraperPipeline({
-      baseDir: config.artworkDir || _path.join(_os.homedir(), 'Library/Application Support/EasyArc/artwork'),
+      baseDir: config.artworkDir || this._getDefaultArtworkDir(),
       regionOrder: config.regionOrder,
       devId: config.devId || 'jelos',
       devPassword: config.devPassword || 'jelos',
       ssid: config.ssid || '',
       ssPassword: config.ssPassword || ''
     });
+  }
+
+  // Returns the platform-appropriate artwork directory.
+  // Mac:     ~/Library/Application Support/easyarc/artwork
+  // Windows: %APPDATA%\\easyarc\\artwork
+  // Linux:   ~/.config/easyarc/artwork
+  _getDefaultArtworkDir() {
+    const { app } = require('electron');
+    return require('path').join(app.getPath('userData'), 'artwork');
   }
 
   async findPCSX2() {
@@ -603,6 +625,28 @@ class RetroArchBridge {
     return { found: false, path: null };
   }
 
+  async findDuckStation() {
+    // FIX_2026-05-22_DUCKSTATION_INSTALL: prefer EasyArc's managed copy over
+    // any user-installed copy. EasyArc's copy has settings we've configured;
+    // a user's copy may not, leading to inconsistent UX.
+    console.log('[FIND-DS] findDuckStation() called');
+    const easyArcBinary = this.getEasyArcDuckStationBinary();
+    console.log('[FIND-DS] EasyArc binary path:', easyArcBinary);
+    const easyArcBinaryExists = fs.existsSync(easyArcBinary);
+    console.log('[FIND-DS] EasyArc binary exists?:', easyArcBinaryExists);
+    if (easyArcBinaryExists) return { found: true, path: easyArcBinary };
+    // Fall back to standard locations if our copy isn't installed yet.
+    const locations = DUCKSTATION_LOCATIONS[process.platform] || [];
+    console.log('[FIND-DS] Checking fallback locations:', locations);
+    for (const loc of locations) {
+      const exists = fs.existsSync(loc);
+      console.log('[FIND-DS]   ' + loc + ' exists?:', exists);
+      if (exists) return { found: true, path: loc };
+    }
+    console.log('[FIND-DS] Not found in any location');
+    return { found: false, path: null };
+  }
+
   async findRetroArch() {
     const locations = RETROARCH_LOCATIONS[process.platform] || [];
     for (const loc of locations) {
@@ -620,23 +664,37 @@ class RetroArchBridge {
   async listCores() { return []; }
 
   coreExists(system) {
-    const coreFile = SYSTEM_CORES[system];
+    let coreFile = SYSTEM_CORES[system];
     if (!coreFile) return false;
+    // FIX_2026-06-13_RETROARCH_WIN_PORT: SYSTEM_CORES stores Mac .dylib names; the file on
+    // Windows is .dll. Without this swap, coreExists never finds the core on Windows and the
+    // "download plugin?" modal reappears on every launch (download itself is correctly skipped
+    // by installCore, which already does the swap).
+    if (process.platform === 'win32') coreFile = coreFile.replace(/\.dylib$/, '.dll');
     return fs.existsSync(path.join(CORES_PATH, coreFile));
   }
 
   async installCore(system) {
-    const coreFile = SYSTEM_CORES[system];
+    let coreFile = SYSTEM_CORES[system];
     if (!coreFile) return { success: false, error: 'No core mapped for system: ' + system };
+    if (process.platform === 'win32') coreFile = coreFile.replace(/\.dylib$/, '.dll');
 
     const corePath = path.join(CORES_PATH, coreFile);
     if (fs.existsSync(corePath)) return { success: true, already: true };
 
-    const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
-    const url = 'https://buildbot.libretro.com/nightly/apple/osx/' + arch + '/latest/' + coreFile + '.zip';
-    console.log('[Bridge] Hash URL:', url);
-    console.log('[Bridge] Hash URL:', url);
+    // FIX_2026-06-13_RETROARCH_WIN_PORT: platform-correct buildbot URL + extraction.
+    const isWin = process.platform === 'win32';
+    let url;
+    if (isWin) {
+      url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/' + coreFile + '.zip';
+    } else {
+      const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+      url = 'https://buildbot.libretro.com/nightly/apple/osx/' + arch + '/latest/' + coreFile + '.zip';
+    }
+    console.log('[Bridge] Core download URL:', url);
     const zipPath = corePath + '.zip';
+
+    try { fs.mkdirSync(CORES_PATH, { recursive: true }); } catch(e) {}
 
     return new Promise((resolve) => {
       const file = fs.createWriteStream(zipPath);
@@ -648,15 +706,26 @@ class RetroArchBridge {
         response.pipe(file);
         file.on('finish', () => {
           file.close();
-          // Unzip the core
-          const unzip = spawn('unzip', ['-o', zipPath, '-d', CORES_PATH]);
+          // Windows has no `unzip`; use PowerShell Expand-Archive (as installDuckStation does).
+          let cmd, args;
+          if (isWin) {
+            cmd = 'powershell';
+            args = ['-Command', `Expand-Archive -Path "${zipPath}" -DestinationPath "${CORES_PATH}" -Force`];
+          } else {
+            cmd = 'unzip';
+            args = ['-o', zipPath, '-d', CORES_PATH];
+          }
+          const unzip = spawn(cmd, args, { stdio: 'ignore' });
           unzip.on('exit', (code) => {
-            fs.unlinkSync(zipPath);
+            try { fs.unlinkSync(zipPath); } catch(e) {}
             if (fs.existsSync(corePath)) {
               resolve({ success: true });
             } else {
               resolve({ success: false, error: 'Core file not found after extraction' });
             }
+          });
+          unzip.on('error', (err) => {
+            resolve({ success: false, error: 'Extraction failed: ' + err.message });
           });
         });
       }).on('error', (err) => {
@@ -718,7 +787,7 @@ class RetroArchBridge {
     // Shared word-boundary-safe hint matcher used by both _detectSystem and scanCollection
     // Check ALL path segments so games in subfolders are correctly identified
     const fullPath = folderPath.toLowerCase();
-    const segments = fullPath.split(/[\/]/).filter(Boolean);
+    const segments = fullPath.split(/[\/\\]/).filter(Boolean);  // Windows port: split on both / and \
     for (const hint of FOLDER_HINTS) {
       if (hint.hints.some(h => {
         // For short hints (3 chars or less) — exact match against ANY path segment
@@ -858,24 +927,38 @@ class RetroArchBridge {
   }
 
   writeRetroArchConfig() {
-    const cfgPath = require('path').join(require('os').homedir(), 'Library/Application Support/RetroArch/retroarch.cfg');
+    // FIX_2026-06-13_RETROARCH_WIN_PORT: Windows writes cfg next to retroarch.exe (triggers
+    // portable mode) with :-relative dirs so the tree stays relocatable.
+    const cfgPath = process.platform === 'win32'
+      ? path.join(RETROARCH_WIN_DIR, 'retroarch.cfg')
+      : require('path').join(require('os').homedir(), 'Library/Application Support/RetroArch/retroarch.cfg');
     try {
       let cfg = '';
       const fs = require('fs');
       if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
       const settings = {
+        ...(process.platform === 'win32' ? {
+          'libretro_directory': ':\\cores',
+          'system_directory': ':\\system',
+          'savefile_directory': ':\\saves',
+          'savestate_directory': ':\\states'
+        } : {}),
         'input_enable_hotkey': 'nul',
         'input_exit_emulator': 'nul',
         'auto_remaps_enable': 'true',
         'input_menu_toggle': 'nul',
         'input_menu_toggle_btn': 'nul',
         'input_menu_toggle_gamepad_combo': '0',
-        'input_quit_gamepad_combo': '0',
+        // FIX_2026-06-14_RETROARCH_SDL2_CLEAN_EXIT: sdl2 driver (works across DualShock/
+        // 8BitDo/GameSir + dongle/Bluetooth/wired) + Select+Start logical quit combo,
+        // controller-independent, single press. Proven on ATOPNUC.
+        'input_joypad_driver': 'sdl2',
+        'input_quit_gamepad_combo': '4',
+        'quit_press_twice': 'false',
         'input_pause_toggle': 'nul',
         'input_pause_toggle_btn': 'nul',
         'input_rewind': 'nul',
         'input_rewind_btn': 'nul',
-        'input_player1_select': 'nul',
         'input_exit_emulator_btn': 'nul',
         'input_hold_fast_forward_btn': 'nul',
         'ui_companion_start_on_boot': 'false',
@@ -952,10 +1035,10 @@ class RetroArchBridge {
         setTimeout(() => {
           require('child_process').exec('osascript -e \'tell application "Dolphin" to activate\' -e \'tell application "System Events" to keystroke "f" using {command down, control down}\'');
         }, 3000);
-        // Hide EasyArc window so controller focus passes to Dolphin
-        const { BrowserWindow: BW } = require('electron');
-        const wins = BW.getAllWindows();
-        if (wins.length > 0) wins[0].hide();
+        // FIX_2026-05-22_NO_MINIMIZE: don't hide EasyArc before Dolphin appears.
+        // The previous hide() caused brief desktop visibility between EasyArc
+        // disappearing and Dolphin's fullscreen window taking over. Letting
+        // Dolphin's fullscreen cover EasyArc naturally is cleaner.
         this.retroarchProcess.on('exit', () => {
           console.log('[Bridge] Dolphin exited');
           this.retroarchProcess = null;
@@ -966,6 +1049,113 @@ class RetroArchBridge {
         return { success: true };
       } catch(err) {
         return { success: false, error: err.message };
+      }
+    }
+
+    // FIX_2026-05-22_DUCKSTATION: PSX games launch via DuckStation instead of RetroArch
+    if (options.system === 'psx') {
+      console.log('[PSX-LAUNCH] Entered PSX launch branch. romPath:', options.romPath);
+      console.log('[PSX-LAUNCH] Calling writeDuckStationConfig()');
+      this.writeDuckStationConfig();
+      console.log('[PSX-LAUNCH] writeDuckStationConfig() returned');
+      console.log('[PSX-LAUNCH] Calling findDuckStation()');
+      const duckstation = await this.findDuckStation();
+      console.log('[PSX-LAUNCH] findDuckStation returned:', JSON.stringify(duckstation));
+      if (!duckstation.found) {
+        console.log('[PSX-LAUNCH] DuckStation not found — returning error');
+        return { success: false, error: 'DuckStation not found. Please install DuckStation first.' };
+      }
+      console.log('[Bridge] Launching PSX game via DuckStation:', options.romPath);
+      console.log('[PSX-LAUNCH] About to spawn:', duckstation.path, 'with args:', ['-batch', '--', options.romPath]);
+      try {
+        this.retroarchProcess = spawn(duckstation.path, ['-batch', '--', options.romPath], { detached: false, stdio: 'inherit' });
+        console.log('[PSX-LAUNCH] spawn() returned. PID:', this.retroarchProcess && this.retroarchProcess.pid);
+        this.retroarchProcess.on('error', (err) => {
+          console.log('[PSX-LAUNCH] spawn error event:', err.message);
+        });
+        this.retroarchProcess.on('spawn', () => {
+          console.log('[PSX-LAUNCH] spawn event fired — process actually started');
+        });
+        // FIX_2026-05-22_NO_MINIMIZE: don't hide EasyArc before DuckStation appears.
+        this.retroarchProcess.on('exit', () => {
+          console.log('[Bridge] DuckStation exited');
+          this.retroarchProcess = null;
+          const { BrowserWindow } = require('electron');
+          const wins = BrowserWindow.getAllWindows();
+          if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+        });
+        return { success: true };
+      } catch(err) {
+        return { success: false, error: err.message };
+      }
+    }
+
+    // FIX_2026-06-18_PSP_BRANCH: PSP games launch via standalone PPSSPP instead of
+    // RetroArch's ppsspp_libretro core. Without this branch, PSP falls through to the
+    // default RetroArch path below — causing BOTH RetroArch and PPSSPP to run when the
+    // DevTools launchPPSSPP path is also used. This branch returns, so RetroArch is
+    // never started for PSP. Also wires PSP into the UI launch flow (clicking a PSP
+    // game now uses PPSSPP). Uses the separate PPSSPPBridge (its own file).
+    if (options.system === 'psp') {
+      console.log('[Bridge] Launching PSP game via PPSSPP:', options.romPath);
+      try {
+        const PPSSPPBridge = require('./PPSSPPBridge');
+        const ppssppBridge = new PPSSPPBridge();
+        const result = await ppssppBridge.launchPPSSPP(options.romPath);
+
+        // FIX_2026-06-19_PSP_LIFECYCLE: explicit game-running lifecycle.
+        // The renderer's gamepad nav loop is hard-disabled while a game runs (via the
+        // 'game-started' / 'game-exited' IPC events below), instead of relying on
+        // window focus/minimize (which proved nondeterministic). This is the single
+        // source of truth: main process knows the process state; renderer obeys it.
+        // No minimize, no focus juggling — the nav loop is simply OFF during gameplay.
+        const sendToRenderer = (channel) => {
+          try {
+            const { BrowserWindow } = require('electron');
+            for (const w of BrowserWindow.getAllWindows()) {
+              if (!w.isDestroyed()) w.webContents.send(channel);
+            }
+          } catch (e) { console.log('[Bridge] sendToRenderer ' + channel + ' failed:', e.message); }
+        };
+
+        if (result && result.success && result.proc) {
+          // Register in the process guard so duplicate launches are blocked.
+          this.retroarchProcess = result.proc;
+
+          // Tell the renderer a game is now running -> it disables nav + launch.
+          sendToRenderer('game-started');
+
+          // Bulletproof exit: fire 'game-exited' on EVERY terminal outcome so the
+          // renderer can NEVER stay frozen. 'exit' covers normal close, self-quit,
+          // user-closes-window, and kill; 'error' covers spawn-side failures. We guard
+          // with a 'settled' flag so the renderer is re-enabled exactly once.
+          let settled = false;
+          const finish = (why) => {
+            if (settled) return;
+            settled = true;
+            console.log('[Bridge] PPSSPP ended (' + why + ') — re-enabling EasyArc nav');
+            this.retroarchProcess = null;
+            sendToRenderer('game-exited');
+          };
+          this.retroarchProcess.on('exit',  () => finish('exit'));
+          this.retroarchProcess.on('close', () => finish('close'));
+          this.retroarchProcess.on('error', (e) => { console.log('[Bridge] PPSSPP proc error:', e.message); finish('error'); });
+        } else {
+          // Launch failed before a process existed — make sure the renderer is NOT
+          // left disabled (we never sent game-started, but be defensive anyway).
+          sendToRenderer('game-exited');
+        }
+        return result;
+      } catch (err) {
+        console.log('[Bridge] PSP launch error:', err.message);
+        // On any thrown error, ensure the renderer is re-enabled.
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) w.webContents.send('game-exited');
+          }
+        } catch (e) {}
+        return { success: false, error: 'PPSSPP launch failed: ' + err.message };
       }
     }
 
@@ -990,8 +1180,9 @@ class RetroArchBridge {
     }
 
     // Find the core for this system
-    const coreFile = SYSTEM_CORES[options.system];
+    let coreFile = SYSTEM_CORES[options.system];
     if (!coreFile) return { success: false, error: 'No core mapped for system: ' + options.system };
+    if (process.platform === 'win32') coreFile = coreFile.replace(/\.dylib$/, '.dll');
 
     const corePath = path.join(CORES_PATH, coreFile);
     if (!fs.existsSync(corePath)) {
@@ -1150,6 +1341,449 @@ Device = Quartz/0/Keyboard & Mouse`;
     }
   }
 
+  // FIX_2026-05-22_DUCKSTATION_INSTALL: returns the directory where EasyArc keeps
+  // its own copy of DuckStation. Sandboxed to EasyArc's app-data folder so no admin
+  // is needed and we have full control over the install.
+  getEasyArcDuckStationDir() {
+    return process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Application Support', 'easyarc', 'duckstation')
+      : path.join(process.env.APPDATA || os.homedir(), 'easyarc', 'duckstation');
+  }
+
+  // FIX_2026-05-28_DUCKSTATION_PORTABLE: detect Windows architecture so we pick the
+  // correct ARM64 vs x64 build automatically. Returns 'arm64' or 'x64'.
+  _getDuckStationArch() {
+    return process.arch === 'arm64' ? 'arm64' : 'x64';
+  }
+
+  // FIX_2026-05-28_DUCKSTATION_PORTABLE: single source of truth for the portable
+  // subfolder under our managed dir. On Windows, every install/find/config path
+  // derives from this so they cannot disagree. On Mac/Linux, returns the base dir
+  // unchanged (no change in current Mac behavior).
+  getEasyArcDuckStationSubdir() {
+    const baseDir = this.getEasyArcDuckStationDir();
+    if (process.platform === 'win32') {
+      return path.join(baseDir, `duckstation-${this._getDuckStationArch()}`);
+    }
+    return baseDir;
+  }
+
+  // Returns the path to the actual DuckStation executable inside our install dir.
+  // FIX_2026-05-28_DUCKSTATION_PORTABLE: on Windows, scan the portable subfolder
+  // for duckstation-qt-*.exe rather than hardcoding the x64 name — this works for
+  // both ARM64 and x64 builds regardless of the exact exe suffix.
+  getEasyArcDuckStationBinary() {
+    const baseDir = this.getEasyArcDuckStationDir();
+    if (process.platform === 'darwin') {
+      return path.join(baseDir, 'DuckStation.app', 'Contents', 'MacOS', 'DuckStation');
+    } else if (process.platform === 'win32') {
+      const subdir = this.getEasyArcDuckStationSubdir();
+      // Return a deterministic default path if nothing's installed yet, so callers
+      // doing fs.existsSync() get a clean "not installed" answer instead of crashing.
+      const defaultPath = path.join(subdir, `duckstation-qt-${this._getDuckStationArch()}-ReleaseLTCG.exe`);
+      if (!fs.existsSync(subdir)) return defaultPath;
+      try {
+        const entries = fs.readdirSync(subdir);
+        const match = entries.find(name =>
+          name.toLowerCase().startsWith('duckstation-qt-') &&
+          name.toLowerCase().endsWith('.exe')
+        );
+        return match ? path.join(subdir, match) : defaultPath;
+      } catch (e) {
+        return defaultPath;
+      }
+    } else {
+      return path.join(baseDir, 'duckstation-qt');
+    }
+  }
+
+  // FIX_2026-05-22_DUCKSTATION_INSTALL: download DuckStation from GitHub release.
+  // Returns path to downloaded archive. progressCallback(received, total) for UI.
+  // Pinned version — bump periodically as part of EasyArc maintenance.
+  async downloadDuckStation(progressCallback) {
+    const VERSION = 'latest';  // DuckStation uses a rolling 'latest' tag, not version tags
+    // FIX_2026-05-28_DUCKSTATION_PORTABLE: pick the arch-correct Windows archive
+    // (arm64 vs x64) so EasyArc works on Parallels/Snapdragon ARM64 as well as x64.
+    const filename = process.platform === 'darwin'
+      ? 'duckstation-mac-release.zip'
+      : process.platform === 'win32'
+        ? `duckstation-windows-${this._getDuckStationArch()}-release.zip`
+        : 'DuckStation-x64.AppImage';
+    const url = `https://github.com/stenzek/duckstation/releases/download/${VERSION}/${filename}`;
+    const downloadDir = this.getEasyArcDuckStationDir();
+    try { fs.mkdirSync(downloadDir, { recursive: true }); } catch(e) {}
+    const downloadPath = path.join(downloadDir, filename);
+    console.log('[Bridge] Downloading DuckStation from', url);
+    return new Promise((resolve, reject) => {
+      const fetchUrl = (urlToFetch) => {
+        https.get(urlToFetch, (response) => {
+          // GitHub redirects releases to a CDN URL
+          if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            fetchUrl(response.headers.location);
+            return;
+          }
+          if (response.statusCode !== 200) {
+            reject(new Error(`Download failed: HTTP ${response.statusCode}`));
+            return;
+          }
+          const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+          let bytesReceived = 0;
+          const fileStream = fs.createWriteStream(downloadPath);
+          response.on('data', (chunk) => {
+            bytesReceived += chunk.length;
+            if (progressCallback) progressCallback(bytesReceived, totalBytes);
+          });
+          response.pipe(fileStream);
+          fileStream.on('finish', () => {
+            fileStream.close();
+            console.log('[Bridge] DuckStation downloaded to', downloadPath);
+            resolve(downloadPath);
+          });
+          fileStream.on('error', (err) => reject(err));
+        }).on('error', (err) => reject(err));
+      };
+      fetchUrl(url);
+    });
+  }
+
+  // FIX_2026-05-22_DUCKSTATION_INSTALL: extract the downloaded DuckStation archive
+  // into our install directory. Uses unzip on Mac/Linux, Expand-Archive on Windows.
+  async installDuckStation(archivePath) {
+    // FIX_2026-05-28_DUCKSTATION_PORTABLE: on Windows, extract into the arch-named
+    // portable subfolder (the DuckStation zip has no root folder, so a flat extract
+    // would scatter files). On Mac/Linux, extract flat into the base dir as before.
+    const installDir = process.platform === 'win32'
+      ? this.getEasyArcDuckStationSubdir()
+      : this.getEasyArcDuckStationDir();
+    try { fs.mkdirSync(installDir, { recursive: true }); } catch(e) {}
+    console.log('[Bridge] Extracting DuckStation to', installDir);
+    return new Promise((resolve, reject) => {
+      let cmd, args;
+      if (process.platform === 'darwin' || process.platform === 'linux') {
+        cmd = 'unzip';
+        args = ['-o', archivePath, '-d', installDir];
+      } else if (process.platform === 'win32') {
+        cmd = 'powershell.exe';
+        args = ['-Command', `Expand-Archive -Path "${archivePath}" -DestinationPath "${installDir}" -Force`];
+      } else {
+        reject(new Error('Unsupported platform'));
+        return;
+      }
+      const proc = spawn(cmd, args, { stdio: 'ignore' });
+      proc.on('exit', (code) => {
+        if (code === 0) {
+          const binary = this.getEasyArcDuckStationBinary();
+          if (fs.existsSync(binary)) {
+            if (process.platform === 'darwin') {
+              try { fs.chmodSync(binary, 0o755); } catch(e) {}
+            }
+            // FIX_2026-05-28_DUCKSTATION_PORTABLE: write portable.txt next to the exe
+            // so DuckStation keeps all user data (settings.ini, BIOS, memcards, etc.)
+            // inside the EasyArc-managed folder, not in Documents (which OneDrive may
+            // redirect). Windows-only — no-op on Mac/Linux.
+            if (process.platform === 'win32') {
+              try {
+                const portableMarker = path.join(path.dirname(binary), 'portable.txt');
+                if (!fs.existsSync(portableMarker)) {
+                  fs.writeFileSync(portableMarker, '');
+                  console.log('[Bridge] Created DuckStation portable.txt at:', portableMarker);
+                }
+              } catch (e) {
+                console.log('[Bridge] Failed to create DuckStation portable.txt:', e.message);
+              }
+            }
+            try { fs.unlinkSync(archivePath); } catch(e) {}
+            console.log('[Bridge] DuckStation installed successfully');
+            resolve({ success: true, binary });
+          } else {
+            reject(new Error(`Extraction completed but binary not found at: ${binary}`));
+          }
+        } else {
+          reject(new Error(`Extraction failed with exit code ${code}`));
+        }
+      });
+      proc.on('error', (err) => reject(err));
+    });
+  }
+
+  // FIX_2026-06-06_DUCKSTATION_BIOS_COPY: copy PS1 BIOS files from a user-specified
+  // directory into DuckStation's portable bios/ subfolder. Replaces the previous
+  // approach of writing [BIOS] SearchDirectory to settings.ini (which was writing to
+  // the wrong settings.ini path on Windows). With files at DuckStation's default
+  // location, DuckStation finds them naturally with no path configuration needed.
+  // Also protects user's original BIOS files from accidental modification/deletion.
+  copyPSXBiosToPortable(sourceDir) {
+    const biosPatterns = [
+      /^scph1001\.bin$/i,
+      /^scph7001\.bin$/i,
+      /^scph7003\.bin$/i,
+      /^scph5500\.bin$/i,
+      /^scph5501\.bin$/i,
+      /^scph5502\.bin$/i,
+      /^scph7502\.bin$/i,
+      /^ps-30[aej]\.bin$/i,
+    ];
+    let targetDir;
+    if (process.platform === 'win32') {
+      targetDir = path.join(this.getEasyArcDuckStationSubdir(), 'bios');
+    } else if (process.platform === 'darwin') {
+      targetDir = path.join(os.homedir(), 'Library', 'Application Support', 'DuckStation', 'bios');
+    } else {
+      targetDir = path.join(process.env.APPDATA || os.homedir(), 'DuckStation', 'bios');
+    }
+    console.log('[BIOS-COPY] Source:', sourceDir);
+    console.log('[BIOS-COPY] Target:', targetDir);
+    try {
+      fs.mkdirSync(targetDir, { recursive: true });
+    } catch(e) {
+      console.error('[BIOS-COPY] Failed to create target directory:', e.message);
+      return { success: false, error: 'Could not create target directory: ' + e.message, copied: 0 };
+    }
+    let copiedCount = 0;
+    const copiedFiles = [];
+    try {
+      const files = fs.readdirSync(sourceDir);
+      console.log('[BIOS-COPY] Found', files.length, 'files in source');
+      for (const filename of files) {
+        for (const pattern of biosPatterns) {
+          if (pattern.test(filename)) {
+            const sourcePath = path.join(sourceDir, filename);
+            const targetPath = path.join(targetDir, filename);
+            try {
+              const stats = fs.statSync(sourcePath);
+              if (stats.size >= 256 * 1024) {
+                fs.copyFileSync(sourcePath, targetPath);
+                copiedCount++;
+                copiedFiles.push(filename);
+                console.log('[BIOS-COPY] Copied', filename, '(' + stats.size + ' bytes)');
+              } else {
+                console.log('[BIOS-COPY] Skipped', filename, '— too small');
+              }
+            } catch(e) {
+              console.log('[BIOS-COPY] Failed to copy', filename, ':', e.message);
+            }
+          }
+        }
+      }
+    } catch(e) {
+      console.error('[BIOS-COPY] Failed to read source directory:', e.message);
+      return { success: false, error: 'Could not read source directory: ' + e.message, copied: copiedCount };
+    }
+    if (copiedCount === 0) {
+      return { success: false, error: 'No valid BIOS files found in source directory', copied: 0 };
+    }
+    console.log('[BIOS-COPY] Successfully copied', copiedCount, 'BIOS files');
+    return { success: true, copied: copiedCount, files: copiedFiles, targetDir };
+  }
+
+  // FIX_2026-05-22_DUCKSTATION_INSTALL: scan common locations for PS1 BIOS files.
+  // Returns first directory found with a valid BIOS file, or null if none.
+  // Validates by canonical filename pattern and file size (>= 256KB).
+  async scanForPSXBios() {
+    const biosPatterns = [
+      /^scph1001\.bin$/i,
+      /^scph7001\.bin$/i,
+      /^scph7003\.bin$/i,
+      /^scph5500\.bin$/i,
+      /^scph5501\.bin$/i,
+      /^scph5502\.bin$/i,
+      /^scph7502\.bin$/i,
+      /^ps-30[aej]\.bin$/i,
+    ];
+    const home = os.homedir();
+    const candidates = [
+      path.join(home, 'Downloads'),
+      path.join(home, 'Documents'),
+      home,
+      path.join(home, 'Desktop'),
+    ];
+    if (process.platform === 'darwin') {
+      candidates.unshift(path.join(home, 'Library', 'Application Support', 'DuckStation', 'bios'));
+    } else if (process.platform === 'win32') {
+      // FIX_2026-06-06_SCAN_PSX_BIOS_PATH: check EasyArc's portable DuckStation bios folder,
+      // not the non-portable %APPDATA%\DuckStation\bios path. After copyPSXBiosToPortable
+      // copies files into the portable location, this scan needs to find them there so the
+      // user isn't prompted to browse for BIOS files on every game launch.
+      candidates.unshift(path.join(this.getEasyArcDuckStationSubdir(), 'bios'));
+    }
+    console.log('[BIOS-SCAN] Starting scan. Platform:', process.platform);
+    console.log('[BIOS-SCAN] Home dir:', os.homedir());
+    console.log('[BIOS-SCAN] Candidates to check:', candidates);
+    for (const dir of candidates) {
+      const exists = fs.existsSync(dir);
+      console.log('[BIOS-SCAN] Checking', dir, '— exists:', exists);
+      if (!exists) continue;
+      try {
+        const files = fs.readdirSync(dir);
+        console.log('[BIOS-SCAN]   Found', files.length, 'files in', dir);
+        for (const filename of files) {
+          for (const pattern of biosPatterns) {
+            if (pattern.test(filename)) {
+              const fullPath = path.join(dir, filename);
+              console.log('[BIOS-SCAN]   Pattern match:', filename, 'in', dir);
+              try {
+                const stats = fs.statSync(fullPath);
+                console.log('[BIOS-SCAN]   Size:', stats.size, 'bytes (need >=', 256 * 1024, ')');
+                if (stats.size >= 256 * 1024) {
+                  console.log('[BIOS-SCAN] PSX BIOS found:', fullPath);
+                  return { found: true, directory: dir, sample: filename };
+                }
+              } catch(e) {
+                console.log('[BIOS-SCAN]   statSync error:', e.message);
+              }
+            }
+          }
+        }
+      } catch(e) {
+        console.error('[BIOS-SCAN] Error scanning', dir, e.message);
+      }
+    }
+    console.log('[BIOS-SCAN] No PSX BIOS found in any candidate directory');
+    return { found: false, directory: null };
+  }
+
+  writeDuckStationConfig() {
+    // FIX_2026-05-22_DUCKSTATION: enforce EasyArc-required settings in DuckStation's
+    // settings.ini so the user experience is consistent across platforms and they
+    // never have to touch DuckStation's own UI. Section-aware INI edit modeled on
+    // writeDolphinConfig pattern. Settings enforced:
+    // - ConfirmPowerOff = false (no exit-confirm dialog, Cmd+Q just quits)
+    // - StartFullscreen = true (game opens fullscreen immediately)
+    // - HideCursorInFullscreen = true (mouse cursor hidden during gameplay)
+    // - HideMainWindowWhenRunning = true (DuckStation UI not visible alongside game)
+    // - SaveStateOnExit = true (state preserved when user quits — for resume next launch)
+    // FIX_2026-05-28_DUCKSTATION_PORTABLE: on Windows, write settings.ini into the
+    // portable subfolder so DuckStation (running in portable mode) actually reads it.
+    // Previously this wrote to %APPDATA%\\DuckStation\\settings.ini, which a portable
+    // DuckStation would IGNORE — silent config failure. Mac path unchanged.
+    const cfgPath = process.platform === 'darwin'
+      ? require('path').join(require('os').homedir(), 'Library/Application Support/DuckStation/settings.ini')
+      : process.platform === 'win32'
+        ? require('path').join(this.getEasyArcDuckStationSubdir(), 'settings.ini')
+        : require('path').join(process.env.APPDATA || require('os').homedir(), 'DuckStation/settings.ini');
+    try {
+      const fs = require('fs');
+      // FIX_2026-05-23_MKDIR_BRIDGE: ensure DuckStation's AppData folder exists before
+      // writing settings.ini. On first launch the directory may not exist yet, causing
+      // ENOENT and silent config failure. Use recursive: true so it's a no-op if present.
+      fs.mkdirSync(require('path').dirname(cfgPath), { recursive: true });
+      const sectionSettings = {
+        'Main': {
+          'ConfirmPowerOff': 'false',
+          'StartFullscreen': 'true',
+          'HideCursorInFullscreen': 'true',
+          'HideMainWindowWhenRunning': 'true',
+          'SaveStateOnExit': 'true',
+          // FIX_2026-05-28_DUCKSTATION_WIZARD_SUPPRESS: tell DuckStation the first-run
+          // wizard is already complete so it never appears on a fresh portable install.
+          'SetupWizardIncomplete': 'false',
+        },
+        // FIX_2026-06-06_DUCKSTATION_PAD_BINDINGS: write [Pad1] and [Pad2] sections so
+        // controllers work without user having to map them through DuckStation's own UI.
+        // Binding strings captured from working DuckStation config on x64 Windows.
+        // Same template works for DualShock and XInput families (SDL2 normalizes both to
+        // standard A/B/X/Y naming internally regardless of UI display). Pad2 written
+        // unconditionally so two-player works automatically when second controller plugged in.
+        'Pad1': {
+          'Analog': 'SDL-0/Guide',
+          'Circle': 'SDL-0/B',
+          'Cross': 'SDL-0/A',
+          'Down': 'SDL-0/DPadDown',
+          'L1': 'SDL-0/LeftShoulder',
+          'L2': 'SDL-0/+LeftTrigger',
+          'L3': 'SDL-0/LeftStick',
+          'LDown': 'SDL-0/+LeftY',
+          'LLeft': 'SDL-0/-LeftX',
+          'LRight': 'SDL-0/+LeftX',
+          'LUp': 'SDL-0/-LeftY',
+          'LargeMotor': 'SDL-0/LargeMotor',
+          'Left': 'SDL-0/DPadLeft',
+          'R1': 'SDL-0/RightShoulder',
+          'R2': 'SDL-0/+RightTrigger',
+          'R3': 'SDL-0/RightStick',
+          'RDown': 'SDL-0/+RightY',
+          'RLeft': 'SDL-0/-RightX',
+          'RRight': 'SDL-0/+RightX',
+          'RUp': 'SDL-0/-RightY',
+          'Right': 'SDL-0/DPadRight',
+          'Select': 'SDL-0/Back',
+          'SmallMotor': 'SDL-0/SmallMotor',
+          'Square': 'SDL-0/X',
+          'Start': 'SDL-0/Start',
+          'Triangle': 'SDL-0/Y',
+          'Type': 'AnalogController',
+          'Up': 'SDL-0/DPadUp',
+        },
+        'Pad2': {
+          'Analog': 'SDL-1/Guide',
+          'Circle': 'SDL-1/B',
+          'Cross': 'SDL-1/A',
+          'Down': 'SDL-1/DPadDown',
+          'L1': 'SDL-1/LeftShoulder',
+          'L2': 'SDL-1/+LeftTrigger',
+          'L3': 'SDL-1/LeftStick',
+          'LDown': 'SDL-1/+LeftY',
+          'LLeft': 'SDL-1/-LeftX',
+          'LRight': 'SDL-1/+LeftX',
+          'LUp': 'SDL-1/-LeftY',
+          'LargeMotor': 'SDL-1/LargeMotor',
+          'Left': 'SDL-1/DPadLeft',
+          'R1': 'SDL-1/RightShoulder',
+          'R2': 'SDL-1/+RightTrigger',
+          'R3': 'SDL-1/RightStick',
+          'RDown': 'SDL-1/+RightY',
+          'RLeft': 'SDL-1/-RightX',
+          'RRight': 'SDL-1/+RightX',
+          'RUp': 'SDL-1/-RightY',
+          'Right': 'SDL-1/DPadRight',
+          'Select': 'SDL-1/Back',
+          'SmallMotor': 'SDL-1/SmallMotor',
+          'Square': 'SDL-1/X',
+          'Start': 'SDL-1/Start',
+          'Triangle': 'SDL-1/Y',
+          'Type': 'AnalogController',
+          'Up': 'SDL-1/DPadUp',
+        },
+        // FIX_2026-06-09_DUCKSTATION_EXIT_HOTKEY: bind controller Select+Start to
+        // DuckStation's Power Off hotkey so couch/TV users can cleanly exit a PSX
+        // game without a keyboard. Combined with -batch (set at launch) and
+        // ConfirmPowerOff=false (set above), this quits DuckStation entirely and
+        // returns to EasyArc. String captured verbatim from DuckStation's own
+        // settings.ini after binding through its UI. SDL naming works identically
+        // on Mac and Windows (DuckStation uses the SDL input backend on both).
+        // Keyboard defaults (OpenPauseMenu=Escape etc.) are preserved by the
+        // section-aware merge below, so a keyboard fallback always remains.
+        'Hotkeys': {
+          'PowerOff': 'SDL-0/Back & SDL-0/Start',
+        }
+      };
+      let cfg = '';
+      if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
+      for (const [section, settings] of Object.entries(sectionSettings)) {
+        const sectionHeader = '[' + section + ']';
+        if (!cfg.includes(sectionHeader)) cfg += '\n' + sectionHeader + '\n';
+        for (const [key, val] of Object.entries(settings)) {
+          const line = key + ' = ' + val;
+          const regex = new RegExp('^' + key + '\\s*=.*$', 'm');
+          const sectionIdx = cfg.indexOf(sectionHeader);
+          const nextSectionIdx = cfg.indexOf('\n[', sectionIdx + 1);
+          const sectionBlock = nextSectionIdx === -1 ? cfg.slice(sectionIdx) : cfg.slice(sectionIdx, nextSectionIdx);
+          if (regex.test(sectionBlock)) {
+            const updatedBlock = sectionBlock.replace(regex, line);
+            cfg = nextSectionIdx === -1 ? cfg.slice(0, sectionIdx) + updatedBlock : cfg.slice(0, sectionIdx) + updatedBlock + cfg.slice(nextSectionIdx);
+          } else {
+            const insertAt = nextSectionIdx === -1 ? cfg.length : nextSectionIdx;
+            cfg = cfg.slice(0, insertAt) + '\n' + line + cfg.slice(insertAt);
+          }
+        }
+      }
+      fs.writeFileSync(cfgPath, cfg);
+      console.log('[Bridge] Wrote DuckStation config with EasyArc-required settings');
+    } catch(e) {
+      console.error('[Bridge] Failed to write DuckStation config:', e.message);
+    }
+  }
+
   writeWiiConfig(controllerName, controllerType) {
     const dolphinConfigDir = path.join(os.homedir(), 'Library/Application Support/Dolphin/Config');
     try { require('fs').mkdirSync(dolphinConfigDir, { recursive: true }); } catch(e) {}
@@ -1259,7 +1893,7 @@ Source = 0`;
 
 
   getArtworkCacheDir() {
-    const dir = require('path').join(require('os').homedir(), 'Library/Application Support/EasyArc/artwork');
+    const dir = this._getDefaultArtworkDir();
     try { require('fs').mkdirSync(dir, { recursive: true }); } catch(e) {}
     return dir;
   }

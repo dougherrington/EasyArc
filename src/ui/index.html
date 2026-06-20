@@ -113,7 +113,6 @@ body::after {
 }
 .test-plan-btn:hover { background:#ffdd00; box-shadow:0 0 28px rgba(255,220,0,0.8); transform:translateY(-1px); }
 .test-plan-btn[style*="cyan"] { background:#ffdd00; box-shadow:0 0 32px rgba(255,255,255,0.9), 0 0 16px rgba(255,220,0,1); transform:translateY(-2px) scale(1.05); outline: 3px solid #fff !important; }
-.sys-btn.gp-nav-active { opacity:0.4; }
 .status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 .status-text { font-size:11px; color:var(--green); letter-spacing:1px; text-transform:uppercase; font-family:'Rajdhani',sans-serif; }
@@ -164,6 +163,7 @@ body::after {
   overflow-y:auto;
   animation:slideInLeft 0.5s cubic-bezier(0.22,1,0.36,1) both;
   padding-right:2px;
+  cursor:none; /* FIX_2026-05-19_MOUSE_OFF: strict mouse-off in browsing area */
 }
 @keyframes slideInLeft { from{opacity:0;transform:rotateY(13deg) translateZ(-18px) translateX(-24px)} to{opacity:1;transform:rotateY(13deg) translateZ(-18px) translateX(0)} }
 .sidebar::-webkit-scrollbar { width:3px; }
@@ -181,8 +181,8 @@ body::after {
   display:flex; align-items:center; gap:10px; width:100%;
   background:linear-gradient(135deg,rgba(0,240,255,0.055) 0%,rgba(0,144,255,0.018) 100%);
   border:1px solid rgba(0,240,255,0.2); border-radius:8px;
-  color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600;
-  padding:9px 12px; cursor:pointer; text-align:left; transition:all 0.16s;
+  color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:16px; font-weight:600;
+  padding:10px 12px; cursor:pointer; text-align:left; transition:all 0.16s;
   position:relative; overflow:hidden;
   box-shadow:0 0 8px rgba(0,240,255,0.07), inset 0 0 5px rgba(0,240,255,0.03);
 }
@@ -223,7 +223,7 @@ body::after {
   background: rgba(255,68,68,0.15);
 }
 .system-count {
-  margin-left:auto; font-size:10px; color:var(--muted);
+  margin-left:auto; font-size:12px; color:var(--muted);
   background:var(--bg3); padding:1px 6px; border-radius:8px;
   font-family:'Orbitron',monospace;
 }
@@ -289,6 +289,7 @@ body::after {
 /* Game grid */
 .game-grid-wrap {
   flex:1; overflow-y:auto; padding-right:4px;
+  cursor:none; /* FIX_2026-05-19_MOUSE_OFF: strict mouse-off in browsing area */
 }
 .game-grid-wrap::-webkit-scrollbar { width:3px; }
 .game-grid-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
@@ -305,7 +306,7 @@ body::after {
 #vs-sentinel { position:relative; width:100%; }
 #vs-card-window {
   position:absolute; top:0; left:0; width:100%; will-change:transform;
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px;
+  display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
 }
 /* Disable the cardIn entrance animation for cards inside the virtual scroller.
    The animation replays on every scroll-triggered rebind, causing a compounded
@@ -374,10 +375,19 @@ body::after {
   height:100%;
   animation:slideInRight 0.5s cubic-bezier(0.22,1,0.36,1) 0.04s both;
   flex-shrink:0;
+  cursor:none; /* FIX_2026-05-19_MOUSE_OFF: strict mouse-off in browsing area */
 }
 @keyframes slideInRight { from{opacity:0;transform:rotateY(-13deg) translateZ(-18px) translateX(24px)} to{opacity:1;transform:rotateY(-13deg) translateZ(-18px) translateX(0)} }
 
 .detail-panel.hidden { display:none; }
+
+/* FIX_2026-05-19_MOUSE_OFF (Patch 2 of 3): force cursor:none on all
+   descendants of the three browsing containers. The container-level rules
+   weren't enough because child buttons/cards/tabs set cursor:pointer with
+   higher specificity. !important here overrides all those pointer rules. */
+.sidebar, .sidebar *,
+.game-grid-wrap, .game-grid-wrap *,
+.detail-panel, .detail-panel * { cursor: none !important; }
 
 .detail-card {
   background:linear-gradient(145deg,rgba(4,14,34,0.96),rgba(2,8,20,0.98));
@@ -792,7 +802,7 @@ body::after {
           <div class="detail-system" id="detailSystem"></div>
           <div class="detail-title" id="detailTitle"></div>
           <div class="detail-meta" id="detailMeta"></div>
-          <button class="launch-btn" style="margin-top:auto" onclick="ctestMaybeLaunch(selectedGame)">&#9654; LAUNCH GAME</button>
+          <button class="launch-btn" style="margin-top:auto">&#9654; LAUNCH GAME</button>
         </div>
       </div>
     </div>
@@ -1003,7 +1013,7 @@ async function loadArtworkCache() {
     const exists = await window.easyarc.artworkExists(g);
     if (exists) {
       const p = await window.easyarc.getArtworkPath(g);
-      if (p) artworkCache[g.path] = encodeURI('file://' + p);
+      if (p) artworkCache[g.path] = encodeURI(pathToFileUrl(p));
       const meta = await window.easyarc.getMetadata(g);
       if (meta) metadataCache[g.path] = meta;
     }
@@ -1019,10 +1029,30 @@ if (localStorage.getItem('easyarc_build_version') !== _buildVersion) {
 }
 
 let games = [];
+// Helper: convert an absolute file path to a valid file:// URL.
+// Handles both Mac (/Users/...) and Windows (C:\\Users\\...) paths correctly.
+function pathToFileUrl(p) {
+  if (!p) return '';
+  // Replace backslashes with forward slashes (Windows -> URL format)
+  let normalized = p.replace(/\\/g, '/');
+  // Ensure exactly 3 slashes after 'file:'
+  // Mac: /Users/... -> file:///Users/...
+  // Windows: C:/Users/... -> file:///C:/Users/...
+  if (normalized.startsWith('/')) {
+    return 'file://' + normalized;
+  } else {
+    return 'file:///' + normalized;
+  }
+}
+
 let artworkCache = {}; // game.path -> file:// URL
 let metadataCache = {}; // game.path -> metadata object
-const _initRecent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
-let currentSystem = _initRecent.length > 0 ? 'recent' : 'all';
+// REMOVED 2026-05-16: Default-to-Recently-Played at boot was a pre-VS
+// performance workaround. VS solved that problem; this default became
+// vestigial and was the actual mechanism producing VS-init timing bugs.
+// (Earlier patches also commented out redundant assignments in the
+// splash-removal sequence.) currentSystem now always boots to 'all'.
+let currentSystem = 'all';
 let currentSearch = '';
 let selectedGame  = null;
 
@@ -1097,7 +1127,8 @@ async function checkEmulatorsOnStartup() {
   const currentState = JSON.stringify({ ra: ra.found, dolphin: dolphin.found });
   const lastState = localStorage.getItem('easyarc_emulator_state');
   // Always show on first run, if RetroArch is missing, or if state has changed
-  if (!lastState || !ra.found || currentState !== lastState) {
+  // FIX_2026-06-08_STARTUP_GATE_NO_EMULATOR_BLOCK: emulator presence is no longer a startup gate (on-demand install handles it)
+  if (!lastState) {
     showEmulatorCheck(ra, dolphin, currentState);
   } else {
     ctrlShowStartupModal();
@@ -1401,8 +1432,8 @@ function vsRenderCards(slice, startIndex, startRow) {
     card.dataset.vsIndex = String(dataIndex);
     card.dataset.gameId = String(g.id);
     card.style.animationDelay = (i * 20) + 'ms';
-    card.onclick = (function(gid) { return function() { selectGame(gid); }; })(g.id);
-    card.onmouseenter = (function(gid) { return function() { selectGame(gid); }; })(g.id);
+    // FIX_2026-05-19_MOUSE_OFF: card mouse handlers removed. Cards are
+    // controller-only. Mouse selection in browsing has been retired.
     card.innerHTML =
       cardArtHtml(g) +
       '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
@@ -1524,17 +1555,48 @@ function vsOnResize() {
 // --- INITIALIZATION ---
 // Must be called AFTER the VS DOM structure exists and AFTER the CSS that
 // defines .game-card dimensions has loaded. Phase 2 Step 3 will wire this.
+const VS_INIT_MAX_ATTEMPTS = 10;
+let vsInitAttempts = 0;
+
 function vsInit() {
+  if (vsInitialized) return true;
+
   const container = document.getElementById('vs-container');
   if (!container) {
     console.warn('vsInit: #vs-container not found — VS DOM not yet in place');
     return false;
   }
+
+  const cols = vsMeasureColumnCount();
+  console.log('[DIAG vsInit] measured cols =', cols, 'window.innerWidth =', window.innerWidth, 'attempt =', vsInitAttempts);
+  const isDegenerate = !cols || cols <= 1;
+
+  if (isDegenerate) {
+    if (vsInitAttempts < VS_INIT_MAX_ATTEMPTS) {
+      vsInitAttempts++;
+      requestAnimationFrame(vsInit);
+      return false;
+    } else {
+      console.warn('vsInit: failed to get valid column count after ' + VS_INIT_MAX_ATTEMPTS + ' attempts; using fallback of 1');
+      vsInitAttempts = 0;
+      VS_COLUMN_COUNT = 1;
+      VS_CARD_HEIGHT = vsMeasureCardHeight();
+      vsContainerHeight = container.clientHeight;
+      vsVisibleRows = Math.ceil(vsContainerHeight / VS_CARD_HEIGHT);
+      vsInitialized = true;
+      return true;
+    }
+  }
+
+  // Layout is ready — measure everything together.
+  vsInitAttempts = 0;
+  VS_COLUMN_COUNT = cols;
   VS_CARD_HEIGHT = vsMeasureCardHeight();
-  VS_COLUMN_COUNT = vsMeasureColumnCount();
   vsContainerHeight = container.clientHeight;
   vsVisibleRows = Math.ceil(vsContainerHeight / VS_CARD_HEIGHT);
+  console.log('[COLDSTART-DIAG] cols=' + cols + ' cardHeight=' + VS_CARD_HEIGHT + ' containerHeight=' + vsContainerHeight + ' visibleRows=' + vsVisibleRows);
   vsInitialized = true;
+  console.log('[DIAG vsInit] LOCKED IN: VS_COLUMN_COUNT =', VS_COLUMN_COUNT, 'cardHeight =', VS_CARD_HEIGHT, 'visibleRows =', vsVisibleRows);
   return true;
 }
 
@@ -1603,7 +1665,7 @@ function renderGrid() {
     grid.innerHTML = '<div id="vs-container"><div id="vs-sentinel"><div id="vs-card-window"></div></div></div>';
     vsContainerEl = document.getElementById('vs-container');
     vsContainerEl.addEventListener('scroll', vsOnScroll);
-    vsInit();
+    requestAnimationFrame(vsInit);
   }
   // FIX_B_RESET_SCROLL: pass true so system switches/search/etc. reset to top.
   vsSetFilteredList(filtered, true);
@@ -1664,23 +1726,12 @@ function updateCounts() {
     count.className = 'system-count';
     count.textContent = populated[sys];
 
-    const removeBtn = document.createElement('span');
-    removeBtn.className = 'system-remove';
-    removeBtn.title = 'Remove console from library. Your game files will not be deleted.';
-    removeBtn.textContent = '×';
-    removeBtn.onclick = function(e) {
-      e.stopPropagation();
-      removeSystem(sys);
-    };
-
+    // FIX_2026-05-19_MOUSE_OFF: dead removeBtn (×) code removed. Removal is
+    // handled exclusively via the Remove Games toolbar action. Sidebar tab
+    // onclick also removed — strict mouse-off in browsing.
     btn.appendChild(icon);
     btn.appendChild(label);
     btn.appendChild(count);
-    btn.appendChild(removeBtn);
-    btn.onclick = function(e) {
-      if (e.target === removeBtn) return;
-      filterSystem(sys, this);
-    };
 
     systemList.appendChild(btn);
   });
@@ -1786,45 +1837,71 @@ function isFavorite(game) {
 }
 
 function filterFavorites(btn) {
+  // FIX_2026-05-19_CTRL_PATH (Patch 1/3): route through the VS pipeline so
+  // vsFilteredList matches the visible grid.
   currentSystem = 'favorites';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
+  buildGamesIndex();
+  reconcileFavoritesAndRecent();
+  const gamesByPath = new Map();
+  for (const g of games) gamesByPath.set(g.path, g);
   const favs = getFavorites();
-  const grid = document.getElementById('gameGrid');
-  document.getElementById('game-count').textContent = favs.length + ' games';
+  const filtered = [];
+  for (const f of favs) {
+    const g = gamesByPath.get(f.path);
+    if (g) filtered.push(g);
+  }
+  document.getElementById('game-count').textContent = filtered.length + ' games';
   document.getElementById('system-title').textContent = 'Favorites';
-  if (favs.length === 0) {
+  const grid = document.getElementById('gameGrid');
+  if (filtered.length === 0) {
     grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO FAVORITES YET<br><span style="font-size:9px;opacity:0.5">Press Y on a game to add it</span></div>';
     return;
   }
-  // FIX_C_ID_REDESIGN: escape string IDs for safe inline onclick interpolation.
-  grid.innerHTML = '<div class="game-grid">' + favs.map((g, i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(\'' + escapeForAttr(g.id) + '\')" onmouseenter="selectGame(\'' + escapeForAttr(g.id) + '\')">' +
-    cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
-    '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
-  ).join('') + '</div>';
+  let vsContainerEl = document.getElementById('vs-container');
+  if (!vsContainerEl) {
+    grid.innerHTML = '<div id="vs-container"><div id="vs-sentinel"><div id="vs-card-window"></div></div></div>';
+    vsContainerEl = document.getElementById('vs-container');
+    vsContainerEl.addEventListener('scroll', vsOnScroll);
+    requestAnimationFrame(vsInit);
+  }
+  vsSetFilteredList(filtered, true);
 }
 
 function filterRecent(btn) {
+  // FIX_2026-05-19_CTRL_PATH (Patch 1/3): route through the VS pipeline so
+  // vsFilteredList matches the visible grid.
   currentSystem = 'recent';
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeDetail();
-  const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
-  const grid = document.getElementById('gameGrid');
-  document.getElementById('game-count').textContent = recent.length + ' games';
+  buildGamesIndex();
+  reconcileFavoritesAndRecent();
+  const gamesByPath = new Map();
+  for (const g of games) gamesByPath.set(g.path, g);
+  const recentRaw = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
+  const filtered = [];
+  for (const r of recentRaw) {
+    const g = gamesByPath.get(r.path);
+    if (g) filtered.push(g);
+  }
+  document.getElementById('game-count').textContent = filtered.length + ' games';
   document.getElementById('system-title').textContent = 'Recently Played';
-  if (recent.length === 0) {
+  const grid = document.getElementById('gameGrid');
+  if (filtered.length === 0) {
     grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:Press Start 2P,monospace;font-size:10px;line-height:2;text-align:center;">NO RECENTLY PLAYED GAMES<br><span style="font-size:9px;opacity:0.5">Launch a game to get started</span></div>';
     return;
   }
-  // FIX_C_ID_REDESIGN: escape string IDs for safe inline onclick interpolation.
-  grid.innerHTML = '<div class="game-grid">' + recent.map((g, i) =>
-    '<div class="game-card" style="animation-delay:' + (i*20) + 'ms" onclick="selectGame(\'' + escapeForAttr(g.id) + '\')" onmouseenter="selectGame(\'' + escapeForAttr(g.id) + '\')">' +
-    cardArtHtml(g) + '<div class="card-info"><div class="card-title">' + g.title + '</div>' +
-    '<div class="card-meta">' + (systemNames[g.system]||g.system) + '</div></div></div>'
-  ).join('') + '</div>';
+  let vsContainerEl = document.getElementById('vs-container');
+  if (!vsContainerEl) {
+    grid.innerHTML = '<div id="vs-container"><div id="vs-sentinel"><div id="vs-card-window"></div></div></div>';
+    vsContainerEl = document.getElementById('vs-container');
+    vsContainerEl.addEventListener('scroll', vsOnScroll);
+    requestAnimationFrame(vsInit);
+  }
+  vsSetFilteredList(filtered, true);
 }
 
 function filterSystem(sys, btn) {
@@ -2229,9 +2306,20 @@ frwInit();
 // SOUND SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Shared AudioContext, lazily initialized. Prevents the audio-stream
+// leak that occurred when each sound function created its own context.
+let _audioCtx = null;
+function _getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new AudioContext();
+  }
+  return _audioCtx;
+}
+
 function playWhoosh() {
   try {
-    const ctx = new AudioContext();
+    const ctx = _getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
     const duration = 1.4;
     const bufferSize = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -2267,7 +2355,8 @@ function playWhoosh() {
 
 function playClick() {
   try {
-    const ctx = new AudioContext();
+    const ctx = _getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     oscillator.connect(gain);
@@ -2284,7 +2373,8 @@ function playClick() {
 
 function playStartup() {
   try {
-    const ctx = new AudioContext();
+    const ctx = _getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
     const notes = [440, 554, 659, 880];
     notes.forEach((freq, i) => {
       const oscillator = ctx.createOscillator();
@@ -2303,10 +2393,20 @@ function playStartup() {
   } catch(e) {}
 }
 
+// FIX_2026-06-15_ADD_RELOAD: when EasyArc reloads itself after a system is added,
+// skip the splash AND the controller/emulator modal — already shown this session.
+const _easyarcPostAddReload = sessionStorage.getItem('easyarc_post_add_reload') === '1';
+if (_easyarcPostAddReload) sessionStorage.removeItem('easyarc_post_add_reload');
+
 // Splash screen — logo fades in over dimmed UI, then reveals
 const splash = document.getElementById('splashScreen');
 const shell = document.getElementById('eaShell');
-if (splash && shell) {
+if (_easyarcPostAddReload) {
+  if (splash) splash.remove();
+  if (shell) shell.classList.remove('dimmed');
+  renderGrid();
+  loadArtworkCache();
+} else if (splash && shell) {
   playStartup();
   // Step 1: After 3 seconds, fade out splash and brighten UI
   setTimeout(() => {
@@ -2315,13 +2415,20 @@ if (splash && shell) {
     // Step 2: After splash fade completes (1s), remove it
     setTimeout(() => {
       splash.remove();
-      // Default to Recently Played on startup if available, otherwise All Games
+      // REMOVED 2026-05-16: Default to Recently Played was a performance
+      // workaround from pre-VS era. VS solved the underlying performance
+      // problem; this branch became vestigial and triggered VS init timing
+      // bugs (empty filtered list on launch caused renderGrid to skip VS
+      // DOM creation). Now boots to default view (All Games) which always
+      // renders content during splash-removal.
+      /*
       const _startupRecent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
       if (_startupRecent.length > 0) {
         currentSystem = 'recent';
         const _recentBtn = document.getElementById('recentBtn');
         if (_recentBtn) { document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active')); _recentBtn.classList.add('active'); }
       }
+      */
       // Render grid now that splash is gone — welcome message appears if no games
       renderGrid();
       // If user has games and emulators already checked — show controller modal
@@ -2334,13 +2441,20 @@ if (splash && shell) {
   }, 3000);
 } else {
   // No splash screen — render grid directly
-  // Default to Recently Played on startup if available
+  // REMOVED 2026-05-16: Default to Recently Played was a performance
+  // workaround from pre-VS era. VS solved the underlying performance
+  // problem; this branch became vestigial and triggered VS init timing
+  // bugs (empty filtered list on launch caused renderGrid to skip VS
+  // DOM creation). Now boots to default view (All Games) which always
+  // renders content during splash-removal.
+  /*
   const _startupRecent2 = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
   if (_startupRecent2.length > 0) {
     currentSystem = 'recent';
     const _recentBtn2 = document.getElementById('recentBtn');
     if (_recentBtn2) { document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active')); _recentBtn2.classList.add('active'); }
   }
+  */
   renderGrid();
   if (games.length > 0) {
     checkEmulatorsOnStartup();
@@ -2353,6 +2467,12 @@ if (splash && shell) {
 
 const KNOWN_CONTROLLERS = {
   'nintendo switch pro controller': { name:'Switch Pro Controller', icon:'&#127918;', type:'switch' },
+  // FIX_2026-06-07_DOLPHIN_VID_DETECTION: VID-based entries catch genuine
+  // hardware and premium clones that spoof real VIDs. Match before name-based
+  // entries due to length-descending sort in ctrlGetProfile().
+  'vendor: 054c':                   { name:'PlayStation Controller', icon:'&#127918;', type:'ds4' },
+  'vendor: 045e':                   { name:'Xbox Controller',        icon:'&#127918;', type:'xbox' },
+  'vendor: 057e':                   { name:'Nintendo Controller',    icon:'&#127918;', type:'switch' },
   'pro controller':                 { name:'Switch Pro Controller', icon:'&#127918;', type:'switch' },
   'dualshock 4':                    { name:'DualShock 4',           icon:'&#127918;', type:'ds4' },
   'dualsense':                      { name:'DualSense',             icon:'&#127918;', type:'dualsense' },
@@ -2703,7 +2823,8 @@ async function ctestMaybeLaunch(game) {
 
   // Step 1 — check if core is installed, offer download if not
   // Skip for systems that use standalone emulators
-  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'ps2', 'ps3', 'xbox', 'xbox360'];
+  // FIX_2026-05-22_DUCKSTATION_INSTALL: psx now uses DuckStation (standalone), not RetroArch
+  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'psx', 'ps2', 'ps3', 'xbox', 'xbox360'];
   if (window.easyarc && !standaloneEmulators.includes(game.system)) {
     const exists = await window.easyarc.coreExists(game.system);
     if (!exists) {
@@ -2728,8 +2849,219 @@ async function ctestMaybeLaunch(game) {
     }
   }
 
+  // FIX_2026-05-22_DUCKSTATION_INSTALL: PSX-specific setup check.
+  // PSX uses DuckStation (standalone emulator). If DuckStation isn't installed
+  // in EasyArc's folder yet, or BIOS isn't configured, run the setup flow.
+  // FIX_2026-05-23_PSX_REWRITE: PSX games go through dedicated setup+launch path
+  // which handles install, BIOS config, AND the actual launch call in one linear flow.
+  console.log('[CLICK-HANDLER] game.system value:', JSON.stringify(game.system), 'window.easyarc:', !!window.easyarc);
+  if (game.system === 'psx' && window.easyarc) {
+    console.log('[CLICK-HANDLER] PSX branch matched - calling psxEnsureReadyAndLaunch');
+    await psxEnsureReadyAndLaunch(game);
+    return;
+  }
+
+  // STAGE_5: GameCube games go through dedicated install+launch path via Dolphin.
+  if (game.system === 'gamecube' && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
+    console.log('[CLICK-HANDLER] GameCube branch matched - calling gamecubeEnsureReadyAndLaunch');
+    await gamecubeEnsureReadyAndLaunch(game);
+    return;
+  }
+  console.log('[CLICK-HANDLER] PSX branch did NOT match - falling through to generic launchGame');
+
   // Controller test disabled — launch directly
   launchGame(game);
+}
+
+// FIX_2026-05-23_PSX_REWRITE: Clean linear rewrite of PSX launch flow.
+// Replaces ensurePsxSetup() + psxSetupInstallDuckStation() + psxSetupConfigureBios().
+// Each step does one thing. On success, falls through to next. On failure, throws.
+// The caller (game-click handler around line 2838) catches and explicitly invokes launchGame.
+
+// STAGE_5: GameCube launch flow for Windows. Mirrors the PSX pattern.
+// 1. Ensure Dolphin is installed (auto-download if not).
+// 2. Launch Dolphin with the ROM.
+// Mac retains the old launchGame path; this function is Windows-specific for now.
+async function gamecubeEnsureReadyAndLaunch(game) {
+  console.log('[GC-FLOW] gamecubeEnsureReadyAndLaunch called for', game && game.title);
+  console.log('[GC-FLOW] ROM path:', game && game.path);
+
+  // STEP 1: ensure Dolphin is installed
+  const ready = await window.easyarc.ensureDolphinReady();
+  console.log('[GC-FLOW] ensureDolphinReady returned:', JSON.stringify(ready));
+  if (!ready.success) {
+    showToast('Could not set up Dolphin: ' + (ready.error || 'unknown error'));
+    return;
+  }
+
+  // STEP 2: launch Dolphin with the ROM
+  // FIX_2026-06-07_DOLPHIN_DETECTION_RESTORE: detect first connected controller
+  // and pass type to launchDolphin so DolphinBridge writes correct GCPadNew.ini.
+  let detectedControllerType = null;
+  try {
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const gp of gamepads) {
+      if (gp && gp.id) {
+        const profile = ctrlGetProfile(gp.id);
+        if (profile && profile.type) {
+          detectedControllerType = profile.type;
+          console.log('[GC-FLOW] Detected controller:', gp.id, '\u2192 type:', detectedControllerType);
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[GC-FLOW] Controller detection failed:', e.message);
+  }
+  const result = await window.easyarc.launchDolphin(game.path, detectedControllerType);
+  console.log('[GC-FLOW] launchDolphin returned:', JSON.stringify(result));
+  if (result.success) {
+    showToast('Launching ' + game.title + '...');
+  } else {
+    showToast('Could not launch ' + game.title + ': ' + (result.error || 'unknown error'));
+  }
+}
+
+async function psxEnsureReadyAndLaunch(game) {
+  const modal = document.getElementById('psxSetupModal');
+  const title = document.getElementById('psxSetupTitle');
+  const status = document.getElementById('psxSetupStatus');
+  const progress = document.getElementById('psxSetupProgress');
+  const progressWrap = document.getElementById('psxSetupProgressWrap');
+  const actionBtn = document.getElementById('psxSetupActionBtn');
+  const cancelBtn = document.getElementById('psxSetupCancelBtn');
+
+  console.log('[PSX-FLOW] psxEnsureReadyAndLaunch called for', game && game.title);
+
+  // ----- STEP 1: install DuckStation if not present -----
+  const found = await window.easyarc.findDuckStation();
+  console.log('[PSX-FLOW] findDuckStation returned:', JSON.stringify(found));
+  if (!found.found) {
+    console.log('[PSX-FLOW] DuckStation not installed — running install flow');
+    title.textContent = 'SETTING UP PLAYSTATION SUPPORT';
+    status.textContent = 'Downloading PlayStation player...';
+    progress.style.width = '0%';
+    progressWrap.style.display = 'block';
+    actionBtn.style.display = 'none';
+    modal.classList.remove('hidden');
+
+    const progressHandler = (p) => {
+      if (p && p.total > 0) progress.style.width = Math.round(100 * p.received / p.total) + '%';
+    };
+    window.easyarc.onDuckStationDownloadProgress(progressHandler);
+
+    let installCancelled = false;
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    newCancelBtn.addEventListener('click', () => {
+      installCancelled = true;
+      window.easyarc.offDuckStationDownloadProgress(progressHandler);
+      modal.classList.add('hidden');
+    });
+
+    let installResult;
+    try {
+      installResult = await window.easyarc.installDuckStation();
+    } catch (err) {
+      window.easyarc.offDuckStationDownloadProgress(progressHandler);
+      modal.classList.add('hidden');
+      console.log('[PSX-FLOW] installDuckStation threw:', err.message);
+      showToast('PlayStation setup failed: ' + err.message);
+      return;
+    }
+    window.easyarc.offDuckStationDownloadProgress(progressHandler);
+
+    if (installCancelled) {
+      console.log('[PSX-FLOW] User cancelled install');
+      return;
+    }
+    if (!installResult.success) {
+      modal.classList.add('hidden');
+      console.log('[PSX-FLOW] Install failed:', installResult.error);
+      showToast('PlayStation setup failed: ' + (installResult.error || 'unknown'));
+      return;
+    }
+    console.log('[PSX-FLOW] DuckStation installed successfully');
+  }
+
+  // ----- STEP 2: configure BIOS -----
+  title.textContent = 'CHECKING FOR SYSTEM FILES';
+  status.textContent = 'Looking for PlayStation System Files (BIOS)...';
+  progressWrap.style.display = 'none';
+  actionBtn.style.display = 'none';
+  modal.classList.remove('hidden');
+
+  let scan;
+  try {
+    scan = await window.easyarc.scanForPSXBios();
+  } catch (err) {
+    modal.classList.add('hidden');
+    console.log('[PSX-FLOW] scanForPSXBios threw:', err.message);
+    showToast('PlayStation setup failed: ' + err.message);
+    return;
+  }
+  console.log('[PSX-FLOW] BIOS scan result:', JSON.stringify(scan));
+
+  let biosConfigured = false;
+  if (scan && scan.found) {
+    try {
+      const cfg = await window.easyarc.configureDuckStationBios(scan.directory);
+      console.log('[PSX-FLOW] configureDuckStationBios result:', JSON.stringify(cfg));
+      if (cfg && cfg.success) biosConfigured = true;
+    } catch (err) {
+      console.log('[PSX-FLOW] configureDuckStationBios threw:', err.message);
+    }
+  }
+
+  if (!biosConfigured) {
+    // Fall back to user browsing for BIOS folder
+    console.log('[PSX-FLOW] Auto-config failed — prompting user to browse');
+    biosConfigured = await new Promise((resolve) => {
+      title.textContent = 'SYSTEM FILES NEEDED';
+      status.innerHTML = 'EasyArc could not find your PlayStation System Files (BIOS).<br><br>If you have them, click <b>Browse</b> to point EasyArc at the folder.';
+      actionBtn.textContent = 'Browse...';
+      actionBtn.style.display = 'inline-block';
+
+      const newActionBtn = actionBtn.cloneNode(true);
+      actionBtn.parentNode.replaceChild(newActionBtn, actionBtn);
+      newActionBtn.addEventListener('click', async () => {
+        const browseResult = await window.easyarc.browseForBiosFolder();
+        if (browseResult.canceled) return;
+        const cfg = await window.easyarc.configureDuckStationBios(browseResult.directory);
+        if (cfg && cfg.success) {
+          resolve(true);
+        } else {
+          status.textContent = 'Could not configure System Files: ' + (cfg && cfg.error || 'unknown');
+        }
+      });
+
+      const newCancelBtn = cancelBtn.cloneNode(true);
+      cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+      newCancelBtn.addEventListener('click', () => {
+        modal.classList.add('hidden');
+        resolve(false);
+      });
+    });
+  }
+
+  if (!biosConfigured) {
+    console.log('[PSX-FLOW] BIOS not configured — aborting launch');
+    return;
+  }
+
+  // ----- STEP 3: brief success message, then launch -----
+  status.textContent = 'PlayStation support is ready!';
+  await new Promise(r => setTimeout(r, 600));
+  modal.classList.add('hidden');
+
+  // ----- STEP 4: actually launch the game -----
+  console.log('[PSX-FLOW] Setup complete — calling launchGame()');
+  await launchGame(game);
+  console.log('[PSX-FLOW] launchGame() returned');
+}
+
+function hidePsxSetupModal() {
+  document.getElementById('psxSetupModal').classList.add('hidden');
 }
 
 function ctestStart(system, gp) {
@@ -3009,9 +3341,14 @@ function ctestSkip() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const GP_NAV = {
-  deadzone:     0.4,
-  initDelay:    600,
-  repeatDelay:  500,
+  // FIX_2026-05-20_DPAD_REBUILD: clean two-path input architecture per
+  // Copilot's Option B spec. D-pad and analog stick are completely
+  // independent — no shared state, no shared logic, no shared function.
+  // - D-pad: tap-based (edge-triggered, one press = one move, 120ms cooldown)
+  // - Stick: smooth-scroll (initDelay + repeatDelay, classic behavior)
+  // Hat axis is intentionally NOT read for now (no real-hardware data).
+  // gpShouldFire is preserved (unchanged) for non-directional inputs:
+  // face buttons (A/B/Y), shoulders (L1/R1), Start, and modal nav.
   inSidebar:    false,
   inTopNav:     false,
   inToolbar:    false,
@@ -3020,8 +3357,19 @@ const GP_NAV = {
   sidebarIdx:   0,
   gridIdx:      0,
   active:       false,
+  // gpShouldFire's original state (preserved for face buttons)
   holdStart:    {},
   lastFire:     0,
+  initDelay:    350,
+  repeatDelay:  120,
+  // D-pad tap state (new)
+  prevDpad:     { up: false, down: false, left: false, right: false },
+  lastTapAt:    { up: 0,     down: 0,     left: 0,     right: 0 },
+  tapCooldownMs: 120,
+  // Stick smooth-scroll state (per-direction; new — separate from holdStart/lastFire)
+  stickHoldStart: { up: 0, down: 0, left: 0, right: 0 },
+  stickLastFire:  { up: 0, down: 0, left: 0, right: 0 },
+  deadzone:     0.22,
 };
 
 // Standard gamepad button indices
@@ -3039,15 +3387,32 @@ function gpFindNeighbour(fromIdx, dir) {
   const total = vsFilteredList.length;
   if (total === 0) return -1;
   const cols = VS_COLUMN_COUNT || 1;
+  // UX Item 1 (2026-05-16): Left at column 1 exits to sidebar regardless
+  // of row. Provides an escape hatch from large game lists without having
+  // to navigate all the way back to the top-left.
+  if (dir === "left" && (fromIdx % cols) === 0) return -1;
+  // UX Item 2 (2026-05-16): Up at top row stops in place.
+  if (dir === "up" && fromIdx < cols) return fromIdx;
+  // UX Item 3 (2026-05-16, refined): Down behavior at the bottom.
+  // If there's no card directly below (fromIdx + cols >= total), check
+  // whether we're on the actual last row or above a partial last row.
+  // On the last row: stop in place.
+  // Above a partial last row: jump to the last card so it's reachable.
+  if (dir === "down" && fromIdx + cols >= total) {
+    const currentRow = Math.floor(fromIdx / cols);
+    const lastRow = Math.floor((total - 1) / cols);
+    if (currentRow === lastRow) return fromIdx;
+    return total - 1;
+  }
+  // UX Item 4 (2026-05-16): Right at the very last card wraps to start.
+  if (dir === "right" && fromIdx === total - 1) return 0;
   let newIdx = fromIdx;
   if (dir === "left")  newIdx = fromIdx - 1;
   if (dir === "right") newIdx = fromIdx + 1;
   if (dir === "up")    newIdx = fromIdx - cols;
   if (dir === "down")  newIdx = fromIdx + cols;
-  if ((dir === "left" || dir === "up") && newIdx < 0) return -1;
-  if (newIdx < 0) newIdx = 0;
+  if (newIdx < 0) return -1;
   if (newIdx >= total) newIdx = total - 1;
-  if (newIdx === fromIdx) return -1;
   return newIdx;
 }
 
@@ -3072,14 +3437,10 @@ function gpHighlightSys(idx) {
     b.classList.remove('gp-nav-active');
   });
   if (idx >= 0 && btns[idx]) {
-    // Add hover to current position
+    // Add hover to current position (single highlight only)
     btns[idx].classList.add('gp-nav-hover');
-    // Dim the active item if it's different from current position
-    btns.forEach((b, i) => {
-      if (b.classList.contains('active') && i !== idx) {
-        b.classList.add('gp-nav-active');
-      }
-    });
+    // Keep highlighted system in view when list overflows (controller scroll)
+    btns[idx].scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 }
 
@@ -3094,6 +3455,8 @@ function gpPreviewSystem(btn) {
     filterRecent(btn);
   } else {
     currentSystem = sys;
+    document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
     document.getElementById('system-title').textContent = systemNames[sys] || 'All Games';
     renderGrid();
   }
@@ -3126,6 +3489,8 @@ function gpActivate() {
 }
 
 function gpShouldFire(key, isPressed) {
+  // Analog-stick smooth-scroll path. Used for keys 'up-stick', 'down-stick', etc.
+  // D-pad and stick use handleDpad/handleStick (see below).
   const now = Date.now();
   if (!isPressed) { GP_NAV.holdStart[key] = 0; return false; }
   if (!GP_NAV.holdStart[key]) {
@@ -3142,6 +3507,52 @@ function gpShouldFire(key, isPressed) {
   return true;
 }
 
+// FIX_2026-05-20_DPAD_REBUILD: D-pad tap detection (Copilot's Option B spec).
+// Edge-triggered — only fires on a false->true transition.
+// Per-direction cooldown prevents stale-packet rapid fire.
+// Returns true if a navigation event should fire this frame for this direction.
+function handleDpad(dir, isPressed, now) {
+  const prev = GP_NAV.prevDpad[dir];
+  let fired = false;
+  if (isPressed && !prev) {
+    const last = GP_NAV.lastTapAt[dir] || 0;
+    if (now - last >= GP_NAV.tapCooldownMs) {
+      GP_NAV.lastTapAt[dir] = now;
+      fired = true;
+      if (window.DEBUG_DPAD) console.log('[dpad]', dir, 'tap fired');
+    }
+  }
+  GP_NAV.prevDpad[dir] = isPressed;
+  if (fired) playClick();
+  return fired;
+}
+
+// FIX_2026-05-20_DPAD_REBUILD: Analog-stick smooth-scroll (Copilot's Option B spec).
+// Per-direction state. initDelay before first repeat, then repeatDelay between repeats.
+// Returns true if a navigation event should fire this frame for this direction.
+function handleStick(dir, isActive, now) {
+  const holdStart = GP_NAV.stickHoldStart[dir] || 0;
+  const lastFire  = GP_NAV.stickLastFire[dir]  || 0;
+  if (!isActive) {
+    GP_NAV.stickHoldStart[dir] = 0;
+    return false;
+  }
+  if (!holdStart) {
+    GP_NAV.stickHoldStart[dir] = now;
+    GP_NAV.stickLastFire[dir]  = now;
+    if (window.DEBUG_DPAD) console.log('[stick]', dir, 'initial fire');
+    playClick();
+    return true;
+  }
+  const heldFor = now - holdStart;
+  if (heldFor < GP_NAV.initDelay) return false;
+  if (now - lastFire < GP_NAV.repeatDelay) return false;
+  GP_NAV.stickLastFire[dir] = now;
+  if (window.DEBUG_DPAD) console.log('[stick]', dir, 'repeat fire');
+  playClick();
+  return true;
+}
+
 function gpHandleInput(gp) {
   const axes = gp.axes;
   // Apply button remap if this controller has one
@@ -3152,10 +3563,32 @@ function gpHandleInput(gp) {
     return remappedIdx ? gp.buttons[parseInt(remappedIdx[0])] : b;
   }) : gp.buttons;
 
-  const up    = btns[GPB.up].pressed    || axes[1] < -GP_NAV.deadzone;
-  const down  = btns[GPB.down].pressed  || axes[1] >  GP_NAV.deadzone;
-  const left  = btns[GPB.left].pressed  || axes[0] < -GP_NAV.deadzone;
-  const right = btns[GPB.right].pressed || axes[0] >  GP_NAV.deadzone;
+  // FIX_2026-05-20_DPAD_REBUILD: clean two-path input detection per Copilot Option B.
+  // D-pad uses buttons only (no hat for now). Stick uses axes only.
+  // Each direction's "should fire" decision combines D-pad tap OR stick smooth-scroll.
+  const now = Date.now();
+  const dpad = {
+    up:    btns[GPB.up].pressed,
+    down:  btns[GPB.down].pressed,
+    left:  btns[GPB.left].pressed,
+    right: btns[GPB.right].pressed,
+  };
+  const stick = {
+    up:    axes[1] < -GP_NAV.deadzone,
+    down:  axes[1] >  GP_NAV.deadzone,
+    left:  axes[0] < -GP_NAV.deadzone,
+    right: axes[0] >  GP_NAV.deadzone,
+  };
+  // Compute fire booleans for each direction. Each call site uses these.
+  const fireUp    = handleDpad('up',    dpad.up,    now) || handleStick('up',    stick.up,    now);
+  const fireDown  = handleDpad('down',  dpad.down,  now) || handleStick('down',  stick.down,  now);
+  const fireLeft  = handleDpad('left',  dpad.left,  now) || handleStick('left',  stick.left,  now);
+  const fireRight = handleDpad('right', dpad.right, now) || handleStick('right', stick.right, now);
+  // For activation check (any input present)
+  const up = dpad.up || stick.up;
+  const down = dpad.down || stick.down;
+  const left = dpad.left || stick.left;
+  const right = dpad.right || stick.right;
   const aBtn  = btns[GPB.a].pressed;
   const bBtn  = btns[GPB.b].pressed;
   const l1    = btns[GPB.l1].pressed;
@@ -3177,7 +3610,7 @@ function gpHandleInput(gp) {
     const highlightToolbar = (idx) => {
       toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === idx ? "2px solid var(--cyan)" : "none"; });
     };
-    if (gpShouldFire("left", left)) {
+    if (fireLeft) {
       if (GP_NAV.toolbarIdx === 0) {
         // Left from Refresh Library — end of navigation
         // do nothing
@@ -3186,7 +3619,7 @@ function gpHandleInput(gp) {
         highlightToolbar(GP_NAV.toolbarIdx);
       }
     }
-    if (gpShouldFire("right", right)) {
+    if (fireRight) {
       if (GP_NAV.toolbarIdx === toolbarBtns.length - 1) {
         // Right from Get Art — go to Library (first nav button)
         highlightToolbar(-99);
@@ -3205,7 +3638,7 @@ function gpHandleInput(gp) {
       highlightToolbar(-99);
       if (toolbarBtns[GP_NAV.toolbarIdx]) toolbarBtns[GP_NAV.toolbarIdx].click();
     }
-    if (gpShouldFire("down", down) || gpShouldFire("b", bBtn)) {
+    if (fireDown || gpShouldFire("b", bBtn)) {
       GP_NAV.inToolbar = false;
       highlightToolbar(-99);
       gpEnterSidebar();
@@ -3217,7 +3650,7 @@ function gpHandleInput(gp) {
   if (GP_NAV.inTopNav) {
     const views = ["library", "wizard", "controller", "settings"];
     const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
-    if (gpShouldFire("left", left)) {
+    if (fireLeft) {
       if (GP_NAV.topNavIdx === 0) {
         // Left from Library — go to Get Art (last toolbar button)
         navBtns.forEach(b => b.style.outline = "none");
@@ -3236,7 +3669,7 @@ function gpHandleInput(gp) {
         navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
       }
     }
-    if (gpShouldFire("right", right)) {
+    if (fireRight) {
       if (GP_NAV.topNavIdx === navBtns.length - 1) {
         // At rightmost nav button (Developer Options) — end of navigation
         // do nothing
@@ -3245,7 +3678,7 @@ function gpHandleInput(gp) {
         navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
       }
     }
-    if (gpShouldFire("up", up)) {
+    if (fireUp) {
       // Up from top nav → toolbar
       GP_NAV.inTopNav = false;
       navBtns.forEach(b => b.style.outline = "none");
@@ -3263,7 +3696,7 @@ function gpHandleInput(gp) {
       navBtns.forEach(b => b.style.outline = "none");
       showView(views[GP_NAV.topNavIdx]);
     }
-    if (gpShouldFire("down", down) || gpShouldFire("b", bBtn)) {
+    if (fireDown || gpShouldFire("b", bBtn)) {
       GP_NAV.inTopNav = false;
       navBtns.forEach(b => b.style.outline = "none");
       gpEnterSidebar();
@@ -3275,7 +3708,7 @@ function gpHandleInput(gp) {
     // ── Sidebar navigation ──────────────────────────────────────────────
     const btns2 = gpGetSysBtns();
 
-    if (gpShouldFire("up", up)) {
+    if (fireUp) {
       if (GP_NAV.sidebarIdx === 0) {
         // At top of sidebar — move up to top nav
         GP_NAV.inSidebar = false;
@@ -3291,7 +3724,7 @@ function gpHandleInput(gp) {
         gpPreviewSystem(btns2[GP_NAV.sidebarIdx]);
       }
     }
-    if (gpShouldFire("down", down)) {
+    if (fireDown) {
       if (GP_NAV.sidebarIdx === btns2.length - 1) {
         // At bottom of sidebar — move down to grid
         gpExitSidebar();
@@ -3301,8 +3734,8 @@ function gpHandleInput(gp) {
         gpPreviewSystem(btns2[GP_NAV.sidebarIdx]);
       }
     }
-    if (gpShouldFire("a", aBtn)) {
-      // A button only — deliberately enter the game grid
+    if (gpShouldFire("right", right)) {
+      // D-pad RIGHT enters the game grid (system already previewed/loaded)
       const btn = btns2[GP_NAV.sidebarIdx];
       if (btn) {
         const sys = btn.dataset.sys || 'all';
@@ -3323,7 +3756,7 @@ function gpHandleInput(gp) {
   } else {
     // FIX_A_GAMEPAD_REWRITE: Index-arithmetic navigation, data-driven launch/fav.
 
-    if (gpShouldFire("left", left)) {
+    if (fireLeft) {
       const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "left");
       if (neighbour >= 0) {
         GP_NAV.gridIdx = neighbour;
@@ -3332,11 +3765,11 @@ function gpHandleInput(gp) {
         gpEnterSidebar();
       }
     }
-    if (gpShouldFire("right", right)) {
+    if (fireRight) {
       const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "right");
       if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
     }
-    if (gpShouldFire("up", up)) {
+    if (fireUp) {
       const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "up");
       if (neighbour >= 0) {
         GP_NAV.gridIdx = neighbour;
@@ -3345,7 +3778,7 @@ function gpHandleInput(gp) {
         gpEnterSidebar();
       }
     }
-    if (gpShouldFire("down", down)) {
+    if (fireDown) {
       const neighbour = gpFindNeighbour(GP_NAV.gridIdx, "down");
       if (neighbour >= 0) { GP_NAV.gridIdx = neighbour; gpHighlightCard(GP_NAV.gridIdx); }
     }
@@ -3395,11 +3828,11 @@ function gpHandleInput(gp) {
   if (GP_NAV.inTopNav) {
     const views = ["library", "wizard", "controller", "settings"];
     const btns = Array.from(document.querySelectorAll(".nav-btn"));
-    if (gpShouldFire("left", left)) {
+    if (fireLeft) {
       GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
       btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
     }
-    if (gpShouldFire("right", right)) {
+    if (fireRight) {
       GP_NAV.topNavIdx = Math.min(btns.length - 1, GP_NAV.topNavIdx + 1);
       btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
     }
@@ -3433,8 +3866,45 @@ function gpCheckExitCombo(gp) {
   }
 }
 
+// FIX_2026-06-19_PSP_LIFECYCLE: main process tells us when a game starts/stops.
+// We flip a single authoritative flag the nav loop obeys. On exit we also clear any
+// pending input bookkeeping so a held button at quit-time cannot trigger a relaunch.
+window.__easyarcGameRunning = false;
+if (window.easyarc && window.easyarc.onGameStarted) {
+  window.easyarc.onGameStarted(() => {
+    console.log('[UI] game-started -> nav disabled');
+    window.__easyarcGameRunning = true;
+  });
+}
+if (window.easyarc && window.easyarc.onGameExited) {
+  window.easyarc.onGameExited(() => {
+    console.log('[UI] game-exited -> nav re-enabled');
+    window.__easyarcGameRunning = false;
+    // FIX_2026-06-19_PSP_LIFECYCLE: clear edge-trigger state so a button still held at
+    // exit can't fire an action (e.g. relaunch the game). GP_NAV.holdStart is the real
+    // previous-state store used by gpShouldFire; we also reset D-pad/stick tap state.
+    try {
+      GP_NAV.holdStart = {};
+      GP_NAV.lastFire = 0;
+      GP_NAV.prevDpad = { up: false, down: false, left: false, right: false };
+      GP_NAV.lastTapAt = { up: 0, down: 0, left: 0, right: 0 };
+      GP_NAV.stickHoldStart = { up: 0, down: 0, left: 0, right: 0 };
+      GP_NAV.stickLastFire = { up: 0, down: 0, left: 0, right: 0 };
+    } catch (e) { console.log('[UI] GP_NAV reset on exit failed:', e.message); }
+  });
+}
+
 // Main navigation poll loop — any connected controller drives the UI
 function gpNavPoll() {
+  // FIX_2026-06-19_PSP_LIFECYCLE: when a game is running, the gamepad nav loop is
+  // HARD-DISABLED — no navigation, no launching, no exit-combo handling here. The
+  // emulator owns all input. State is driven by main-process 'game-started'/'game-exited'
+  // events (see listeners below). This is what stops input bleed-through AND the
+  // relaunch-on-close bug (no buffered input can trigger launchGame at the exit moment).
+  if (window.__easyarcGameRunning) {
+    requestAnimationFrame(gpNavPoll);
+    return;
+  }
   // Block all navigation while startup modal is open
   if (ctrlStartupMode) {
     requestAnimationFrame(gpNavPoll);
@@ -3493,6 +3963,7 @@ document.addEventListener("keydown", (e) => {
       if (GP_NAV.inSidebar) {
         GP_NAV.sidebarIdx = Math.max(0, GP_NAV.sidebarIdx - 1);
         gpHighlightSys(GP_NAV.sidebarIdx);
+        gpPreviewSystem(gpGetSysBtns()[GP_NAV.sidebarIdx]);
       } else {
         const n = gpFindNeighbour(GP_NAV.gridIdx, "up");
         if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
@@ -3504,6 +3975,7 @@ document.addEventListener("keydown", (e) => {
         const btns = gpGetSysBtns();
         GP_NAV.sidebarIdx = Math.min(btns.length - 1, GP_NAV.sidebarIdx + 1);
         gpHighlightSys(GP_NAV.sidebarIdx);
+        gpPreviewSystem(btns[GP_NAV.sidebarIdx]);
       } else {
         const n = gpFindNeighbour(GP_NAV.gridIdx, "down");
         if (n >= 0) { GP_NAV.gridIdx = n; gpHighlightCard(n); }
@@ -3998,6 +4470,7 @@ async function addGamesImportAll() {
     if (!folders.includes(r.folder)) {
       folders.push(r.folder);
       localStorage.setItem('easyarc_rom_folders', JSON.stringify(folders));
+      localStorage.setItem('easyarc_setup_done', '1');
     }
     // Scan for games
     if (window.easyarc) {
@@ -4018,32 +4491,25 @@ async function addGamesImportAll() {
     }
   }
 
+  // BUG2_FIX: Force VS to re-measure after import. Large imports can cause
+  // vsInit to lock in a wrong column count (measured before final layout
+  // settles). Resetting these flags makes the upcoming renderGrid() call
+  // trigger a fresh vsInit against the now-settled layout. Cost: sub-ms.
+  vsInitialized = false;
+  vsInitAttempts = 0;
+  hideAddGamesModal();
+
+  // FIX_2026-06-15_ADD_RELOAD: see addGamesScanAndAdd. Reload so the VS rebuilds
+  // cleanly after a collection import. Existing art re-read on startup; no scrape.
+  if (totalAdded > 0) {
+    sessionStorage.setItem('easyarc_post_add_reload', '1');
+    window.location.reload();
+    return;
+  }
+  showToast('No new games added.');
   updateCounts();
   renderGrid();
   loadArtworkCache();
-  hideAddGamesModal();
-
-  const btn = document.getElementById('addGamesBtn');
-  if (btn) {
-    btn.classList.add('active');
-    btn.textContent = '✓ ' + totalAdded + ' Games Added!';
-    setTimeout(() => {
-      btn.classList.remove('active');
-      btn.textContent = '+ Add Games/Collection';
-    }, 3000);
-  }
-
-  if (totalAdded > 0) {
-    const ssUser = localStorage.getItem('ss_user') || '';
-    const ssPass = localStorage.getItem('ss_pass') || '';
-    if (ssUser && ssPass) {
-      if (confirm(totalAdded + ' games added from ' + toImport.length + ' systems! Click OK to download artwork now, or Cancel to do it later.')) {
-        startScrape();
-      }
-    } else {
-      showToast(totalAdded + ' games added from ' + toImport.length + ' systems!');
-    }
-  }
 }
 
 async function addGamesScanAndAdd() {
@@ -4065,6 +4531,7 @@ async function addGamesScanAndAdd() {
   if (!folders.includes(addGamesFolder)) {
     folders.push(addGamesFolder);
     localStorage.setItem('easyarc_rom_folders', JSON.stringify(folders));
+    localStorage.setItem('easyarc_setup_done', '1');
   }
 
   // Scan for games
@@ -4086,43 +4553,25 @@ async function addGamesScanAndAdd() {
     }
   }
 
+  // BUG2_FIX: Force VS to re-measure after import. Defensive parity with
+  // the batch-import path; protects single-system imports of large libraries.
+  vsInitialized = false;
+  vsInitAttempts = 0;
+  hideAddGamesModal();
+
+  // FIX_2026-06-15_ADD_RELOAD: reload the renderer so the VS rebuilds cleanly
+  // (identical to the manual restart that reliably fixes the post-add stale grid).
+  // Existing art is re-read on startup; no new scrape here (user fetches art later).
+  // Splash + controller modal suppressed via the sessionStorage flag. VS not touched.
+  if (newCount > 0) {
+    sessionStorage.setItem('easyarc_post_add_reload', '1');
+    window.location.reload();
+    return;
+  }
+  showToast('No new games found in ' + addGamesFolder);
   updateCounts();
   renderGrid();
   loadArtworkCache();
-  hideAddGamesModal();
-
-  // Turn Add Games button green briefly
-  const btn = document.getElementById('addGamesBtn');
-  if (btn) {
-    btn.classList.add('active');
-    btn.textContent = '✓ ' + newCount + ' Games Added!';
-    setTimeout(() => {
-      btn.classList.remove('active');
-      btn.textContent = '+ Add Games';
-    }, 3000);
-  }
-
-  if (newCount > 0) {
-    const ssUser = localStorage.getItem('ss_user') || '';
-    const ssPass = localStorage.getItem('ss_pass') || '';
-    if (ssUser && ssPass) {
-      const toastMsg = newCount + ' new games added! Download artwork?';
-      showToast(toastMsg);
-      setTimeout(() => {
-        if (confirm(newCount + ' new games added! Download artwork now?')) {
-          const newGames = games.slice(-newCount);
-          newGames.forEach(async (g) => {
-            await window.easyarc.scrapeGame(g, ssUser, ssPass);
-          });
-          showToast('Downloading artwork for ' + newCount + ' games...');
-        }
-      }, 500);
-    } else {
-      showToast(newCount + ' new games added!');
-    }
-  } else {
-    showToast('No new games found in ' + addGamesFolder);
-  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4171,7 +4620,7 @@ async function startScrape() {
       result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
     }
     if (result.success && result.path) {
-      artworkCache[g.path] = encodeURI('file://' + result.path);
+      artworkCache[g.path] = encodeURI(pathToFileUrl(result.path));
       if (result.metadata) metadataCache[g.path] = result.metadata;
       succeeded++;
       logLines.push('OK      ' + g.system + ' | ' + g.title);
@@ -4337,6 +4786,23 @@ showView = function(name) {
     <div class="frw-btn-row">
       <button class="frw-btn ghost" id="coreDownloadCancelBtn">Cancel</button>
       <button class="frw-btn" id="coreDownloadBtn" style="display:none" autofocus>Download Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- FIX_2026-05-22_DUCKSTATION_INSTALL: setup modal for PlayStation support.
+     Shown when user tries to launch a PSX game and DuckStation isn't installed
+     yet, or BIOS files aren't configured. Single coherent flow rather than
+     multiple separate prompts. -->
+<div class="frw-overlay hidden" id="psxSetupModal">
+  <div class="frw-box" style="max-width:520px">
+    <span class="frw-icon" id="psxSetupIcon">&#127918;</span>
+    <div class="frw-title" id="psxSetupTitle">SETTING UP PLAYSTATION SUPPORT</div>
+    <div class="frw-sub" id="psxSetupStatus">EasyArc needs a few things to play PlayStation games. This is a one-time setup.</div>
+    <div class="frw-progress-wrap" id="psxSetupProgressWrap"><div class="frw-progress-bar" id="psxSetupProgress"></div></div>
+    <div class="frw-btn-row" id="psxSetupBtnRow">
+      <button class="frw-btn ghost" id="psxSetupCancelBtn" onclick="hidePsxSetupModal()">Cancel</button>
+      <button class="frw-btn" id="psxSetupActionBtn" style="display:none" autofocus>Continue</button>
     </div>
   </div>
 </div>

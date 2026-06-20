@@ -1,7 +1,8 @@
-node_modules/
-*.zip
 .DS_Store
-dist/
-build/
 *.bak
+*.bak_*
 *.bak.*
+*.PREREVERT_*
+node_modules/
+dist/
+/index.html
