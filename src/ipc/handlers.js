@@ -11,6 +11,20 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   }
 
   handle('bridge:findRetroArch', () => bridge.findRetroArch());
+  // SLICE3.5_2026-06-21: isolated node-hid load + enumerate test. DevTools-invokable only.
+  handle('bridge:hidTest', () => {
+    let HID;
+    try { HID = require('node-hid'); }
+    catch (err) { return { success: false, stage: 'require', error: err.message }; }
+    try {
+      const devices = HID.devices();
+      const summary = devices.map(d => ({
+        product: d.product, manufacturer: d.manufacturer,
+        vendorId: d.vendorId, productId: d.productId, path: d.path
+      }));
+      return { success: true, count: summary.length, devices: summary };
+    } catch (err) { return { success: false, stage: 'enumerate', error: err.message }; }
+  });
   // FIX_2026-05-24_DOLPHIN_STEP1_2: ensureDolphinReady — Step 1+2 only.
   // Detects existing Dolphin install or downloads+extracts to %APPDATA%\\easyarc\\dolphin.
   // Does NOT launch Dolphin, does NOT write config. Manual DevTools invocation only.

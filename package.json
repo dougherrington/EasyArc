@@ -32,7 +32,8 @@
     },
     "files": [
       "src/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/node-hid/**/*"
     ],
     "extraResources": [
       {
@@ -42,7 +43,11 @@
           "**/*"
         ]
       }
-    ]
+    ],
+    "asarUnpack": [
+      "node_modules/node-hid/**/*"
+    ],
+    "npmRebuild": false
   },
   "devDependencies": {
     "electron": "^29.0.0",
@@ -50,6 +55,7 @@
   },
   "dependencies": {
     "crc-32": "^1.2.2",
+    "node-hid": "^3.3.0",
     "yauzl": "^3.3.0"
   }
 }
