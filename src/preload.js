@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   launchPPSSPP:  (romPath) => ipcRenderer.invoke('bridge:launchPPSSPP', romPath),
   // RMG_SLICE1_2026-06-20: N64 via RMG (download/extract + launch; no controllers yet).
   ensureRMGReady: () => ipcRenderer.invoke('bridge:ensureRMGReady'),
-  launchRMG:      (romPath) => ipcRenderer.invoke('bridge:launchRMG', romPath),
+  launchRMG:      (romPath, controllers) => ipcRenderer.invoke('bridge:launchRMG', romPath, controllers),
   // FIX_2026-06-19_PSP_LIFECYCLE: game-running lifecycle events from main process.
   onGameStarted: (callback) => ipcRenderer.on('game-started', () => callback()),
   onGameExited:  (callback) => ipcRenderer.on('game-exited',  () => callback()),

@@ -1979,6 +1979,24 @@ async function launchGame(game) {
   }
 }
 
+// RMG_SLICE3_2026-06-21: DevTools-callable multi-controller N64 launch (Windows test path).
+// Enumerates all pads in gp.index order; xinputIndex = gp.index (P1 = first slot).
+// ATOPNUC test is the arbiter for index->player order.  Usage: rmgLaunchAllPads('C:\\path\\game.z64')
+async function rmgLaunchAllPads(romPath) {
+  if (!window.easyarc || !window.easyarc.launchRMG) { console.error('[RMG] launchRMG bridge not available'); return; }
+  const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+  if (gps.length === 0) console.warn('[RMG] no gamepads detected');
+  const controllers = [null, null, null, null];
+  gps.slice(0, 4).forEach((gp, slot) => {
+    const profile = ctrlGetProfile(gp.id);
+    controllers[slot] = { type: 'xinput', xinputIndex: gp.index, _id: gp.id, _detected: profile.type };
+  });
+  console.log('[RMG] launching with controllers:', JSON.parse(JSON.stringify(controllers)));
+  const result = await window.easyarc.launchRMG(romPath, controllers);
+  console.log('[RMG] launch result:', result);
+  return result;
+}
+
 function showView(name) {
   document.getElementById('settings-view').classList.remove('active');
   const sidebar = document.getElementById('sidebar');

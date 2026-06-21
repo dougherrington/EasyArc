@@ -47,10 +47,11 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
     const rmgBridge = new RMGBridge();
     return rmgBridge.ensureRMGReady();
   });
-  handle('bridge:launchRMG', (romPath) => {
+  // RMG_SLICE3_2026-06-21: accept+forward controllers array (port-indexed).
+  handle('bridge:launchRMG', (romPath, controllers) => {
     const RMGBridge = require('../bridge/RMGBridge');
     const rmgBridge = new RMGBridge();
-    const result = rmgBridge.launchRMG(romPath);
+    const result = rmgBridge.launchRMG(romPath, controllers);
     // Return a serializable result (drop the non-cloneable proc handle).
     return { success: result.success, pid: result.pid, error: result.error };
   });
