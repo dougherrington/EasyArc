@@ -41,6 +41,19 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
     const ppssppBridge = new PPSSPPBridge();
     return ppssppBridge.launchPPSSPP(romPath);
   });
+  // RMG_SLICE1_2026-06-20: N64 via RMG. Download/extract + launch only (no controllers yet).
+  handle('bridge:ensureRMGReady', () => {
+    const RMGBridge = require('../bridge/RMGBridge');
+    const rmgBridge = new RMGBridge();
+    return rmgBridge.ensureRMGReady();
+  });
+  handle('bridge:launchRMG', (romPath) => {
+    const RMGBridge = require('../bridge/RMGBridge');
+    const rmgBridge = new RMGBridge();
+    const result = rmgBridge.launchRMG(romPath);
+    // Return a serializable result (drop the non-cloneable proc handle).
+    return { success: result.success, pid: result.pid, error: result.error };
+  });
   handle('bridge:findDuckStation', () => bridge.findDuckStation());
   handle('bridge:installDuckStation', async (event) => {
     // Download + extract DuckStation. Progress sent back via events.
