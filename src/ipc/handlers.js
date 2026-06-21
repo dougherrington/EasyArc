@@ -11,6 +11,11 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   }
 
   handle('bridge:findRetroArch', () => bridge.findRetroArch());
+  handle('bridge:matchHidControllers', (targets) => {
+    const RMGBridge = require('../bridge/RMGBridge');
+    const rmgBridge = new RMGBridge();
+    return rmgBridge.matchHidControllers(targets);
+  });
   // SLICE3.5_2026-06-21: isolated node-hid load + enumerate test. DevTools-invokable only.
   handle('bridge:hidTest', () => {
     let HID;
@@ -20,7 +25,11 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
       const devices = HID.devices();
       const summary = devices.map(d => ({
         product: d.product, manufacturer: d.manufacturer,
-        vendorId: d.vendorId, productId: d.productId, path: d.path
+        vendorId: d.vendorId, productId: d.productId,
+        usage: d.usage, usagePage: d.usagePage,
+        interface: d.interface, release: d.release,
+        serialNumber: d.serialNumber,
+        path: d.path
       }));
       return { success: true, count: summary.length, devices: summary };
     } catch (err) { return { success: false, stage: 'enumerate', error: err.message }; }

@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('easyarc', {
   hidTest: () => ipcRenderer.invoke('bridge:hidTest'),
+  matchHidControllers: (targets) => ipcRenderer.invoke('bridge:matchHidControllers', targets),
   findRetroArch: () => ipcRenderer.invoke('bridge:findRetroArch'),
   findDolphin:   () => ipcRenderer.invoke('bridge:findDolphin'),
   launchPPSSPP:  (romPath) => ipcRenderer.invoke('bridge:launchPPSSPP', romPath),

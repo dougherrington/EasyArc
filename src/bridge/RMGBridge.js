@@ -157,17 +157,33 @@ class RMGBridge {
       .replace(/^(Pak = )0/m, '$10');
   }
 
-  _buildProfileSection(profileNum, xinputIndex) {
+  _switchProfileBody() {
+    return this._xinputProfileBody()
+      .replace('A_Name = "a"', 'A_Name = "b"')
+      .replace('B_Name = "x"', 'B_Name = "y"');
+  }
+
+  _buildProfileSection(profileNum, controller) {
     const header = "[Rosalie's Mupen GUI - Input Plugin Profile " + profileNum + "]";
     let identity, body;
-    if (typeof xinputIndex === 'number') {
+    if (controller && controller.type === 'xinput' && typeof controller.xinputIndex === 'number') {
       identity =
         'PluggedIn = True\n' +
         'DeviceName = "XInput Controller"\n' +
         'DeviceType = 4\n' +
-        'DevicePath = "XInput#' + xinputIndex + '"\n' +
+        'DevicePath = "XInput#' + controller.xinputIndex + '"\n' +
         'DeviceSerial = ""';
       body = this._xinputProfileBody();
+    } else if (controller && controller.type === 'hid' && controller.devicePath) {
+      const name = controller.deviceName || "Controller";
+      const serial = controller.deviceSerial || "";
+      identity =
+        'PluggedIn = True\n' +
+        'DeviceName = "' + name + '"\n' +
+        'DeviceType = 4\n' +
+        'DevicePath = "' + controller.devicePath + '"\n' +
+        'DeviceSerial = "' + serial + '"';
+      body = (controller.hidLayout === 'switch') ? this._switchProfileBody() : this._xinputProfileBody();
     } else {
       identity =
         'PluggedIn = False\n' +
@@ -183,14 +199,52 @@ class RMGBridge {
   _buildAllProfiles(controllers) {
     const sections = [];
     for (let port = 0; port < 4; port++) {
-      const c = controllers[port];
-      if (c && c.type === 'xinput') {
-        sections.push(this._buildProfileSection(port, c.xinputIndex));
-      } else {
-        sections.push(this._buildProfileSection(port, null));
-      }
+      sections.push(this._buildProfileSection(port, controllers[port] || null));
     }
     return sections.join('\n\n');
+  }
+
+  matchHidControllers(targets) {
+    if (process.platform !== 'win32') return { success: false, error: 'HID matching is Windows-only' };
+    let HID;
+    try { HID = require('node-hid'); }
+    catch (err) { return { success: false, stage: 'require', error: err.message }; }
+    let devices;
+    try { devices = HID.devices(); }
+    catch (err) { return { success: false, stage: 'enumerate', error: err.message }; }
+    const results = (targets || []).map((t) => ({
+      vendorId: t.vendorId, productId: t.productId,
+      controller: this._matchOneHid(devices, t.vendorId, t.productId)
+    }));
+    return { success: true, results };
+  }
+
+  // RMG stores Bluetooth MACs dash-separated (e.g. 03-c4-80-fc-0e-a3); node-hid
+  // reports them separatorless (03c480fc0ea3). Match RMG's format for HID binding.
+  _formatHidSerial(s) {
+    if (!s) return '';
+    if (/^[0-9a-fA-F]{12}$/.test(s)) return s.match(/.{1,2}/g).join('-');
+    return s;
+  }
+
+  _matchOneHid(devices, vendorId, productId) {
+    const candidates = devices.filter((d) =>
+      d.vendorId === vendorId && d.productId === productId &&
+      d.usagePage === 1 && (d.usage === 4 || d.usage === 5)
+    );
+    if (candidates.length === 0) return null;
+    const d = candidates[0];
+    const isSwitch = (vendorId === 0x057E);
+    const isSony   = (vendorId === 0x054C);
+    return {
+      type: 'hid', devicePath: d.path,
+      deviceName: isSwitch ? 'Nintendo Switch Pro Controller'
+                : isSony   ? 'PS4 Controller'
+                : (d.product || 'Controller'),
+      deviceSerial: this._formatHidSerial(d.serialNumber),
+      hidLayout: (isSwitch || isSony) ? 'switch' : 'standard',
+      _candidateCount: candidates.length
+    };
   }
 
   getRMGConfigPath() {
@@ -278,12 +332,30 @@ class RMGBridge {
       return { success: false, error: 'spawn failed: ' + err.message };
     }
 
-    proc.on('error', (err) => {
-      console.log('[RMG] Process error:', err.message);
-    });
-    proc.on('exit', (code) => {
-      console.log('[RMG] RMG exited with code', code);
-    });
+    // SLICE4_LIFECYCLE_2026-06-21: mirror PPSSPP/RetroArch game-running lifecycle so the
+    // renderer's gamepad nav loop is hard-disabled during play (stops input bleed-through
+    // and the relaunch-on-button-press bug). Renderer obeys 'game-started'/'game-exited'.
+    const sendToRenderer = (channel) => {
+      try {
+        const { BrowserWindow } = require('electron');
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send(channel);
+        }
+      } catch (e) { console.log('[RMG] sendToRenderer ' + channel + ' failed:', e.message); }
+    };
+
+    sendToRenderer('game-started');
+
+    let settled = false;
+    const finish = (why) => {
+      if (settled) return;
+      settled = true;
+      console.log('[RMG] RMG ended (' + why + ') — re-enabling EasyArc nav');
+      sendToRenderer('game-exited');
+    };
+    proc.on('error', (err) => { console.log('[RMG] Process error:', err.message); finish('error'); });
+    proc.on('exit',  (code) => { console.log('[RMG] RMG exited with code', code); finish('exit'); });
+    proc.on('close', () => finish('close'));
 
     console.log('[RMG] RMG launched, pid', proc.pid);
     return { success: true, pid: proc.pid, proc };

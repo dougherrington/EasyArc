@@ -1987,10 +1987,37 @@ async function rmgLaunchAllPads(romPath) {
   const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
   if (gps.length === 0) console.warn('[RMG] no gamepads detected');
   const controllers = [null, null, null, null];
+  function parseVidPid(id) {
+    const v = /vendor:\s*([0-9a-f]{4})/i.exec(id);
+    const p = /product:\s*([0-9a-f]{4})/i.exec(id);
+    return (v && p) ? { vendorId: parseInt(v[1],16), productId: parseInt(p[1],16) } : null;
+  }
+  const HID_VENDORS = [0x057E, 0x054C];
+  const hidRequests = [];
   gps.slice(0, 4).forEach((gp, slot) => {
-    const profile = ctrlGetProfile(gp.id);
-    controllers[slot] = { type: 'xinput', xinputIndex: gp.index, _id: gp.id, _detected: profile.type };
+    const vp = parseVidPid(gp.id);
+    if (vp && HID_VENDORS.includes(vp.vendorId) && window.easyarc.matchHidControllers) {
+      hidRequests.push({ slot, vendorId: vp.vendorId, productId: vp.productId });
+      controllers[slot] = { _pendingHid: true, _id: gp.id };
+    } else {
+      controllers[slot] = { type: 'xinput', xinputIndex: gp.index, _id: gp.id };
+    }
   });
+  if (hidRequests.length > 0) {
+    const matchRes = await window.easyarc.matchHidControllers(hidRequests.map(r => ({ vendorId: r.vendorId, productId: r.productId })));
+    console.log('[RMG] HID match result:', JSON.parse(JSON.stringify(matchRes)));
+    if (matchRes && matchRes.success) {
+      hidRequests.forEach((req, i) => {
+        const ctrl = matchRes.results[i] && matchRes.results[i].controller;
+        if (ctrl) { controllers[req.slot] = ctrl; }
+        else {
+          console.warn('[RMG] no HID match for slot', req.slot, '- XInput fallback');
+          const gp = gps[req.slot];
+          controllers[req.slot] = { type: 'xinput', xinputIndex: gp ? gp.index : 0 };
+        }
+      });
+    }
+  }
   console.log('[RMG] launching with controllers:', JSON.parse(JSON.stringify(controllers)));
   const result = await window.easyarc.launchRMG(romPath, controllers);
   console.log('[RMG] launch result:', result);
