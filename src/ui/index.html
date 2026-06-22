@@ -2078,6 +2078,79 @@ async function rmgDetectOnePressExcluding(excludeSerials, excludeIndexes, window
 }
 
 // SLICE5.3: console-driven multi-controller join flow.
+// SLICE5.4: controller-assignment cache. Stores stable identity (serial for HID, rank for XInput)
+// so the same set of controllers reuses its mapping silently on subsequent launches.
+const RMG_CACHE_KEY = 'easyarc_rmg_controller_cache';
+function saveControllerCache(assignments) {
+  try {
+    const entries = assignments.map((c, port) => {
+      if (!c) return null;
+      if (c.type === 'hid') return { port, kind:'hid', serial: c.deviceSerial };
+      if (c.type === 'xinput') return { port, kind:'xinput', xinputRank: c.xinputIndex };
+      return null;
+    });
+    localStorage.setItem(RMG_CACHE_KEY, JSON.stringify({ assignments: entries }));
+    console.log('[CACHE] saved controller mapping');
+  } catch (e) { console.warn('[CACHE] save failed', e); }
+}
+async function getConnectedHidSerials() {
+  // enumerate connected HID gamepads' serials via the bridge
+  if (!window.easyarc.hidTest) return [];
+  const res = await window.easyarc.hidTest();
+  if (!res || !res.success) return [];
+  const HID_VENDORS = [0x057E, 0x054C];
+  return res.devices
+    .filter(d => d.usagePage === 1 && (d.usage === 4 || d.usage === 5) && HID_VENDORS.includes(d.vendorId))
+    .map(d => (d.serialNumber || '').replace(/-/g, '').toLowerCase());
+}
+function getConnectedXinputCount() {
+  const HID_VENDORS = [0x057E, 0x054C];
+  function vp(id){ const v=/vendor:\s*([0-9a-f]{4})/i.exec(id); return v?parseInt(v[1],16):null; }
+  return Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean)
+    .filter(gp => !HID_VENDORS.includes(vp(gp.id))).length;
+}
+// Returns assignments array if cache valid for the current set, else null (caller runs join flow).
+async function tryControllerCache() {
+  const raw = localStorage.getItem(RMG_CACHE_KEY);
+  if (!raw) return null;
+  let cache; try { cache = JSON.parse(raw); } catch { return null; }
+  if (!cache || !Array.isArray(cache.assignments)) return null;
+  const hidSerials = await getConnectedHidSerials();
+  const nonEmpty = hidSerials.filter(Boolean);
+  if (nonEmpty.length !== hidSerials.length) { console.log('[CACHE] miss: empty serial present'); return null; }
+  if (new Set(nonEmpty).size !== nonEmpty.length) { console.log('[CACHE] miss: duplicate serial'); return null; }
+  const cachedHid = cache.assignments.filter(a => a && a.kind === 'hid').map(a => (a.serial||'').replace(/-/g,'').toLowerCase());
+  const cachedXi = cache.assignments.filter(a => a && a.kind === 'xinput').length;
+  const curSet = new Set(hidSerials);
+  if (!cachedHid.every(sn => curSet.has(sn))) { console.log('[CACHE] miss: a cached HID pad is not connected'); return null; }
+  if (cachedXi !== getConnectedXinputCount()) { console.log('[CACHE] miss: XInput count changed'); return null; }
+  const assignments = [null, null, null, null];
+  for (const a of cache.assignments) {
+    if (!a) continue;
+    if (a.kind === 'hid') {
+      const res = await window.easyarc.matchHidBySerial(a.serial);
+      if (!res || !res.success) { console.log('[CACHE] miss: could not re-resolve serial', a.serial); return null; }
+      assignments[a.port] = res.controller;
+    } else if (a.kind === 'xinput') {
+      assignments[a.port] = { type:'xinput', xinputIndex: a.xinputRank };
+    }
+  }
+  return assignments;
+}
+// SLICE5.4: top-level launch entry. Reuses cached mapping silently if the same controllers are
+// connected; otherwise runs the join flow (which saves a fresh cache). Usage: rmgLaunchWithCache('C:\\game.z64')
+async function rmgLaunchWithCache(romPath) {
+  const cached = await tryControllerCache();
+  if (cached) {
+    console.log('[CACHE] hit - launching with saved mapping (silent)');
+    const result = await window.easyarc.launchRMG(romPath, cached);
+    console.log('[CACHE] launch result:', result);
+    return result;
+  }
+  console.log('[CACHE] no valid cache - starting join flow');
+  return rmgJoinFlow(romPath);
+}
+
 async function rmgJoinFlow(romPath) {
   if (!window.easyarc || !window.easyarc.launchRMG) { console.error('[JOIN] launchRMG bridge not available'); return; }
   const connected = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean).length;
@@ -2120,6 +2193,7 @@ async function rmgJoinFlow(romPath) {
   }
   console.log('========================================');
   console.log('[JOIN] All assigned. Launching:', JSON.parse(JSON.stringify(assignments)));
+  saveControllerCache(assignments);
   const result = await window.easyarc.launchRMG(romPath, assignments);
   console.log('[JOIN] launch result:', result);
   return result;

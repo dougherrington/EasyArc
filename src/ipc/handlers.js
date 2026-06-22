@@ -16,6 +16,11 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
     const rmgBridge = new RMGBridge();
     return rmgBridge.matchHidByPath(path);
   });
+  handle('bridge:matchHidBySerial', (serial) => {
+    const RMGBridge = require('../bridge/RMGBridge');
+    const rmgBridge = new RMGBridge();
+    return rmgBridge.matchHidBySerial(serial);
+  });
   handle('bridge:matchHidControllers', (targets) => {
     const RMGBridge = require('../bridge/RMGBridge');
     const rmgBridge = new RMGBridge();

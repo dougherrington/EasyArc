@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   hidDetectPress: (targets, durationMs, threshold, excludeSerials) => ipcRenderer.invoke('bridge:hidDetectPress', targets, durationMs, threshold, excludeSerials),
   matchHidControllers: (targets) => ipcRenderer.invoke('bridge:matchHidControllers', targets),
   matchHidByPath: (path) => ipcRenderer.invoke('bridge:matchHidByPath', path),
+  matchHidBySerial: (serial) => ipcRenderer.invoke('bridge:matchHidBySerial', serial),
   findRetroArch: () => ipcRenderer.invoke('bridge:findRetroArch'),
   findDolphin:   () => ipcRenderer.invoke('bridge:findDolphin'),
   launchPPSSPP:  (romPath) => ipcRenderer.invoke('bridge:launchPPSSPP', romPath),

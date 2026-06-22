@@ -268,6 +268,25 @@ class RMGBridge {
     return { success: true, controller: this._hidControllerFromDevice(d) };
   }
 
+  // SLICE5.4: re-resolve a cached HID controller by its (stable) serial to its CURRENT path.
+  matchHidBySerial(serial) {
+    if (process.platform !== 'win32') return { success: false, error: 'HID matching is Windows-only' };
+    let HID;
+    try { HID = require('node-hid'); }
+    catch (err) { return { success: false, stage: 'require', error: err.message }; }
+    let devices;
+    try { devices = HID.devices(); }
+    catch (err) { return { success: false, stage: 'enumerate', error: err.message }; }
+    const want = (serial || '').replace(/-/g, '').toLowerCase();
+    const d = devices.find(dv => {
+      if (!dv.serialNumber) return false;
+      if (dv.usagePage !== 1 || !(dv.usage === 4 || dv.usage === 5)) return false;
+      return dv.serialNumber.replace(/-/g, '').toLowerCase() === want;
+    });
+    if (!d) return { success: false, error: 'serial not found among connected HID gamepads' };
+    return { success: true, controller: this._hidControllerFromDevice(d) };
+  }
+
   getRMGConfigPath() {
     return path.join(this.getEasyArcRMGDir(), 'Config', 'mupen64plus.cfg');
   }
