@@ -2151,6 +2151,47 @@ async function rmgLaunchWithCache(romPath) {
   return rmgJoinFlow(romPath);
 }
 
+// SLICE5.3 modal: reuses the existing ctrlModal element/styling to show the join flow on-screen.
+function joinModalShow(numPlayers) {
+  const modal = document.getElementById('ctrlModal');
+  const title = document.getElementById('ctrlModalTitle');
+  const sub   = document.getElementById('ctrlModalSub');
+  const btn   = document.getElementById('ctrlModalBtn');
+  const skip  = document.getElementById('ctrlModalSkipBtn');
+  if (!modal) return;
+  if (btn) btn.style.display = 'none';
+  if (skip) skip.style.display = 'none';
+  if (title) title.textContent = 'ASSIGN CONTROLLERS';
+  if (sub) sub.textContent = 'Press a button on each controller when prompted.';
+  modal.classList.remove('hidden');
+}
+function joinModalUpdate(numPlayers, labels, currentPort) {
+  const body = document.getElementById('ctrlModalBody');
+  if (!body) return;
+  let rows = '';
+  for (let i = 0; i < numPlayers; i++) {
+    const label = labels[i];
+    let cls = 'ctrl-player-row', status;
+    if (label) { cls += ' connected'; status = label; }
+    else if (i === currentPort) { cls += ' unknown'; status = 'PRESS A BUTTON NOW'; }
+    else { status = 'Waiting...'; }
+    rows += '<div class="' + cls + '">' +
+      '<div class="ctrl-player-num">PLAYER ' + (i+1) + '</div>' +
+      '<span class="ctrl-player-icon">&#127918;</span>' +
+      '<div class="ctrl-player-info"><div class="ctrl-player-status">' + status + '</div></div>' +
+      '</div>';
+  }
+  body.innerHTML = '<div class="ctrl-player-list">' + rows + '</div>';
+}
+function joinModalHide() {
+  const modal = document.getElementById('ctrlModal');
+  const btn   = document.getElementById('ctrlModalBtn');
+  const skip  = document.getElementById('ctrlModalSkipBtn');
+  if (btn) btn.style.display = 'inline-block';
+  if (skip) skip.style.display = 'inline-block';
+  if (modal) modal.classList.add('hidden');
+}
+
 async function rmgJoinFlow(romPath) {
   if (!window.easyarc || !window.easyarc.launchRMG) { console.error('[JOIN] launchRMG bridge not available'); return; }
   const connected = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean).length;
@@ -2161,39 +2202,45 @@ async function rmgJoinFlow(romPath) {
   }
   console.log('[JOIN] ' + numPlayers + ' controllers connected. Starting join flow.');
   const assignments = [null, null, null, null];
+  const labels = [null, null, null, null];
   const claimedSerials = new Set();
   const claimedXinput = new Set();
   let xinputRank = 0;  // XInput slots count only among XInput pads, NOT browser gp.index
+  joinModalShow(numPlayers);
   for (let port = 0; port < numPlayers; port++) {
-    console.log('========================================');
     console.log('[JOIN] Press a button for Player ' + (port + 1) + '...');
+    joinModalUpdate(numPlayers, labels, port);
     let assigned = false, attempts = 0;
     while (!assigned && attempts < 50) {
       attempts++;
       const c = await rmgDetectOnePressExcluding(Array.from(claimedSerials), Array.from(claimedXinput), 15000, 16);
-      if (!c || c.detected === 'none') { console.warn('[JOIN] timed out for Player ' + (port+1)); return { ok:false, reason:'timeout', port, assignments }; }
+      if (!c || c.detected === 'none') { console.warn('[JOIN] timed out for Player ' + (port+1)); joinModalHide(); return { ok:false, reason:'timeout', port, assignments }; }
       if (c.detected === 'hid') {
         if (claimedSerials.has(c.serial)) { console.log('[JOIN] that pad already assigned - press a DIFFERENT one'); continue; }
         const res = await window.easyarc.matchHidByPath(c.path);
         if (!res || !res.success) { console.log('[JOIN] could not resolve pad, try again:', res && res.error); continue; }
         claimedSerials.add(c.serial);
         assignments[port] = res.controller;
+        labels[port] = res.controller.deviceName + ' (' + res.controller.deviceSerial + ')';
         console.log('[JOIN] Player ' + (port+1) + ' = ' + res.controller.deviceName + ' (' + res.controller.deviceSerial + ')');
         assigned = true;
       } else if (c.detected === 'xinput') {
         if (claimedXinput.has(c.gpIndex)) { console.log('[JOIN] that pad already assigned - press a DIFFERENT one'); continue; }
         claimedXinput.add(c.gpIndex);
         assignments[port] = { type:'xinput', xinputIndex: xinputRank };
+        labels[port] = 'XInput Controller (slot #' + xinputRank + ')';
         console.log('[JOIN] Player ' + (port+1) + ' = XInput controller (slot #' + xinputRank + ', gp.index ' + c.gpIndex + ')');
         xinputRank++;
         assigned = true;
       }
     }
-    if (!assigned) { console.warn('[JOIN] could not assign Player ' + (port+1)); return { ok:false, reason:'maxAttempts', port, assignments }; }
+    if (!assigned) { console.warn('[JOIN] could not assign Player ' + (port+1)); joinModalHide(); return { ok:false, reason:'maxAttempts', port, assignments }; }
+    joinModalUpdate(numPlayers, labels, -1);
   }
-  console.log('========================================');
   console.log('[JOIN] All assigned. Launching:', JSON.parse(JSON.stringify(assignments)));
+  joinModalUpdate(numPlayers, labels, -1);
   saveControllerCache(assignments);
+  setTimeout(joinModalHide, 600);
   const result = await window.easyarc.launchRMG(romPath, assignments);
   console.log('[JOIN] launch result:', result);
   return result;
