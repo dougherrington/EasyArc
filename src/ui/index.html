@@ -1982,6 +1982,149 @@ async function launchGame(game) {
 // RMG_SLICE3_2026-06-21: DevTools-callable multi-controller N64 launch (Windows test path).
 // Enumerates all pads in gp.index order; xinputIndex = gp.index (P1 = first slot).
 // ATOPNUC test is the arbiter for index->player order.  Usage: rmgLaunchAllPads('C:\\path\\game.z64')
+// SLICE5.2_2026-06-22: mixed-detection diagnostic. Arms HID press-detection (main) +
+// Gamepad-API polling (renderer) for one window, applies HID-first priority, reports what fired.
+// Usage: rmgDetectOnePress(10000)  then press ONE controller (DS4, GameSir, or Xbox).
+async function rmgDetectOnePress(windowMs, threshold) {
+  const ms = windowMs || 10000;
+  const TH = threshold || 16;
+  const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+  function parseVidPid(id) {
+    const v = /vendor:\s*([0-9a-f]{4})/i.exec(id);
+    const p = /product:\s*([0-9a-f]{4})/i.exec(id);
+    return (v && p) ? { vendorId: parseInt(v[1],16), productId: parseInt(p[1],16) } : null;
+  }
+  const HID_VENDORS = [0x057E, 0x054C];
+  const hidTargets = []; const seen = new Set();
+  gps.forEach(gp => {
+    const vp = parseVidPid(gp.id);
+    if (vp && HID_VENDORS.includes(vp.vendorId)) {
+      const key = vp.vendorId + ':' + vp.productId;
+      if (!seen.has(key)) { seen.add(key); hidTargets.push(vp); }
+    }
+  });
+  const hidPromise = (hidTargets.length && window.easyarc.hidDetectPress)
+    ? window.easyarc.hidDetectPress(hidTargets, ms, TH)
+    : Promise.resolve({ success: true, fired: false });
+  const gpPromise = new Promise((resolve) => {
+    const start = performance.now();
+    function poll() {
+      const now = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+      for (const gp of now) {
+        const vp = parseVidPid(gp.id);
+        if (vp && HID_VENDORS.includes(vp.vendorId)) continue;
+        const pressed = gp.buttons.some(b => b.pressed) || gp.axes.some(a => Math.abs(a) > 0.5);
+        if (pressed) { resolve({ fired: true, kind: 'xinput', gpIndex: gp.index, id: gp.id }); return; }
+      }
+      if (performance.now() - start > ms) { resolve({ fired: false }); return; }
+      requestAnimationFrame(poll);
+    }
+    requestAnimationFrame(poll);
+  });
+  const [hidRes, gpRes] = await Promise.all([hidPromise, gpPromise]);
+  let conclusion;
+  if (hidRes && hidRes.fired) conclusion = { detected: 'hid', vendorId: hidRes.vendorId, productId: hidRes.productId, serial: hidRes.serial, path: hidRes.path };
+  else if (gpRes && gpRes.fired) conclusion = { detected: 'xinput', gpIndex: gpRes.gpIndex, id: gpRes.id };
+  else conclusion = { detected: 'none' };
+  console.log('[5.2] HID result:', JSON.stringify(hidRes));
+  console.log('[5.2] GP result :', JSON.stringify(gpRes));
+  console.log('[5.2] CONCLUSION:', JSON.stringify(conclusion, null, 2));
+  return conclusion;
+}
+
+// SLICE5.3: detection that excludes already-claimed pads.
+async function rmgDetectOnePressExcluding(excludeSerials, excludeIndexes, windowMs, threshold) {
+  const ms = windowMs || 15000;
+  const TH = threshold || 16;
+  const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+  function parseVidPid(id) {
+    const v = /vendor:\s*([0-9a-f]{4})/i.exec(id);
+    const p = /product:\s*([0-9a-f]{4})/i.exec(id);
+    return (v && p) ? { vendorId: parseInt(v[1],16), productId: parseInt(p[1],16) } : null;
+  }
+  const HID_VENDORS = [0x057E, 0x054C];
+  const hidTargets = []; const seen = new Set();
+  gps.forEach(gp => {
+    const vp = parseVidPid(gp.id);
+    if (vp && HID_VENDORS.includes(vp.vendorId)) {
+      const key = vp.vendorId + ':' + vp.productId;
+      if (!seen.has(key)) { seen.add(key); hidTargets.push(vp); }
+    }
+  });
+  const hidPromise = (hidTargets.length && window.easyarc.hidDetectPress)
+    ? window.easyarc.hidDetectPress(hidTargets, ms, TH, excludeSerials || [])
+    : Promise.resolve({ success: true, fired: false });
+  const exIdx = new Set(excludeIndexes || []);
+  const gpPromise = new Promise((resolve) => {
+    const start = performance.now();
+    function poll() {
+      const now = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+      for (const gp of now) {
+        const vp = parseVidPid(gp.id);
+        if (vp && HID_VENDORS.includes(vp.vendorId)) continue;
+        if (exIdx.has(gp.index)) continue;
+        const pressed = gp.buttons.some(b => b.pressed) || gp.axes.some(a => Math.abs(a) > 0.5);
+        if (pressed) { resolve({ fired: true, kind:'xinput', gpIndex: gp.index, id: gp.id }); return; }
+      }
+      if (performance.now() - start > ms) { resolve({ fired: false }); return; }
+      requestAnimationFrame(poll);
+    }
+    requestAnimationFrame(poll);
+  });
+  const [hidRes, gpRes] = await Promise.all([hidPromise, gpPromise]);
+  if (hidRes && hidRes.fired) return { detected:'hid', serial: hidRes.serial, path: hidRes.path, vendorId: hidRes.vendorId, productId: hidRes.productId };
+  if (gpRes && gpRes.fired) return { detected:'xinput', gpIndex: gpRes.gpIndex, id: gpRes.id };
+  return { detected:'none' };
+}
+
+// SLICE5.3: console-driven multi-controller join flow.
+async function rmgJoinFlow(romPath) {
+  if (!window.easyarc || !window.easyarc.launchRMG) { console.error('[JOIN] launchRMG bridge not available'); return; }
+  const connected = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean).length;
+  const numPlayers = Math.min(connected, 4);
+  if (numPlayers <= 1) {
+    console.log('[JOIN] 1 or 0 controllers - direct launch (no join flow)');
+    return rmgLaunchAllPads(romPath);
+  }
+  console.log('[JOIN] ' + numPlayers + ' controllers connected. Starting join flow.');
+  const assignments = [null, null, null, null];
+  const claimedSerials = new Set();
+  const claimedXinput = new Set();
+  let xinputRank = 0;  // XInput slots count only among XInput pads, NOT browser gp.index
+  for (let port = 0; port < numPlayers; port++) {
+    console.log('========================================');
+    console.log('[JOIN] Press a button for Player ' + (port + 1) + '...');
+    let assigned = false, attempts = 0;
+    while (!assigned && attempts < 50) {
+      attempts++;
+      const c = await rmgDetectOnePressExcluding(Array.from(claimedSerials), Array.from(claimedXinput), 15000, 16);
+      if (!c || c.detected === 'none') { console.warn('[JOIN] timed out for Player ' + (port+1)); return { ok:false, reason:'timeout', port, assignments }; }
+      if (c.detected === 'hid') {
+        if (claimedSerials.has(c.serial)) { console.log('[JOIN] that pad already assigned - press a DIFFERENT one'); continue; }
+        const res = await window.easyarc.matchHidByPath(c.path);
+        if (!res || !res.success) { console.log('[JOIN] could not resolve pad, try again:', res && res.error); continue; }
+        claimedSerials.add(c.serial);
+        assignments[port] = res.controller;
+        console.log('[JOIN] Player ' + (port+1) + ' = ' + res.controller.deviceName + ' (' + res.controller.deviceSerial + ')');
+        assigned = true;
+      } else if (c.detected === 'xinput') {
+        if (claimedXinput.has(c.gpIndex)) { console.log('[JOIN] that pad already assigned - press a DIFFERENT one'); continue; }
+        claimedXinput.add(c.gpIndex);
+        assignments[port] = { type:'xinput', xinputIndex: xinputRank };
+        console.log('[JOIN] Player ' + (port+1) + ' = XInput controller (slot #' + xinputRank + ', gp.index ' + c.gpIndex + ')');
+        xinputRank++;
+        assigned = true;
+      }
+    }
+    if (!assigned) { console.warn('[JOIN] could not assign Player ' + (port+1)); return { ok:false, reason:'maxAttempts', port, assignments }; }
+  }
+  console.log('========================================');
+  console.log('[JOIN] All assigned. Launching:', JSON.parse(JSON.stringify(assignments)));
+  const result = await window.easyarc.launchRMG(romPath, assignments);
+  console.log('[JOIN] launch result:', result);
+  return result;
+}
+
 async function rmgLaunchAllPads(romPath) {
   if (!window.easyarc || !window.easyarc.launchRMG) { console.error('[RMG] launchRMG bridge not available'); return; }
   const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);

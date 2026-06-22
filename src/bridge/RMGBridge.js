@@ -227,24 +227,45 @@ class RMGBridge {
     return s;
   }
 
-  _matchOneHid(devices, vendorId, productId) {
-    const candidates = devices.filter((d) =>
-      d.vendorId === vendorId && d.productId === productId &&
-      d.usagePage === 1 && (d.usage === 4 || d.usage === 5)
-    );
-    if (candidates.length === 0) return null;
-    const d = candidates[0];
-    const isSwitch = (vendorId === 0x057E);
-    const isSony   = (vendorId === 0x054C);
+  // Single source of truth for HID controller-object construction (naming / layout / serial format).
+  _hidControllerFromDevice(d) {
+    const isSwitch = (d.vendorId === 0x057E);
+    const isSony   = (d.vendorId === 0x054C);
     return {
       type: 'hid', devicePath: d.path,
       deviceName: isSwitch ? 'Nintendo Switch Pro Controller'
                 : isSony   ? 'PS4 Controller'
                 : (d.product || 'Controller'),
       deviceSerial: this._formatHidSerial(d.serialNumber),
-      hidLayout: (isSwitch || isSony) ? 'switch' : 'standard',
-      _candidateCount: candidates.length
+      hidLayout: (isSwitch || isSony) ? 'switch' : 'standard'
     };
+  }
+
+  _matchOneHid(devices, vendorId, productId) {
+    const candidates = devices.filter((d) =>
+      d.vendorId === vendorId && d.productId === productId &&
+      d.usagePage === 1 && (d.usage === 4 || d.usage === 5)
+    );
+    if (candidates.length === 0) return null;
+    const ctrl = this._hidControllerFromDevice(candidates[0]);
+    ctrl._candidateCount = candidates.length;
+    return ctrl;
+  }
+
+  // SLICE5.3: build a controller object for ONE specific HID device by its path. The join flow
+  // needs this because two identical pads share VID/PID and can only be told apart by the exact
+  // path (and serial) that fired during press-detection.
+  matchHidByPath(path) {
+    if (process.platform !== 'win32') return { success: false, error: 'HID matching is Windows-only' };
+    let HID;
+    try { HID = require('node-hid'); }
+    catch (err) { return { success: false, stage: 'require', error: err.message }; }
+    let devices;
+    try { devices = HID.devices(); }
+    catch (err) { return { success: false, stage: 'enumerate', error: err.message }; }
+    const d = devices.find(dv => dv.path === path);
+    if (!d) return { success: false, error: 'path not found in current device list' };
+    return { success: true, controller: this._hidControllerFromDevice(d) };
   }
 
   getRMGConfigPath() {

@@ -11,6 +11,11 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   }
 
   handle('bridge:findRetroArch', () => bridge.findRetroArch());
+  handle('bridge:matchHidByPath', (path) => {
+    const RMGBridge = require('../bridge/RMGBridge');
+    const rmgBridge = new RMGBridge();
+    return rmgBridge.matchHidByPath(path);
+  });
   handle('bridge:matchHidControllers', (targets) => {
     const RMGBridge = require('../bridge/RMGBridge');
     const rmgBridge = new RMGBridge();
@@ -33,6 +38,110 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
       }));
       return { success: true, count: summary.length, devices: summary };
     } catch (err) { return { success: false, stage: 'enumerate', error: err.message }; }
+  });
+
+  // SLICE5_PROBE_2026-06-21: open each matching HID gamepad path, listen, count input
+  // events per path. Read-only diagnostic — answers whether a button press isolates to
+  // one device path (the gate for the multi-identical-controller join flow).
+  // SLICE5.2_2026-06-22: open candidate HID paths, resolve EARLY when the first one
+  // fires an actual input report (skipping the initial state packet), returning which
+  // path/serial fired. Renderer pairs this with Gamepad-API polling + HID-first priority.
+  handle('bridge:hidDetectPress', (targets, durationMs, threshold, excludeSerials) => {
+    let HID;
+    try { HID = require('node-hid'); }
+    catch (err) { return Promise.resolve({ success: false, stage: 'require', error: err.message }); }
+    let all;
+    try { all = HID.devices(); }
+    catch (err) { return Promise.resolve({ success: false, stage: 'enumerate', error: err.message }); }
+    const TH = threshold || 16;
+    const paths = [];
+    (targets || []).forEach(t => {
+      all.filter(d =>
+        d.vendorId === t.vendorId && d.productId === t.productId &&
+        d.usagePage === 1 && (d.usage === 4 || d.usage === 5)
+      ).forEach(d => paths.push({ path: d.path, serial: d.serialNumber || '', vendorId: t.vendorId, productId: t.productId }));
+    });
+    if (paths.length === 0) return Promise.resolve({ success: false, error: 'no matching HID gamepads found' });
+    const _excl = new Set(excludeSerials || []);
+    const _paths = paths.filter(p => !_excl.has(p.serial));
+    if (_paths.length === 0) return Promise.resolve({ success: true, fired: false, allExcluded: true });
+    return new Promise((resolve) => {
+      const opened = [];
+      let settled = false;
+      let maxDriftSeen = 0;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        opened.forEach(d => { try { d.close(); } catch (e) {} });
+        result.maxDriftSeen = maxDriftSeen;
+        result.threshold = TH;
+        resolve(result);
+      };
+      _paths.forEach((p) => {
+        try {
+          const dev = new HID.HID(p.path);
+          let baseline = null;
+          dev.on('data', (buf) => {
+            const cur = Array.from(buf);
+            if (!baseline) { baseline = cur; return; }
+            const len = Math.min(baseline.length, cur.length);
+            let maxDelta = 0;
+            for (let i = 0; i < len; i++) {
+              const dlt = Math.abs(cur[i] - baseline[i]);
+              if (dlt > maxDelta) maxDelta = dlt;
+            }
+            if (maxDelta < TH && maxDelta > maxDriftSeen) maxDriftSeen = maxDelta;
+            if (maxDelta >= TH) {
+              finish({ success: true, fired: true, path: p.path, serial: p.serial, vendorId: p.vendorId, productId: p.productId, firedDelta: maxDelta });
+            }
+          });
+          dev.on('error', () => {});
+          opened.push(dev);
+        } catch (e) {}
+      });
+      const ms = durationMs || 10000;
+      setTimeout(() => finish({ success: true, fired: false, candidatesOpened: opened.length }), ms);
+    });
+  });
+
+  handle('bridge:hidProbe', (targets, durationMs) => {
+    let HID;
+    try { HID = require('node-hid'); }
+    catch (err) { return Promise.resolve({ success: false, stage: 'require', error: err.message }); }
+    let all;
+    try { all = HID.devices(); }
+    catch (err) { return Promise.resolve({ success: false, stage: 'enumerate', error: err.message }); }
+    const paths = [];
+    (targets || []).forEach(t => {
+      all.filter(d =>
+        d.vendorId === t.vendorId && d.productId === t.productId &&
+        d.usagePage === 1 && (d.usage === 4 || d.usage === 5)
+      ).forEach(d => paths.push({ path: d.path, serial: d.serialNumber || '' }));
+    });
+    if (paths.length === 0) return Promise.resolve({ success: false, error: 'no matching HID gamepads found' });
+    return new Promise((resolve) => {
+      const opened = [];
+      const fires = {};
+      paths.forEach((p) => {
+        try {
+          const dev = new HID.HID(p.path);
+          fires[p.path] = 0;
+          dev.on('data', () => { fires[p.path] += 1; });
+          dev.on('error', () => {});
+          opened.push(dev);
+        } catch (e) {
+          fires[p.path] = 'OPEN_FAILED: ' + e.message;
+        }
+      });
+      const ms = durationMs || 8000;
+      setTimeout(() => {
+        opened.forEach(d => { try { d.close(); } catch (e) {} });
+        resolve({
+          success: true, listenedMs: ms,
+          devices: paths.map(p => ({ path: p.path, serial: p.serial, dataEvents: fires[p.path] }))
+        });
+      }, ms);
+    });
   });
   // FIX_2026-05-24_DOLPHIN_STEP1_2: ensureDolphinReady — Step 1+2 only.
   // Detects existing Dolphin install or downloads+extracts to %APPDATA%\\easyarc\\dolphin.
