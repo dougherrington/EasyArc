@@ -128,7 +128,9 @@ const RETROARCH_WIN_DIR = path.join(process.env.APPDATA || os.homedir(), 'easyar
 const CORES_PATH = process.platform === 'win32'
   ? path.join(RETROARCH_WIN_DIR, 'cores')
   : path.join(os.homedir(), 'Library/Application Support/RetroArch/cores');
-const REMAPS_PATH = path.join(os.homedir(), 'Library/Application Support/RetroArch/config/remaps');
+const REMAPS_PATH = process.platform === 'win32'
+  ? path.join(process.env.APPDATA || os.homedir(), 'easyarc', 'retroarch', 'remaps')
+  : path.join(os.homedir(), 'Library/Application Support/RetroArch/config/remaps');
 
 // Core folder names for remap files (must match RetroArch's core display name)
 const CORE_REMAP_FOLDERS = {
@@ -184,11 +186,12 @@ const SYSTEM_ANALOG_MODES = {
   gbc:      { p1: '1', p2: '1' },
   gb:       { p1: '1', p2: '1' },
   gba:      { p1: '1', p2: '1' },
-  snes:     { p1: '0', p2: '0' },
+  snes:     { p1: '1', p2: '1' },
   nes:      { p1: '1', p2: '1' },
-  genesis:  { p1: '0', p2: '0' },
-  saturn:   { p1: '0', p2: '0' },
+  genesis:  { p1: '1', p2: '1' },
+  saturn:   { p1: '1', p2: '1' },
   dreamcast:{ p1: '0', p2: '0' },
+  mastersystem: { p1: '1', p2: '1' },
   gamecube: { p1: '0', p2: '0' },
 };
 
@@ -847,16 +850,16 @@ class RetroArchBridge {
     const content = [
       'input_libretro_device_p1 = "' + deviceTypes.p1 + '"',
       'input_libretro_device_p2 = "' + deviceTypes.p2 + '"',
-      'input_libretro_device_p3 = "1"',
-      'input_libretro_device_p4 = "1"',
+      'input_libretro_device_p3 = "' + deviceTypes.p2 + '"',
+      'input_libretro_device_p4 = "' + deviceTypes.p2 + '"',
       'input_libretro_device_p5 = "1"',
       'input_libretro_device_p6 = "1"',
       'input_libretro_device_p7 = "1"',
       'input_libretro_device_p8 = "1"',
       'input_player1_analog_dpad_mode = "' + analogModes.p1 + '"',
       'input_player2_analog_dpad_mode = "' + analogModes.p2 + '"',
-      'input_player3_analog_dpad_mode = "0"',
-      'input_player4_analog_dpad_mode = "0"',
+      'input_player3_analog_dpad_mode = "' + analogModes.p2 + '"',
+      'input_player4_analog_dpad_mode = "' + analogModes.p2 + '"',
       'input_player5_analog_dpad_mode = "0"',
       'input_player6_analog_dpad_mode = "0"',
       'input_player7_analog_dpad_mode = "0"',
@@ -946,6 +949,24 @@ class RetroArchBridge {
         'input_enable_hotkey': 'nul',
         'input_exit_emulator': 'nul',
         'auto_remaps_enable': 'true',
+        'input_player1_analog_dpad_mode': '1',
+        'input_player2_analog_dpad_mode': '1',
+        'input_player3_analog_dpad_mode': '1',
+        'input_player4_analog_dpad_mode': '1',
+        // FIX_2026-07-08_MULTIPAD_V3: deterministic pad-to-port pins in connection
+        // order. Safe now because config_save_on_exit=false stops RetroArch re-dumping
+        // and mutating them (that — not pinning itself — caused the July 1 incident).
+        // The scrub below clears any pre-existing pins first, so these four are written
+        // fresh every launch. Fixes autodetect collapsing P2's pad onto both ports.
+        'input_autodetect_enable': 'true',
+        'input_max_users': '8',
+        'config_save_on_exit': 'false',
+        'input_player1_joypad_index': '0',
+        'input_player2_joypad_index': '1',
+        'input_player3_joypad_index': '2',
+        'input_player4_joypad_index': '3',
+
+        'input_remaps_directory': ':\\remaps',
         'input_menu_toggle': 'nul',
         'input_menu_toggle_btn': 'nul',
         'input_menu_toggle_gamepad_combo': '0',
@@ -965,6 +986,9 @@ class RetroArchBridge {
         'video_fullscreen': 'true',
         'quit_on_close_content': '2'
       };
+      // FIX_2026-07-01_MULTIPAD_V2: scrub stale pad-to-port pins so an orphaned
+      // index can never make a controller invisible again.
+      cfg = cfg.replace(/^input_player\d+_joypad_index\s*=.*$\n?/gm, '');
       for (const [key, val] of Object.entries(settings)) {
         const regex = new RegExp('^' + key + '\\s*=.*$', 'm');
         const line = key + ' = "' + val + '"';
@@ -1070,19 +1094,41 @@ class RetroArchBridge {
       try {
         this.retroarchProcess = spawn(duckstation.path, ['-batch', '--', options.romPath], { detached: false, stdio: 'inherit' });
         console.log('[PSX-LAUNCH] spawn() returned. PID:', this.retroarchProcess && this.retroarchProcess.pid);
+
+        // FIX_2026-06-30_DUCKSTATION_LIFECYCLE (Bug #7): emit game-started / game-exited
+        // so the renderer disables nav and the launch guard blocks duplicate launches
+        // during play. Without this, __easyarcGameRunning stayed false and A-button
+        // presses during gameplay triggered the whoosh sound (input bleed).
+        const sendToRenderer = (channel) => {
+          try {
+            const { BrowserWindow } = require('electron');
+            for (const w of BrowserWindow.getAllWindows()) {
+              if (!w.isDestroyed()) w.webContents.send(channel);
+            }
+          } catch (e) { console.log('[PSX-LAUNCH] sendToRenderer ' + channel + ' failed:', e.message); }
+        };
+
+        sendToRenderer('game-started');
+
+        const onDuckStationExit = () => {
+          if (!this.retroarchProcess) return;
+          this.retroarchProcess = null;
+          sendToRenderer('game-exited');
+          const { BrowserWindow } = require('electron');
+          const wins = BrowserWindow.getAllWindows();
+          if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+        };
+
         this.retroarchProcess.on('error', (err) => {
           console.log('[PSX-LAUNCH] spawn error event:', err.message);
+          onDuckStationExit();
         });
         this.retroarchProcess.on('spawn', () => {
           console.log('[PSX-LAUNCH] spawn event fired — process actually started');
         });
-        // FIX_2026-05-22_NO_MINIMIZE: don't hide EasyArc before DuckStation appears.
         this.retroarchProcess.on('exit', () => {
           console.log('[Bridge] DuckStation exited');
-          this.retroarchProcess = null;
-          const { BrowserWindow } = require('electron');
-          const wins = BrowserWindow.getAllWindows();
-          if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+          onDuckStationExit();
         });
         return { success: true };
       } catch(err) {
@@ -1210,15 +1256,38 @@ class RetroArchBridge {
 
     console.log('[Bridge] Launching:', this.retroarchPath, args.join(' '));
 
+    const sendToRenderer = (channel) => {
+      try {
+        const { BrowserWindow } = require('electron');
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send(channel);
+        }
+      } catch (e) { console.log('[Bridge] sendToRenderer ' + channel + ' failed:', e.message); }
+    };
+
     try {
       this.retroarchProcess = spawn(this.retroarchPath, args, { detached: false, stdio: 'ignore' });
-      this.retroarchProcess.on('exit', () => {
-        console.log('[Bridge] RetroArch exited');
+
+      const onRetroArchExit = () => {
+        if (!this.retroarchProcess) return;
         this.retroarchProcess = null;
+        sendToRenderer('game-exited');
         const { BrowserWindow } = require('electron');
         const wins = BrowserWindow.getAllWindows();
         if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+      };
+
+      this.retroarchProcess.on('error', (err) => {
+        console.log('[Bridge] RetroArch spawn error:', err.message);
+        onRetroArchExit();
       });
+
+      this.retroarchProcess.on('exit', () => {
+        console.log('[Bridge] RetroArch exited');
+        onRetroArchExit();
+      });
+
+      sendToRenderer('game-started');
       return { success: true, pid: this.retroarchProcess.pid };
     } catch(err) {
       return { success: false, error: err.message };

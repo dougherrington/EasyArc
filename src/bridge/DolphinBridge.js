@@ -231,6 +231,7 @@ class DolphinBridge {
       const sectionSettings = {
         'Interface': { 'ConfirmStop': 'False' },
         'Graphics': { 'StartFullscreen': 'True' },
+        'Display': { 'Fullscreen': 'True' },
         'Core': { 'SIDevice0': '6', 'SIDevice1': '6', 'SIDevice2': '6', 'SIDevice3': '6', 'CPUThread': 'True' },
         'Analytics': { 'PermissionAsked': 'True', 'Enabled': 'False' }
       };
@@ -441,14 +442,15 @@ class DolphinBridge {
     // --batch and keeping --config flags makes StartFullscreen, CPUThread, and Backend
     // take effect correctly. Tradeoff: Dolphin briefly shows UI before game loads.
     // Acceptable for beta. Supersedes FIX_2026-06-07_DOLPHIN_LAUNCH_CONFIG_FLAGS.
-    const args = [
-      '--exec=' + romPath,
-      '--config=Dolphin.Graphics.StartFullscreen=True',
-      '--config=Dolphin.Core.CPUThread=True'
-    ];
-    if (process.platform === 'win32') {
-      args.push('--config=Dolphin.Graphics.Backend=D3D11');
-    }
+    // FIX_2026-06-30_DOLPHIN_FULLSCREEN (Bug #18): launch like standalone does —
+    // read settings from Dolphin.ini (written by writeDolphinConfig) instead of
+    // forcing them as --config overrides, which produced borderless-with-taskbar
+    // instead of true fullscreen. The .ini already has StartFullscreen=True etc.
+    // FIX_2026-06-30_DOLPHIN_FULLSCREEN_BATCH (Bug #18): --batch makes Dolphin
+    // boot the game honoring Dolphin.ini's StartFullscreen=True as true fullscreen
+    // (matching standalone). The old reason --batch was dropped (it suppressed
+    // --config flags) no longer applies since we now use the .ini, not --config.
+    const args = ['--batch', '--exec=' + romPath];
     console.log('[DOLPHIN] Spawning with cwd:', cwd, 'args:', args);
 
     return new Promise((resolve) => {
@@ -461,11 +463,38 @@ class DolphinBridge {
         return;
       }
 
+      // FIX_2026-06-30_DOLPHIN_LIFECYCLE (Bug #17): emit game-started / game-exited
+      // so the renderer disables nav and the launch guard blocks duplicate launches
+      // during play. Mirrors the proven RMG/RetroArch pattern. Without this, the
+      // GameCube path never set __easyarcGameRunning, so the DualShock cross button
+      // re-entered the launch handler and spawned duplicate Dolphin instances.
+      const sendToRenderer = (channel) => {
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) w.webContents.send(channel);
+          }
+        } catch (e) { console.log('[DOLPHIN] sendToRenderer ' + channel + ' failed:', e.message); }
+      };
+
+      // Bulletproof exit: fire game-exited exactly once on any terminal outcome,
+      // so the running-flag always clears and future launches are never blocked.
+      let exited = false;
+      const finishExit = (why) => {
+        if (exited) return;
+        exited = true;
+        console.log('[DOLPHIN] Dolphin ended (' + why + ') — re-enabling EasyArc nav');
+        sendToRenderer('game-exited');
+      };
+      proc.on('exit',  (code) => { console.log('[DOLPHIN] exit event, code', code); finishExit('exit'); });
+      proc.on('close', () => finishExit('close'));
+
       let settled = false;
       proc.on('error', (err) => {
         if (settled) return;
         settled = true;
         console.log('[DOLPHIN] spawn error event:', err.message);
+        finishExit('error');
         resolve({ success: false, error: 'spawn error: ' + err.message });
       });
 
@@ -473,6 +502,7 @@ class DolphinBridge {
         if (settled) return;
         settled = true;
         console.log('[DOLPHIN] spawn event fired — PID:', proc.pid);
+        sendToRenderer('game-started');
         resolve({ success: true, pid: proc.pid });
       });
     });

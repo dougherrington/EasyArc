@@ -15,7 +15,8 @@ class PPSSPPBridge {
   // Replaced by bundled/app-data resolution in a later stage.
   getPPSSPPBinary() {
     if (process.platform === 'win32') {
-      return 'C:\\Users\\dough\\Downloads\\ppsspp_win\\PPSSPPWindows64.exe';
+      const appData = process.env.APPDATA || require('os').homedir();
+      return require('path').join(appData, 'easyarc', 'ppsspp', 'PPSSPPWindows64.exe');
     }
     // Mac/Linux not targeted yet — return a path that simply won't exist so callers
     // get a clean "not found" rather than a crash.

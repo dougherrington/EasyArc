@@ -3129,6 +3129,14 @@ async function ctestMaybeLaunch(game) {
   playWhoosh();
   if (!game) return;
   if (ctrlStartupMode) return;
+  // FIX_2026-06-30_LAUNCH_GUARD (Bug #17): if a game is already running, ignore
+  // any further launch trigger. The DualShock cross button (and any controller)
+  // can otherwise reach this handler during play and spawn a duplicate emulator
+  // instance. __easyarcGameRunning is set true on game-started, false on game-exited.
+  if (window.__easyarcGameRunning) {
+    console.log('[LAUNCH-GUARD] Game already running - ignoring launch request');
+    return;
+  }
 
   // Step 1 — check if core is installed, offer download if not
   // Skip for systems that use standalone emulators
@@ -3176,6 +3184,13 @@ async function ctestMaybeLaunch(game) {
     await gamecubeEnsureReadyAndLaunch(game);
     return;
   }
+
+  // SLICE5: N64 games go through dedicated install+join-flow launch path via RMG.
+  if (game.system === 'n64' && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
+    console.log('[CLICK-HANDLER] N64 branch matched - calling n64EnsureReadyAndLaunch');
+    await n64EnsureReadyAndLaunch(game);
+    return;
+  }
   console.log('[CLICK-HANDLER] PSX branch did NOT match - falling through to generic launchGame');
 
   // Controller test disabled — launch directly
@@ -3191,6 +3206,23 @@ async function ctestMaybeLaunch(game) {
 // 1. Ensure Dolphin is installed (auto-download if not).
 // 2. Launch Dolphin with the ROM.
 // Mac retains the old launchGame path; this function is Windows-specific for now.
+// SLICE5: N64 launch flow for Windows. Mirrors the GameCube pattern.
+// 1. Ensure RMG is installed (auto-download if not) BEFORE controller assignment.
+// 2. Cache-aware controller assignment + launch: silent reuse if same controllers as last time,
+//    otherwise the on-screen join-flow modal. Single controller falls through to direct launch.
+async function n64EnsureReadyAndLaunch(game) {
+  console.log('[N64-FLOW] n64EnsureReadyAndLaunch called for', game && game.title);
+  console.log('[N64-FLOW] ROM path:', game && game.path);
+  const ready = await window.easyarc.ensureRMGReady();
+  console.log('[N64-FLOW] ensureRMGReady returned:', JSON.stringify(ready));
+  if (!ready || !ready.success) {
+    console.error('[N64-FLOW] RMG not ready:', ready && ready.error);
+    alert('Could not prepare the N64 emulator (RMG). ' + ((ready && ready.error) || ''));
+    return;
+  }
+  await rmgLaunchWithCache(game.path);
+}
+
 async function gamecubeEnsureReadyAndLaunch(game) {
   console.log('[GC-FLOW] gamecubeEnsureReadyAndLaunch called for', game && game.title);
   console.log('[GC-FLOW] ROM path:', game && game.path);
