@@ -942,9 +942,9 @@ const systemNames = {
   dreamcast:'Sega Dreamcast',
   jaguar:'Atari Jaguar', genesis:'Sega Genesis',
   gamegear:'Game Gear', mastersystem:'Master System',
-  atari2600:'Atari 2600',
+  atari2600:'Atari 2600', atari7800:'Atari 7800', msdos:'MS-DOS',
   psx:'PlayStation', ps2:'PlayStation 2',
-  psp:'PlayStation Portable', ps3:'PlayStation 3',
+  psp:'PlayStation Portable', pspmini:'PSP Mini', ps3:'PlayStation 3',
   saturn:'Sega Saturn',
   mame:'MAME Arcade', mame2003:'MAME Arcade', arcade:'Arcade', neogeo:'Neo Geo',
   wii:'Nintendo Wii',
@@ -954,8 +954,8 @@ const systemNames = {
 const systemColors = {
   gbc:'#1a2a1a', gb:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
   n64:'#2a2a1a', gamecube:'#1a2a2a', jaguar:'#0a0a0a', genesis:'#0a1a0a',
-  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a',
-  psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', ps3:'#0a0a1a',
+  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', msdos:'#0a2a0a',
+  psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', pspmini:'#1a0a2a', ps3:'#0a0a1a',
   saturn:'#2a0a0a',
   mame:'#1a1a0a', mame2003:'#1a1a0a', arcade:'#2a0a1a', neogeo:'#1a0a0a',
 };
@@ -971,9 +971,12 @@ const systemIcons = {
   gamegear:String.fromCodePoint(0x1F7E4),
   mastersystem:String.fromCodePoint(0x2B1C),
   atari2600:String.fromCodePoint(0x1F7E0),
+  atari7800:String.fromCodePoint(0x1F7E5),
+  msdos:String.fromCodePoint(0x1F4BB),
   psx:String.fromCodePoint(0x25FD),
   ps2:String.fromCodePoint(0x25FC),
   psp:String.fromCodePoint(0x1F4F1),
+  pspmini:String.fromCodePoint(0x1F4F2),
   ps3:String.fromCodePoint(0x1F5A5),
   saturn:String.fromCodePoint(0x1FA90),
   gamecube:String.fromCodePoint(0x1F3AE),
@@ -1206,7 +1209,10 @@ function showSupportedSystems() {
     {sys:'psx', name:'PlayStation'},
     {sys:'ps2', name:'PlayStation 2'},
     {sys:'psp', name:'PlayStation Portable'},
+    {sys:'pspmini', name:'PSP Mini'},
     {sys:'atari2600', name:'Atari 2600'},
+    {sys:'atari7800', name:'Atari 7800'},
+    {sys:'msdos', name:'MS-DOS'},
     {sys:'jaguar', name:'Atari Jaguar'},
     {sys:'mame2003', name:'MAME Arcade'},
   ];
@@ -1703,9 +1709,9 @@ function updateCounts() {
   const order = [
     'gbc','gb','gba','nes','snes','n64','gamecube',
     'genesis','gamegear','mastersystem','saturn','dreamcast',
-    'atari2600','jaguar',
+    'atari2600','atari7800','msdos','jaguar',
     'mame','mame2003','arcade','neogeo',
-    'psx','ps2','psp','ps3',
+    'psx','ps2','psp','pspmini','ps3',
     'wii',
     'wiiu',
     'switch',
@@ -3106,7 +3112,7 @@ let ctestResults = {};
 let ctestPendingLaunch = null;
 
 // Systems that need analog stick testing
-const ANALOG_SYSTEMS = ['psx', 'ps2', 'psp', 'n64', 'gba', 'snes', 'genesis', 'gamecube', 'dreamcast'];
+const ANALOG_SYSTEMS = ['psx', 'ps2', 'psp', 'pspmini', 'n64', 'gba', 'snes', 'genesis', 'gamecube', 'dreamcast'];
 
 // Already tested systems (saved per system)
 function ctestAlreadyTested(system) {
@@ -3141,7 +3147,7 @@ async function ctestMaybeLaunch(game) {
   // Step 1 — check if core is installed, offer download if not
   // Skip for systems that use standalone emulators
   // FIX_2026-05-22_DUCKSTATION_INSTALL: psx now uses DuckStation (standalone), not RetroArch
-  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'psx', 'ps2', 'ps3', 'xbox', 'xbox360'];
+  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'psx', 'ps2', 'ps3', 'xbox', 'xbox360', 'psp', 'pspmini'];
   if (window.easyarc && !standaloneEmulators.includes(game.system)) {
     const exists = await window.easyarc.coreExists(game.system);
     if (!exists) {
@@ -3185,10 +3191,11 @@ async function ctestMaybeLaunch(game) {
     return;
   }
 
-  // SLICE5: N64 games go through dedicated install+join-flow launch path via RMG.
-  if (game.system === 'n64' && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
-    console.log('[CLICK-HANDLER] N64 branch matched - calling n64EnsureReadyAndLaunch');
-    await n64EnsureReadyAndLaunch(game);
+  // FIX_2026-07-01_N64_RETROARCH: N64 now uses RetroArch/Mupen64Plus-Next (RMG dropped).
+  // Falls through to generic launchGame which routes N64 through RetroArchBridge.
+  if (game.system === 'n64') {
+    console.log('[CLICK-HANDLER] N64 branch matched - launching via RetroArch/Mupen64Plus-Next');
+    await launchGame(game);
     return;
   }
   console.log('[CLICK-HANDLER] PSX branch did NOT match - falling through to generic launchGame');
@@ -4232,6 +4239,16 @@ if (window.easyarc && window.easyarc.onGameExited) {
       GP_NAV.stickHoldStart = { up: 0, down: 0, left: 0, right: 0 };
       GP_NAV.stickLastFire = { up: 0, down: 0, left: 0, right: 0 };
     } catch (e) { console.log('[UI] GP_NAV reset on exit failed:', e.message); }
+    // FIX_2026-07-08_PRO_CONTROLLER_RESCAN: force Gamepad API rescan after emulator
+    // releases controllers. Non-xinput devices (e.g. Nintendo Pro Controller via
+    // Bluetooth) lose their gamepad index when the emulator exits. A short delay allows
+    // Windows to re-register the device before we poll again.
+    setTimeout(() => {
+      try {
+        const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+        console.log('[UI] Post-exit gamepad rescan:', Array.from(gps).filter(Boolean).map(g => g && g.id));
+      } catch (e) { console.log('[UI] Post-exit gamepad rescan failed:', e.message); }
+    }, 1000);
   });
 }
 
@@ -4390,6 +4407,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'psx',         name:'PlayStation' },
   { id:'ps2',         name:'PlayStation 2' },
   { id:'psp',         name:'PlayStation Portable' },
+  { id:'pspmini',     name:'PSP Mini' },
   { id:'ps3',         name:'PlayStation 3' },
   { id:'n64',         name:'Nintendo 64' },
   { id:'gamecube',    name:'GameCube' },
@@ -4413,6 +4431,8 @@ const ADD_GAMES_SYSTEMS = [
   { id:'arcade',      name:'Arcade (FinalBurn Neo)' },
   { id:'neogeo',      name:'Neo Geo' },
   { id:'atari2600',   name:'Atari 2600' },
+  { id:'atari7800',   name:'Atari 7800' },
+  { id:'msdos',       name:'MS-DOS' },
 ];
 
 function showTestPlanModal() {
@@ -4919,7 +4939,7 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
-const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'psp', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
+const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }

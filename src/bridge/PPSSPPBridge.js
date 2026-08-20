@@ -46,7 +46,7 @@ class PPSSPPBridge {
     const cwd = path.dirname(binaryPath);
     // STAGE_A: --fullscreen only. Clean-exit flag (--escape-exit) deliberately held
     // back until we observe natural exit behavior first.
-    const args = [romPath, '--fullscreen'];
+    const args = [romPath, '--fullscreen', '--escape-exit'];
     console.log('[PPSSPP] Spawning with cwd:', cwd, 'args:', args);
 
     return new Promise((resolve) => {
@@ -76,6 +76,23 @@ class PPSSPPBridge {
         // guard that DuckStation/Dolphin/etc. already use. Without this, pressing a
         // face button during a PSP game re-fires launchGame and spawns duplicate
         // PPSSPP instances (the guard sees retroarchProcess===null and allows it).
+        // FIX_2026-07-08_PPSSPP_LIFECYCLE: emit game-started so renderer suppresses
+        // input bleed during PSP gameplay. game-exited emitted on process exit.
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) w.webContents.send('game-started');
+          }
+        } catch(e) { console.log('[PPSSPP] game-started send failed:', e.message); }
+        proc.on('exit', () => {
+          console.log('[PPSSPP] process exited');
+          try {
+            const { BrowserWindow } = require('electron');
+            const wins = BrowserWindow.getAllWindows();
+            for (const w of wins) { if (!w.isDestroyed()) w.webContents.send('game-exited'); }
+            if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+          } catch(e) { console.log('[PPSSPP] game-exited send failed:', e.message); }
+        });
         resolve({ success: true, pid: proc.pid, proc: proc });
       });
     });

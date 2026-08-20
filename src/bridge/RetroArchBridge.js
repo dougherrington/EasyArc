@@ -59,6 +59,8 @@ const UNIQUE_EXTENSIONS = {
   gamegear:     ['.gg'],
   mastersystem: ['.sms'],
   atari2600:    ['.a26'],
+  atari7800:    ['.a78'],
+  msdos:        ['.exe', '.com', '.bat', '.img', '.ima', '.iso'],
   switch:       ['.nsp', '.xci', '.nca'],
   gamecube:     ['.gcm', '.gcz', '.nkit'],
   wii:          ['.wbfs', '.wad'],
@@ -67,17 +69,17 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
-  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','jaguar','psp','psx','mame','mame2003','arcade','neogeo'],
-  '.bin':  ['atari2600','genesis','mastersystem','gamegear','saturn'],
-  '.iso':  ['ps2','psp','gamecube','wii','saturn','dreamcast'],
+  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
+  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','jaguar','msdos','psp','psx','mame','mame2003','arcade','neogeo'],
+  '.bin':  ['atari2600','atari7800','genesis','mastersystem','gamegear','saturn'],
+  '.iso':  ['ps2','psp','pspmini','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
   '.ciso': ['gamecube','wii'],
-  '.cso':  ['ps2','psp'],
+  '.cso':  ['ps2','psp','pspmini'],
   '.chd':  ['psx','ps2','saturn','dreamcast'],
   '.cdi':  ['dreamcast'],
   '.cue':  ['psx','ps2','saturn','dreamcast'],
-  '.pbp':  ['psx','psp'],
+  '.pbp':  ['psx','psp','pspmini'],
   '.pkg':  ['ps3'],
 };
 
@@ -87,6 +89,7 @@ const FOLDER_HINTS = [
   { hints: ['playstation 3','playstation3','ps3'],                           system: 'ps3' },
   { hints: ['playstation 2','playstation2','ps2'],                           system: 'ps2' },
   { hints: ['playstation portable','psp'],                                   system: 'psp' },
+  { hints: ['psp mini','pspmini','psp-mini','psp_mini','psp minis','pspminis','psp-minis','psp_minis','mini psp','minipsp','mini-psp','playstation portable mini','playstation portable minis','ps portable mini','ps minis','playstation minis','minis','pspgo'], system: 'pspmini' },
   { hints: ['sony playstation','playstation 1','playstation1','psx','ps1'],  system: 'psx' },
   { hints: ['sega dreamcast','dreamcast','dream cast'],                      system: 'dreamcast' },
   { hints: ['sega saturn','saturn'],                                         system: 'saturn' },
@@ -105,6 +108,8 @@ const FOLDER_HINTS = [
   { hints: ['game gear','gamegear','gg'],                                    system: 'gamegear' },
   { hints: ['master system','mastersystem','sms'],                           system: 'mastersystem' },
   { hints: ['atari 2600','atari2600'],                                       system: 'atari2600' },
+  { hints: ['atari 7800','atari7800'],                                       system: 'atari7800' },
+  { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
   { hints: ['mame'],                                                         system: 'mame' },
@@ -155,6 +160,8 @@ const CORE_REMAP_FOLDERS = {
   dreamcast:   'Flycast',
   gamecube:    'Dolphin',
   atari2600:   'Stella',
+  atari7800:   'ProSystem',
+  msdos:       'DOSBox-Pure',
 };
 
 // Device type values per system (RetroArch internal values)
@@ -213,6 +220,8 @@ const SYSTEM_CORES = {
   dreamcast:    'flycast_libretro.dylib',
   gamecube:     'dolphin_libretro.dylib',
   atari2600:    'stella_libretro.dylib',
+  atari7800:    'prosystem_libretro.dylib',
+  msdos:        'dosbox_pure_libretro.dylib',
   mame:         'mame_libretro.dylib',
   mame2003:     'mame2003_plus_libretro.dylib',
   arcade:       'fbneo_libretro.dylib',
@@ -946,6 +955,7 @@ class RetroArchBridge {
           'savefile_directory': ':\\saves',
           'savestate_directory': ':\\states'
         } : {}),
+        'video_driver': 'gl',
         'input_enable_hotkey': 'nul',
         'input_exit_emulator': 'nul',
         'auto_remaps_enable': 'true',
@@ -1142,7 +1152,7 @@ class RetroArchBridge {
     // DevTools launchPPSSPP path is also used. This branch returns, so RetroArch is
     // never started for PSP. Also wires PSP into the UI launch flow (clicking a PSP
     // game now uses PPSSPP). Uses the separate PPSSPPBridge (its own file).
-    if (options.system === 'psp') {
+    if (options.system === 'psp' || options.system === 'pspmini') {
       console.log('[Bridge] Launching PSP game via PPSSPP:', options.romPath);
       try {
         const PPSSPPBridge = require('./PPSSPPBridge');
@@ -1747,6 +1757,9 @@ Device = Quartz/0/Keyboard & Mouse`;
           // wizard is already complete so it never appears on a fresh portable install.
           'SetupWizardIncomplete': 'false',
         },
+        'AutoUpdater': {
+          'CheckAtStartup': 'false',
+        },
         // FIX_2026-06-06_DUCKSTATION_PAD_BINDINGS: write [Pad1] and [Pad2] sections so
         // controllers work without user having to map them through DuckStation's own UI.
         // Binding strings captured from working DuckStation config on x64 Windows.
@@ -2061,9 +2074,9 @@ Source = 0`;
 
   async scrapeGame(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26,
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 43, msdos: 135,
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
-      gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, ps3: 59
+      gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 62, ps3: 59
     };
     const systemId = SS_IDS[game.system];
     if (!systemId) {

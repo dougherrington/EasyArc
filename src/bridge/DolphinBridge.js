@@ -229,11 +229,12 @@ class DolphinBridge {
       // backend (avoids Microsoft Basic Render Driver fallback issues). Analytics
       // suppresses the first-launch telemetry prompt for beta testers.
       const sectionSettings = {
-        'Interface': { 'ConfirmStop': 'False' },
+        'Interface': { 'ConfirmStop': 'False', 'SkipNKitWarning': 'True' },
         'Graphics': { 'StartFullscreen': 'True' },
         'Display': { 'Fullscreen': 'True' },
         'Core': { 'SIDevice0': '6', 'SIDevice1': '6', 'SIDevice2': '6', 'SIDevice3': '6', 'CPUThread': 'True' },
-        'Analytics': { 'PermissionAsked': 'True', 'Enabled': 'False' }
+        'Analytics': { 'PermissionAsked': 'True', 'Enabled': 'False' },
+        'AutoUpdate': { 'UpdateTrack': '' }
       };
       if (process.platform === 'win32') {
         sectionSettings['Graphics']['Backend'] = 'D3D11';
