@@ -42,6 +42,20 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources/retroarch-bundle/",
+        "to": "retroarch-bundle/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/ppsspp-bundle/",
+        "to": "ppsspp-bundle/",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asarUnpack": [

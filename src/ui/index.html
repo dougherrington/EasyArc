@@ -4222,12 +4222,22 @@ if (window.easyarc && window.easyarc.onGameStarted) {
   window.easyarc.onGameStarted(() => {
     console.log('[UI] game-started -> nav disabled');
     window.__easyarcGameRunning = true;
+    // FIX_2026-08-27_SCRAPER_PAUSE: pause scraper when game launches
+    if (scrapeRunning) {
+      console.log('[UI] game-started -> scraper paused');
+      scrapeRunning = false;
+    }
   });
 }
 if (window.easyarc && window.easyarc.onGameExited) {
   window.easyarc.onGameExited(() => {
     console.log('[UI] game-exited -> nav re-enabled');
     window.__easyarcGameRunning = false;
+    // FIX_2026-08-27_SCRAPER_RESUME: resume scraper after game exits
+    if (scrapeResumeQueue && scrapeResumeIndex < scrapeResumeQueue.length) {
+      console.log('[UI] game-exited -> resuming scraper from index', scrapeResumeIndex);
+      resumeScrape();
+    }
     // FIX_2026-06-19_PSP_LIFECYCLE: clear edge-trigger state so a button still held at
     // exit can't fire an action (e.g. relaunch the game). GP_NAV.holdStart is the real
     // previous-state store used by gpShouldFire; we also reset D-pad/stick tap state.
@@ -4939,6 +4949,9 @@ async function addGamesScanAndAdd() {
 // BOX ART SCRAPING
 // ═══════════════════════════════════════════════════════════
 let scrapeRunning = false;
+let scrapeResumeQueue = null;   // saved queue when paused by game launch
+let scrapeResumeIndex = 0;      // saved position when paused by game launch
+let scrapeResumeCredentials = null; // saved credentials when paused
 const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 async function startScrape() {
@@ -4970,7 +4983,13 @@ async function startScrape() {
   logLines.push('Total to scrape: ' + toScrape.length);
   logLines.push('');
 
+  // FIX_2026-08-27_SCRAPER_PAUSE: save queue and credentials for resume after game exit
+  scrapeResumeQueue = toScrape;
+  scrapeResumeIndex = 0;
+  scrapeResumeCredentials = { ssUser, ssPass };
+
   for (const g of toScrape) {
+    scrapeResumeIndex = toScrape.indexOf(g);
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
     if (gameEl) gameEl.textContent = g.title;
@@ -5015,6 +5034,9 @@ async function startScrape() {
   logLines.push('Success rate: ' + pct + '% (of attempted)');
 
   scrapeRunning = false;
+  scrapeResumeQueue = null;
+  scrapeResumeIndex = 0;
+  scrapeResumeCredentials = null;
   const led2 = document.getElementById('scrapeLed');
   if (led2) led2.classList.remove('active');
   if (row) row.style.display = 'none';
@@ -5024,6 +5046,68 @@ async function startScrape() {
   if (window.easyarc && window.easyarc.writeScrapeLog) {
     await window.easyarc.writeScrapeLog(logLines.join('\n'));
   }
+}
+
+// FIX_2026-08-27_SCRAPER_RESUME: resume scraping from saved position after game exit
+async function resumeScrape() {
+  if (!scrapeResumeQueue || scrapeResumeIndex >= scrapeResumeQueue.length) return;
+  if (scrapeRunning) return;
+
+  const toScrape = scrapeResumeQueue.slice(scrapeResumeIndex);
+  const ssUser = scrapeResumeCredentials ? scrapeResumeCredentials.ssUser : '';
+  const ssPass = scrapeResumeCredentials ? scrapeResumeCredentials.ssPass : '';
+
+  scrapeRunning = true;
+  const led = document.getElementById('scrapeLed');
+  if (led) led.classList.add('active');
+  const row = document.getElementById('scrapeProgressRow');
+  const title = document.getElementById('scrapeProgressTitle');
+  const gameEl = document.getElementById('scrapeProgressGame');
+  if (row) row.style.display = '';
+
+  let done = 0;
+  let succeeded = 0;
+  let partial = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const g of toScrape) {
+    scrapeResumeIndex++;
+    if (!scrapeRunning) break;
+    if (title) title.textContent = 'Scraping ' + (scrapeResumeIndex) + ' of ' + scrapeResumeQueue.length + '...';
+    if (gameEl) gameEl.textContent = g.title;
+    let result;
+    try {
+      result = await window.easyarc.scrapeGame(g, ssUser, ssPass);
+    } catch (err) {
+      result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
+    }
+    if (result.success && result.path) {
+      artworkCache[g.path] = encodeURI(pathToFileUrl(result.path));
+      if (result.metadata) metadataCache[g.path] = result.metadata;
+      succeeded++;
+    } else if (result.success && result.partial) {
+      partial++;
+    } else if (result.error && result.error.startsWith('Skipped')) {
+      skipped++;
+    } else {
+      failed++;
+    }
+    done++;
+    if (!result.cached) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  scrapeRunning = false;
+  scrapeResumeQueue = null;
+  scrapeResumeIndex = 0;
+  scrapeResumeCredentials = null;
+  const led2 = document.getElementById('scrapeLed');
+  if (led2) led2.classList.remove('active');
+  if (row) row.style.display = 'none';
+  showToast('Scraping resumed and complete! ' + succeeded + '/' + done + ' scraped.');
+  renderGrid();
 }
 
 function stopScrape() {
