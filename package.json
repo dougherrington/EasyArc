@@ -23,6 +23,17 @@
         "zip"
       ]
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EasyArc",
+      "installerIcon": null,
+      "uninstallerIcon": null,
+      "artifactName": "EasyArc-Setup-${version}.exe",
+      "include": "resources/installer.nsh"
+    },
     "dmg": {
       "title": "EasyArc 0.3.1 Alpha",
       "window": {
@@ -33,7 +44,8 @@
     "files": [
       "src/**/*",
       "package.json",
-      "node_modules/node-hid/**/*"
+      "node_modules/node-hid/**/*",
+      "resources/vc_redist.x64.exe"
     ],
     "extraResources": [
       {
@@ -59,7 +71,8 @@
       }
     ],
     "asarUnpack": [
-      "node_modules/node-hid/**/*"
+      "node_modules/node-hid/**/*",
+      "resources/vc_redist.x64.exe"
     ],
     "npmRebuild": false
   },
