@@ -1154,7 +1154,7 @@ async function showEmulatorCheck(ra, dolphin, currentState) {
 
   modal.classList.remove('hidden');
   title.textContent = 'EMULATOR CHECK';
-  sub.textContent = 'EasyArc requires RetroArch and optionally Dolphin.';
+  sub.textContent = 'EasyArc includes the emulators it needs. This is just a quick check.';
   btn.textContent = 'CONTINUE →';
   btn.style.display = 'inline-block';
   if (skip) skip.style.display = 'none';
@@ -1165,15 +1165,15 @@ async function showEmulatorCheck(ra, dolphin, currentState) {
     '<span style="font-size:28px">' + (ra.found ? '✅' : '❌') + '</span>' +
     '<div>' +
     '<div style="color:#fff;font-weight:bold">RetroArch</div>' +
-    '<div style="color:' + (ra.found ? 'var(--green)' : '#ff3c6e') + ';font-size:14px">' + (ra.found ? ra.path : 'Not found — <a href="https://www.retroarch.com/index.php?page=platforms" style="color:var(--cyan)">Download RetroArch</a>') + '</div>' +
+    '<div style="color:' + (ra.found ? 'var(--green)' : '#ff3c6e') + ';font-size:14px">' + (ra.found ? ra.path : 'Not detected yet — EasyArc will set this up for you.') + '</div>' +
     '</div></div>' +
     '<div style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:12px;background:' + (dolphin.found ? 'rgba(0,255,136,0.08)' : 'rgba(255,180,0,0.08)') + ';border:1px solid ' + (dolphin.found ? 'rgba(0,255,136,0.3)' : 'rgba(255,180,0,0.3)') + ';border-radius:8px">' +
     '<span style="font-size:28px">' + (dolphin.found ? '✅' : '⚠️') + '</span>' +
     '<div>' +
     '<div style="color:#fff;font-weight:bold">Dolphin</div>' +
-    '<div style="color:' + (dolphin.found ? 'var(--green)' : 'var(--yellow)') + ';font-size:14px">' + (dolphin.found ? dolphin.path : 'Not found — required for GameCube only. <a href="https://dolphin-emu.org/download/" style="color:var(--cyan)">Download Dolphin</a>') + '</div>' +
+    '<div style="color:' + (dolphin.found ? 'var(--green)' : 'var(--yellow)') + ';font-size:14px">' + (dolphin.found ? dolphin.path : 'Downloads automatically the first time you launch a GameCube game.') + '</div>' +
     '</div></div>' +
-    (!ra.found ? '<div style="color:#ff3c6e;font-size:14px;text-align:center;margin-top:8px">⚠️ RetroArch is required. Please install it before continuing.</div>' : '') +
+    '' +
     '</div>';
 
   btn.onclick = () => {
@@ -1195,6 +1195,7 @@ function setOnboardingKey(fn) {
 function showSupportedSystems() {
   const grid = document.getElementById('gameGrid');
   const systems = [
+    {sys:'gb', name:'Game Boy'},
     {sys:'gbc', name:'Game Boy Color'},
     {sys:'gba', name:'Game Boy Advance'},
     {sys:'nes', name:'NES'},
@@ -1204,17 +1205,15 @@ function showSupportedSystems() {
     {sys:'genesis', name:'Sega Genesis'},
     {sys:'gamegear', name:'Game Gear'},
     {sys:'mastersystem', name:'Master System'},
-    {sys:'saturn', name:'Sega Saturn'},
-    {sys:'dreamcast', name:'Sega Dreamcast'},
     {sys:'psx', name:'PlayStation'},
-    {sys:'ps2', name:'PlayStation 2'},
     {sys:'psp', name:'PlayStation Portable'},
     {sys:'pspmini', name:'PSP Mini'},
     {sys:'atari2600', name:'Atari 2600'},
     {sys:'atari7800', name:'Atari 7800'},
-    {sys:'msdos', name:'MS-DOS'},
     {sys:'jaguar', name:'Atari Jaguar'},
+    {sys:'neogeo', name:'Neo Geo'},
     {sys:'mame2003', name:'MAME Arcade'},
+    {sys:'arcade', name:'Arcade'},
   ];
   const cards = systems.map(s =>
     '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;' +
@@ -1228,11 +1227,10 @@ function showSupportedSystems() {
     '<div style="max-width:780px;width:100%;">' +
     '<div style="margin-bottom:16px;"><button onclick="renderGrid()" style="background:transparent;border:1px solid var(--muted);color:var(--muted);font-family:Rajdhani,sans-serif;font-size:13px;padding:6px 14px;border-radius:4px;cursor:pointer;">← Back</button></div>' +
     '<div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:8px;text-align:center;">Supported Systems</div>' +
-    '<div style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--muted);text-align:center;margin-bottom:24px;">EasyArc Alpha supports 17 systems — with more coming soon!</div>' +
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--muted);text-align:center;margin-bottom:24px;">EasyArc supports more than 15 classic systems — with more coming soon!</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;">' +
     cards +
     '</div>' +
-    '<p style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:var(--muted);text-align:left;margin-bottom:24px;">* PlayStation 2 requires <a href="https://pcsx2.net" style="color:var(--cyan);">PCSX2</a> and a PS2 BIOS file. EasyArc does not provide BIOS files.</p>' +
     '<p style="font-family:Calibri,Arial,sans-serif;font-size:14pt;color:var(--cyan);text-align:center;">Press <strong>ENTER</strong> on your keyboard to continue.</p>' +
     '</div></div>';
 
@@ -1256,27 +1254,24 @@ function showSysReqScreen() {
         <div style="font-family:Calibri,Arial,sans-serif;font-size:16pt;color:#fff;line-height:1.8;text-align:left;">
 
           <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Minimum Requirements</p>
-          <p style="margin-bottom:8px;">• macOS 12 Monterey or later</p>
-          <p style="margin-bottom:8px;">• Intel Mac (2018 or newer) or any Apple Silicon</p>
+          <p style="margin-bottom:8px;">• Windows 10 (64-bit) or later</p>
           <p style="margin-bottom:8px;">• 8GB RAM</p>
-          <p style="margin-bottom:16px;">• 4GB free disk space (for emulator cores and artwork)</p>
+          <p style="margin-bottom:16px;">• 6GB free disk space (for emulators and artwork)</p>
 
           <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Recommended</p>
-          <p style="margin-bottom:8px;">• macOS 13 Ventura or later</p>
-          <p style="margin-bottom:8px;">• Apple Silicon (M1 or newer) — best performance</p>
+          <p style="margin-bottom:8px;">• Windows 11 (64-bit)</p>
           <p style="margin-bottom:8px;">• 16GB RAM</p>
-          <p style="margin-bottom:16px;">• 10GB+ free disk space</p>
+          <p style="margin-bottom:16px;">• 15GB+ free disk space</p>
 
-          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Required Software</p>
-          <p style="margin-bottom:8px;">• <a href="https://www.retroarch.com" style="color:var(--cyan);">RetroArch</a> — installed in your Applications folder</p>
-          <p style="margin-bottom:16px;">• <a href="https://dolphin-emu.org" style="color:var(--cyan);">Dolphin</a> — required for GameCube and Wii games only</p>
+          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Emulators</p>
+          <p style="margin-bottom:16px;">Nothing to install. EasyArc includes everything it needs, and downloads anything extra automatically the first time you launch a game that requires it.</p>
 
-          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Confirmed Controllers (Bluetooth)</p>
+          <p style="margin-bottom:16px;font-size:17pt;font-weight:bold;color:var(--cyan);">Confirmed Controllers</p>
+          <p style="margin-bottom:8px;">• Xbox One / Series controller</p>
           <p style="margin-bottom:8px;">• DualShock 4</p>
-          <p style="margin-bottom:8px;">• Xbox One/Series controller</p>
-          <p style="margin-bottom:8px;">• Nintendo Switch Pro Controller</p>
           <p style="margin-bottom:8px;">• EasySMX X15 (in Xbox mode)</p>
-          <p style="margin-bottom:24px;">• GameSir Nova Lite (in XInput mode — hold B+Home to activate)</p>
+          <p style="margin-bottom:16px;">• GameSir Nova Lite (in XInput mode — hold B+Home to activate)</p>
+          <p style="margin-bottom:24px;font-size:14pt;color:var(--yellow);">Note: the Nintendo Switch Pro Controller works inside games, but stops responding in EasyArc afterward. Press the Sync button to reconnect it. A fix is coming.</p>
 
           <p style="color:var(--cyan);font-size:14pt;">Press <strong>ENTER</strong> on your keyboard — it's time to add some games! 🎮</p>
         </div>
@@ -1635,14 +1630,13 @@ function renderGrid() {
         <div style="display:flex;align-items:flex-start;justify-content:center;height:100%;padding:40px 40px 0 40px;">
           <div style="max-width:680px;text-align:center;">
             <div style="font-family:Calibri,Arial,sans-serif;font-size:20pt;font-weight:bold;color:#fff;margin-bottom:24px;">
-              Welcome to EasyArc Alpha!
+              Welcome to EasyArc!
             </div>
             <div style="font-family:Calibri,Arial,sans-serif;font-size:16pt;color:#fff;line-height:1.8;text-align:left;margin-bottom:32px;">
-              <p style="margin-bottom:16px;">You made it! You're one of a small, hand-picked group of people who are among the very first to experience EasyArc. That's a pretty big deal — and we mean that sincerely.</p>
-              <p style="margin-bottom:16px;">What you do over the next few days matters more than you might think. Your feedback, your bug reports, even your "huh, that's weird" moments will directly shape the final release. You're not just testing software — you're helping build it.</p>
-              <p style="margin-bottom:16px;">EasyArc is heading toward a much wider beta release, and your job is to help us get it ready. We want to know what works, what doesn't, and what just feels off. Nothing is too small to mention. If a button is in the wrong place, tell us. If something confused you, tell us. If something made you smile, tell us that too.</p>
-              <p style="margin-bottom:16px;">When you find something — and you will find something, that's why you're here — just make a note of it and send it back to us. No technical knowledge required. Plain English is perfect.</p>
-              <p style="margin-bottom:24px;">Thank you for being part of this. Now go play some games. 🎮</p>
+              <p style="margin-bottom:16px;">EasyArc brings your retro game collection together in one place. It supports more than 15 classic systems, and it handles the emulators for you — there's nothing else to install.</p>
+              <p style="margin-bottom:16px;">To get started, click <strong>Add Games</strong> and point EasyArc at the folder where your ROM files live. It will sort them by system automatically. You can add more folders or rescan at any time.</p>
+              <p style="margin-bottom:16px;">To quit a game and come back here, press <strong>Select + Start</strong> on your controller. That works for every system.</p>
+              <p style="margin-bottom:24px;">This is an early release, so you'll find rough edges. When you do, make a note and send it back — plain English is perfect, and nothing is too small to mention. 🎮</p>
               <p style="margin-bottom:16px;font-size:13pt;color:var(--yellow);font-weight:bold;">📌 Don't worry — you'll only see these screens once. EasyArc remembers that you've been through setup and will take you straight to your games next time. So take a moment to read through — it's worth it!</p>
               <p style="margin-bottom:0;font-size:14pt;color:var(--cyan);">Press <strong>ENTER</strong> on your keyboard to continue.</p>
             </div>
@@ -3245,23 +3239,28 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   // STEP 2: launch Dolphin with the ROM
   // FIX_2026-06-07_DOLPHIN_DETECTION_RESTORE: detect first connected controller
   // and pass type to launchDolphin so DolphinBridge writes correct GCPadNew.ini.
+  // FIX_2026-08-31_DOLPHIN_MULTI_CONTROLLER: detect ALL connected controllers
+  // and pass array of types so DolphinBridge can write correct device per pad.
   let detectedControllerType = null;
+  let detectedControllerTypes = [];
   try {
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const gp of gamepads) {
       if (gp && gp.id) {
         const profile = ctrlGetProfile(gp.id);
         if (profile && profile.type) {
-          detectedControllerType = profile.type;
-          console.log('[GC-FLOW] Detected controller:', gp.id, '\u2192 type:', detectedControllerType);
-          break;
+          detectedControllerTypes.push(profile.type);
+          console.log('[GC-FLOW] Detected controller:', gp.id, '\u2192 type:', profile.type);
         }
       }
+    }
+    if (detectedControllerTypes.length > 0) {
+      detectedControllerType = detectedControllerTypes[0];
     }
   } catch (e) {
     console.log('[GC-FLOW] Controller detection failed:', e.message);
   }
-  const result = await window.easyarc.launchDolphin(game.path, detectedControllerType);
+  const result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes);
   console.log('[GC-FLOW] launchDolphin returned:', JSON.stringify(result));
   if (result.success) {
     showToast('Launching ' + game.title + '...');
@@ -5292,13 +5291,13 @@ showView = function(name) {
         <p style="margin-bottom:20px;">Thank you for helping test EasyArc. Please work through each section below and note any issues, questions, or suggestions. There are no wrong answers — your honest feedback is exactly what we need.</p>
 
         <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">BEFORE YOU BEGIN</p>
-        <p style="margin-bottom:6px;">• Install RetroArch to your Applications folder: <a href="https://www.retroarch.com" style="color:var(--cyan)">retroarch.com</a></p>
-        <p style="margin-bottom:6px;">• Install Dolphin to your Applications folder (GameCube only): <a href="https://dolphin-emu.org" style="color:var(--cyan)">dolphin-emu.org</a></p>
-        <p style="margin-bottom:20px;">• Have at least one Bluetooth controller ready</p>
+        <p style="margin-bottom:6px;">• Nothing to install — EasyArc includes the emulators it needs and downloads any extras automatically.</p>
+        <p style="margin-bottom:20px;">• Have at least one controller ready (wired or Bluetooth)</p>
 
         <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 1 — INSTALLATION</p>
         <p style="margin-bottom:6px;">□ Did EasyArc launch successfully?</p>
         <p style="margin-bottom:6px;">□ Did the emulator check show RetroArch as found (green)?</p>
+        <p style="margin-bottom:6px;">□ Did Select + Start exit games back to EasyArc?</p>
         <p style="margin-bottom:20px;">□ Were there any error messages during startup?</p>
 
         <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">SECTION 2 — CONTROLLERS</p>
@@ -5327,7 +5326,7 @@ showView = function(name) {
         <p style="margin-bottom:6px;">□ What did you like most about EasyArc?</p>
         <p style="margin-bottom:6px;">□ What confused you or was hard to figure out?</p>
         <p style="margin-bottom:6px;">□ What features are missing that you'd like to see?</p>
-        <p style="margin-bottom:20px;">□ Would you recommend EasyArc to other Mac retro gamers?</p>
+        <p style="margin-bottom:20px;">□ Would you recommend EasyArc to other retro gamers?</p>
 
         <p style="color:var(--cyan);font-weight:bold;font-size:16px;margin-bottom:8px;">REPORTING BUGS</p>
         <p style="margin-bottom:6px;">Please report all findings to our Facebook group:</p>

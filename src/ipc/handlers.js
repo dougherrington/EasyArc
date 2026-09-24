@@ -166,10 +166,10 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   });
 
   // STAGE_5: Launch Dolphin with a ROM. Used by gamecubeEnsureReadyAndLaunch.
-  handle('bridge:launchDolphin', (romPath, controllerType) => {  // FIX_2026-06-08_DOLPHIN_HANDLER_FORWARD
+  handle('bridge:launchDolphin', (romPath, controllerType, controllerTypes) => {  // FIX_2026-06-08_DOLPHIN_HANDLER_FORWARD
     const DolphinBridge = require('../bridge/DolphinBridge');
     const dolphinBridge = new DolphinBridge();
-    return dolphinBridge.launchDolphin(romPath, controllerType);
+    return dolphinBridge.launchDolphin(romPath, controllerType, controllerTypes);
   });
   handle('bridge:findDolphin',   () => bridge.findDolphin());
   // FIX_2026-06-18_PPSSPP_STAGEA: launch a PSP ROM via standalone PPSSPP.

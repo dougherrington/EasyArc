@@ -50,5 +50,5 @@ contextBridge.exposeInMainWorld('easyarc', {
   ensureDolphinReady: () => ipcRenderer.invoke('bridge:ensureDolphinReady'),
   launchDolphinBare: () => ipcRenderer.invoke('bridge:launchDolphinBare'),
   // FIX_2026-06-07_DOLPHIN_DETECTION_RESTORE: pass controllerType through IPC
-  launchDolphin: (romPath, controllerType) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType),
+  launchDolphin: (romPath, controllerType, controllerTypes) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType, controllerTypes),
 });

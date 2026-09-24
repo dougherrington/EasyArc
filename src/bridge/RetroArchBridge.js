@@ -109,7 +109,8 @@ const FOLDER_HINTS = [
   { hints: ['master system','mastersystem','sms'],                           system: 'mastersystem' },
   { hints: ['atari 2600','atari2600'],                                       system: 'atari2600' },
   { hints: ['atari 7800','atari7800'],                                       system: 'atari7800' },
-  { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
+  // BETA_DEFER_MSDOS_2026: DOS support untested — uncomment to restore for v1.0
+  // { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
   { hints: ['mame'],                                                         system: 'mame' },
@@ -1017,6 +1018,18 @@ class RetroArchBridge {
     // Prevent launching if RetroArch is already running
     if (this.retroarchProcess && !this.retroarchProcess.killed) {
       return { success: false, error: 'A game is already running. Close it first.' };
+    }
+
+    // FIX_2026-10_ROM_EXISTS: fail loudly when the ROM file is missing. Stale library
+    // entries (e.g. after a fresh install, or a removed external drive) previously
+    // caused a silent no-op: the branch matched, the emulator died instantly, and the
+    // user saw nothing at all. Report the path so the problem is self-explanatory.
+    if (!options.romPath) {
+      return { success: false, error: 'No game file path was provided for this entry.' };
+    }
+    if (!fs.existsSync(options.romPath)) {
+      console.log('[Bridge] ROM not found:', options.romPath);
+      return { success: false, error: 'Game file not found:\n' + options.romPath + '\n\nThe file may have been moved, renamed, or is on a drive that is not connected. Try rescanning your games folder.' };
     }
 
     // Find RetroArch if we haven't yet

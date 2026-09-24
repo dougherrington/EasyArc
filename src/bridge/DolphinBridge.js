@@ -276,16 +276,23 @@ class DolphinBridge {
   // the correct binding template. DualShock 3/4 and DualSense get WGInput-based
   // bindings; everything else (xbox, xinput, generic, switch) gets XInput bindings.
   // Switch Pro support deferred to v1.0.
-  writeGCPadConfig(controllerName, controllerType) {
+  writeGCPadConfig(controllerName, controllerType, controllerTypes) {
     const cfgDir = this._getDolphinConfigDir();
     const cfgPath = path.join(cfgDir, 'GCPadNew.ini');
     try {
       fs.mkdirSync(cfgDir, { recursive: true });
 
       const isDualShock = (controllerType === 'ds4' || controllerType === 'dualsense' || controllerType === 'ds3');
-      const gcpadConfig = isDualShock
-        ? this._getGCPadConfigDualShock()
-        : this._getGCPadConfigXInput();
+      // FIX_2026-08-31_DOLPHIN_MULTI_CONTROLLER: use mixed config when multiple controller types detected
+      let gcpadConfig;
+      if (controllerTypes && controllerTypes.length > 1) {
+        gcpadConfig = this._getGCPadConfigMixed(controllerTypes);
+        console.log('[DOLPHIN] Writing mixed GCPadNew.ini for controllers:', controllerTypes);
+      } else {
+        gcpadConfig = isDualShock
+          ? this._getGCPadConfigDualShock()
+          : this._getGCPadConfigXInput();
+      }
 
       fs.writeFileSync(cfgPath, gcpadConfig);
       console.log('[DOLPHIN] Wrote GCPadNew.ini at:', cfgPath, '(family:', isDualShock ? 'DualShock' : 'XInput', ')');
@@ -326,6 +333,54 @@ class DolphinBridge {
     }
   }
 
+  _getGCPadConfigMixed(controllerTypes) {
+    // Build a per-pad config based on each controller's type
+    const lines = [];
+    let xinputIndex = 0;
+    let sdlIndex = 0;
+    for (let pad = 1; pad <= 4; pad++) {
+      const type = controllerTypes[pad - 1] || null;
+      const isDualShock = type === 'ds4' || type === 'dualsense' || type === 'ds3';
+      lines.push(`[GCPad${pad}]`);
+      if (!type) {
+        lines.push('Device =');
+        continue;
+      }
+      if (isDualShock) {
+        lines.push(`Device = SDL/${sdlIndex}/PS4 Controller`);
+        sdlIndex++;
+      } else {
+        lines.push(`Device = XInput/${xinputIndex}/Gamepad`);
+        xinputIndex++;
+      }
+      lines.push('Buttons/A = `' + (isDualShock ? 'Button S' : 'Button A') + '`');
+      lines.push('Buttons/B = `' + (isDualShock ? 'Button E' : 'Button B') + '`');
+      lines.push('Buttons/X = `' + (isDualShock ? 'Button W' : 'Button X') + '`');
+      lines.push('Buttons/Y = `' + (isDualShock ? 'Button N' : 'Button Y') + '`');
+      lines.push('Buttons/Z = `' + (isDualShock ? 'Shoulder L' : 'Shoulder R') + '`');
+      lines.push('Buttons/Start = Start');
+      lines.push('Main Stick/Up = `Left Y+`');
+      lines.push('Main Stick/Down = `Left Y-`');
+      lines.push('Main Stick/Left = `Left X-`');
+      lines.push('Main Stick/Right = `Left X+`');
+      lines.push('Main Stick/Modifier = `Shift`');
+      lines.push('Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42');
+      lines.push('C-Stick/Up = `Right Y+`');
+      lines.push('C-Stick/Down = `Right Y-`');
+      lines.push('C-Stick/Left = `Right X-`');
+      lines.push('C-Stick/Right = `Right X+`');
+      lines.push('C-Stick/Modifier = `Ctrl`');
+      lines.push('C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42');
+      lines.push('Triggers/L = `Trigger L`');
+      lines.push('Triggers/R = `Trigger R`');
+      lines.push('D-Pad/Up = `Pad N`');
+      lines.push('D-Pad/Down = `Pad S`');
+      lines.push('D-Pad/Left = `Pad W`');
+      lines.push('D-Pad/Right = `Pad E`');
+    }
+    return lines.join('\n');
+  }
+
   _getGCPadConfigXInput() {
     return [
         '[GCPad1]',
@@ -355,11 +410,83 @@ class DolphinBridge {
         'D-Pad/Left = `Pad W`',
         'D-Pad/Right = `Pad E`',
         '[GCPad2]',
-        'Device =',
+        'Device = XInput/1/Gamepad',
+        'Buttons/A = `Button A`',
+        'Buttons/B = `Button B`',
+        'Buttons/X = `Button X`',
+        'Buttons/Y = `Button Y`',
+        'Buttons/Z = `Shoulder R`',
+        'Buttons/Start = Start',
+        'Main Stick/Up = `Left Y+`',
+        'Main Stick/Down = `Left Y-`',
+        'Main Stick/Left = `Left X-`',
+        'Main Stick/Right = `Left X+`',
+        'Main Stick/Modifier = `Shift`',
+        'Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+        'C-Stick/Up = `Right Y+`',
+        'C-Stick/Down = `Right Y-`',
+        'C-Stick/Left = `Right X-`',
+        'C-Stick/Right = `Right X+`',
+        'C-Stick/Modifier = `Ctrl`',
+        'C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+        'Triggers/L = `Trigger L`',
+        'Triggers/R = `Trigger R`',
+        'D-Pad/Up = `Pad N`',
+        'D-Pad/Down = `Pad S`',
+        'D-Pad/Left = `Pad W`',
+        'D-Pad/Right = `Pad E`',
         '[GCPad3]',
-        'Device =',
+        'Device = XInput/2/Gamepad',
+        'Buttons/A = `Button A`',
+        'Buttons/B = `Button B`',
+        'Buttons/X = `Button X`',
+        'Buttons/Y = `Button Y`',
+        'Buttons/Z = `Shoulder R`',
+        'Buttons/Start = Start',
+        'Main Stick/Up = `Left Y+`',
+        'Main Stick/Down = `Left Y-`',
+        'Main Stick/Left = `Left X-`',
+        'Main Stick/Right = `Left X+`',
+        'Main Stick/Modifier = `Shift`',
+        'Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+        'C-Stick/Up = `Right Y+`',
+        'C-Stick/Down = `Right Y-`',
+        'C-Stick/Left = `Right X-`',
+        'C-Stick/Right = `Right X+`',
+        'C-Stick/Modifier = `Ctrl`',
+        'C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+        'Triggers/L = `Trigger L`',
+        'Triggers/R = `Trigger R`',
+        'D-Pad/Up = `Pad N`',
+        'D-Pad/Down = `Pad S`',
+        'D-Pad/Left = `Pad W`',
+        'D-Pad/Right = `Pad E`',
         '[GCPad4]',
-        'Device ='
+        'Device = XInput/3/Gamepad',
+        'Buttons/A = `Button A`',
+        'Buttons/B = `Button B`',
+        'Buttons/X = `Button X`',
+        'Buttons/Y = `Button Y`',
+        'Buttons/Z = `Shoulder R`',
+        'Buttons/Start = Start',
+        'Main Stick/Up = `Left Y+`',
+        'Main Stick/Down = `Left Y-`',
+        'Main Stick/Left = `Left X-`',
+        'Main Stick/Right = `Left X+`',
+        'Main Stick/Modifier = `Shift`',
+        'Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+        'C-Stick/Up = `Right Y+`',
+        'C-Stick/Down = `Right Y-`',
+        'C-Stick/Left = `Right X-`',
+        'C-Stick/Right = `Right X+`',
+        'C-Stick/Modifier = `Ctrl`',
+        'C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+        'Triggers/L = `Trigger L`',
+        'Triggers/R = `Trigger R`',
+        'D-Pad/Up = `Pad N`',
+        'D-Pad/Down = `Pad S`',
+        'D-Pad/Left = `Pad W`',
+        'D-Pad/Right = `Pad E`'
     ].join('\n');
   }
 
@@ -399,11 +526,83 @@ class DolphinBridge {
       'D-Pad/Left = `Pad W`',
       'D-Pad/Right = `Pad E`',
       '[GCPad2]',
-      'Device =',
+      'Device = SDL/1/PS4 Controller',
+      'Buttons/A = `Button S`',
+      'Buttons/B = `Button E`',
+      'Buttons/X = `Button W`',
+      'Buttons/Y = `Button N`',
+      'Buttons/Z = `Shoulder L`',
+      'Buttons/Start = Start',
+      'Main Stick/Up = `Left Y+`',
+      'Main Stick/Down = `Left Y-`',
+      'Main Stick/Left = `Left X-`',
+      'Main Stick/Right = `Left X+`',
+      'Main Stick/Modifier = `Shift`',
+      'Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+      'C-Stick/Up = `Right Y+`',
+      'C-Stick/Down = `Right Y-`',
+      'C-Stick/Left = `Right X-`',
+      'C-Stick/Right = `Right X+`',
+      'C-Stick/Modifier = `Ctrl`',
+      'C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+      'Triggers/L = `Trigger L`',
+      'Triggers/R = `Trigger R`',
+      'D-Pad/Up = `Pad N`',
+      'D-Pad/Down = `Pad S`',
+      'D-Pad/Left = `Pad W`',
+      'D-Pad/Right = `Pad E`',
       '[GCPad3]',
-      'Device =',
+      'Device = SDL/2/PS4 Controller',
+      'Buttons/A = `Button S`',
+      'Buttons/B = `Button E`',
+      'Buttons/X = `Button W`',
+      'Buttons/Y = `Button N`',
+      'Buttons/Z = `Shoulder L`',
+      'Buttons/Start = Start',
+      'Main Stick/Up = `Left Y+`',
+      'Main Stick/Down = `Left Y-`',
+      'Main Stick/Left = `Left X-`',
+      'Main Stick/Right = `Left X+`',
+      'Main Stick/Modifier = `Shift`',
+      'Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+      'C-Stick/Up = `Right Y+`',
+      'C-Stick/Down = `Right Y-`',
+      'C-Stick/Left = `Right X-`',
+      'C-Stick/Right = `Right X+`',
+      'C-Stick/Modifier = `Ctrl`',
+      'C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+      'Triggers/L = `Trigger L`',
+      'Triggers/R = `Trigger R`',
+      'D-Pad/Up = `Pad N`',
+      'D-Pad/Down = `Pad S`',
+      'D-Pad/Left = `Pad W`',
+      'D-Pad/Right = `Pad E`',
       '[GCPad4]',
-      'Device ='
+      'Device = SDL/3/PS4 Controller',
+      'Buttons/A = `Button S`',
+      'Buttons/B = `Button E`',
+      'Buttons/X = `Button W`',
+      'Buttons/Y = `Button N`',
+      'Buttons/Z = `Shoulder L`',
+      'Buttons/Start = Start',
+      'Main Stick/Up = `Left Y+`',
+      'Main Stick/Down = `Left Y-`',
+      'Main Stick/Left = `Left X-`',
+      'Main Stick/Right = `Left X+`',
+      'Main Stick/Modifier = `Shift`',
+      'Main Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+      'C-Stick/Up = `Right Y+`',
+      'C-Stick/Down = `Right Y-`',
+      'C-Stick/Left = `Right X-`',
+      'C-Stick/Right = `Right X+`',
+      'C-Stick/Modifier = `Ctrl`',
+      'C-Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42',
+      'Triggers/L = `Trigger L`',
+      'Triggers/R = `Trigger R`',
+      'D-Pad/Up = `Pad N`',
+      'D-Pad/Down = `Pad S`',
+      'D-Pad/Left = `Pad W`',
+      'D-Pad/Right = `Pad E`'
     ].join('\n');
   }
 
@@ -412,13 +611,13 @@ class DolphinBridge {
   // and starts the game). Matches the Mac launch pattern in RetroArchBridge.launchGame.
   // FIX_2026-06-07_DOLPHIN_CONTROLLER_FAMILIES: accept controllerType from renderer
   // so we can write the correct GCPadNew.ini based on connected controller family.
-  async launchDolphin(romPath, controllerType) {
+  async launchDolphin(romPath, controllerType, controllerTypes) {
     console.log('[DOLPHIN] launchDolphin called with romPath:', romPath);
 
     // STAGE_6: Write config files before launching so Dolphin starts in fullscreen
     // and the controller mapping matches what we know works on Windows + XInput.
     this.writeDolphinConfig();
-    this.writeGCPadConfig(null, controllerType);
+    this.writeGCPadConfig(null, controllerType, controllerTypes);
     // FIX_2026-06-13_DOLPHIN_EXIT_HOTKEY: write Hotkeys.ini so player 1 can cleanly
     // exit back to EasyArc via a controller combo. Device string and exit binding are
     // per controller family (verbatim from working Dolphin UI configs). P1 only.
