@@ -1,3 +1,7 @@
+// FIX_2026-09-28_SDL_NO_SWITCH_HIDAPI: stop SDL-based emulators (RetroArch sdl2,
+// DuckStation, Dolphin) from reconfiguring the Nintendo Pro Controller, which left
+// EasyArc's Chromium gamepad frozen after game exit. Child processes inherit this.
+if (process.platform === 'win32') { process.env.SDL_JOYSTICK_HIDAPI_SWITCH = '0'; }
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const os = require('os');
