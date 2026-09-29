@@ -730,7 +730,7 @@ body::after {
       <button class="toolbar-btn toolbar-remove" id="removeGamesBtn" onclick="playClick();showRemoveGamesModal()">&#x2715; Remove Games</button>
     </div>
     <div class="toolbar-center">
-      <button class="toolbar-btn toolbar-center-btn" id="rescanBtn" onclick="playClick();rescanLibrary()">&#x27f3; Refresh Library</button>
+      <button class="toolbar-btn toolbar-center-btn" id="rescanBtn" onclick="playClick();rescanLibrary()">&#x27f3; Back to Library</button>
       <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();showGetArtModal()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span>
     </div>
     <div class="toolbar-right">
@@ -2328,7 +2328,7 @@ async function rescanLibrary() {
   updateCounts();
   renderGrid();
   loadArtworkCache();
-  if (btn) { btn.classList.remove('active'); btn.textContent = '⟳ Refresh Library'; btn.disabled = false; }
+  if (btn) { btn.classList.remove('active'); btn.textContent = '⟳ Back to Library'; btn.disabled = false; }
   showToast(newCount > 0 ? 'Found ' + newCount + ' new games!' : 'No new games found.');
 }
 
@@ -2704,7 +2704,15 @@ function playStartup() {
 
 // FIX_2026-06-15_ADD_RELOAD: when EasyArc reloads itself after a system is added,
 // skip the splash AND the controller/emulator modal — already shown this session.
-const _easyarcPostAddReload = sessionStorage.getItem('easyarc_post_add_reload') === '1';
+// FIX_2026-09-29_NINTENDO_RELAUNCH: a fresh (<30s) note from a controller relaunch
+// also skips the splash and startup modal. Stale notes are discarded.
+let _eaNintendoResume = false;
+try {
+  const _n = JSON.parse(localStorage.getItem('easyarc_nintendo_resume') || 'null');
+  localStorage.removeItem('easyarc_nintendo_resume');
+  if (_n && _n.ts && (Date.now() - _n.ts) < 30000) _eaNintendoResume = true;
+} catch (e) {}
+const _easyarcPostAddReload = sessionStorage.getItem('easyarc_post_add_reload') === '1' || _eaNintendoResume;
 if (_easyarcPostAddReload) sessionStorage.removeItem('easyarc_post_add_reload');
 
 // Splash screen — logo fades in over dimmed UI, then reveals
@@ -3382,12 +3390,19 @@ async function psxEnsureReadyAndLaunch(game) {
         }
       });
 
-      const newCancelBtn = cancelBtn.cloneNode(true);
-      cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-      newCancelBtn.addEventListener('click', () => {
-        modal.classList.add('hidden');
-        resolve(false);
-      });
+      // FIX_2026-09_STALE_CANCEL_REF: the install step above may already have replaced
+      // the cancel button, leaving this reference detached from the DOM. Re-read it by id
+      // so replaceChild has a live parentNode. Without this the BIOS prompt throws and the
+      // Browse handler is never attached — the dialog appears but does nothing.
+      const liveCancelBtn = document.getElementById(cancelBtn.id) || cancelBtn;
+      if (liveCancelBtn.parentNode) {
+        const newCancelBtn = liveCancelBtn.cloneNode(true);
+        liveCancelBtn.parentNode.replaceChild(newCancelBtn, liveCancelBtn);
+        newCancelBtn.addEventListener('click', () => {
+          modal.classList.add('hidden');
+          resolve(false);
+        });
+      }
     });
   }
 
@@ -3699,6 +3714,10 @@ const GP_NAV = {
   inSidebar:    false,
   inTopNav:     false,
   inToolbar:    false,
+  inLetterGrid: false,
+  letterIdx:    0,
+  // Buttons held across a letter-grid open/close must be released before they act again
+  lgGate:       { a:false, b:false, x:false },
   topNavIdx:    0,
   toolbarIdx:   0,
   sidebarIdx:   0,
@@ -3936,8 +3955,13 @@ function gpHandleInput(gp) {
   const down = dpad.down || stick.down;
   const left = dpad.left || stick.left;
   const right = dpad.right || stick.right;
-  const aBtn  = btns[GPB.a].pressed;
-  const bBtn  = btns[GPB.b].pressed;
+  // Clear each gate once its button is physically released
+  if (!btns[GPB.a].pressed) GP_NAV.lgGate.a = false;
+  if (!btns[GPB.b].pressed) GP_NAV.lgGate.b = false;
+  if (!btns[GPB.x].pressed) GP_NAV.lgGate.x = false;
+  const aBtn  = btns[GPB.a].pressed && !GP_NAV.lgGate.a;
+  const bBtn  = btns[GPB.b].pressed && !GP_NAV.lgGate.b;
+  const xBtn  = btns[GPB.x].pressed && !GP_NAV.lgGate.x;
   const l1    = btns[GPB.l1].pressed;
   const r1    = btns[GPB.r1].pressed;
   const start = btns[GPB.start].pressed;
@@ -4147,6 +4171,9 @@ function gpHandleInput(gp) {
     }
   }
 
+  // X — open the letter grid
+  if (gpShouldFire("xOpen", xBtn)) { openLetterGrid(); return; }
+
   // L1/R1 — cycle systems from anywhere
   if (gpShouldFire("l1", l1)) {
     const sysBtns = gpGetSysBtns();
@@ -4232,6 +4259,22 @@ if (window.easyarc && window.easyarc.onGameExited) {
   window.easyarc.onGameExited(() => {
     console.log('[UI] game-exited -> nav re-enabled');
     window.__easyarcGameRunning = false;
+    // FIX_2026-09-29_NINTENDO_RELAUNCH: Nintendo controllers (vendor 057e) go stale in
+    // Chromium after SDL-based emulators exit; only a fresh app start restores them.
+    // Skipped after PSP, since PPSSPP doesn't cause the freeze.
+    try {
+      const _gps = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+      console.log('[UI] game-exited -> connected pads:', _gps.map(g => g.id));
+      const _hasNintendo = _gps.some(g => /057e/i.test(g.id || ''));
+      const _sys = selectedGame && selectedGame.system;
+      const _isPsp = (_sys === 'psp' || _sys === 'pspmini');
+      if (_hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
+        console.log('[UI] game-exited -> Nintendo controller present, relaunching');
+        localStorage.setItem('easyarc_nintendo_resume', JSON.stringify({ ts: Date.now(), system: currentSystem }));
+        window.easyarc.relaunchForController();
+        return;
+      }
+    } catch (e) { console.log('[UI] Nintendo relaunch check failed:', e.message); }
     // FIX_2026-08-27_SCRAPER_RESUME: resume scraper after game exits
     if (scrapeResumeQueue && scrapeResumeIndex < scrapeResumeQueue.length) {
       console.log('[UI] game-exited -> resuming scraper from index', scrapeResumeIndex);
@@ -4262,6 +4305,104 @@ if (window.easyarc && window.easyarc.onGameExited) {
 }
 
 // Main navigation poll loop — any connected controller drives the UI
+// ── LETTER GRID ───────────────────────────────────────────────────────────
+// X button (or clicking the search bar) opens a 6-wide grid of letters.
+// Selecting one scrolls the library to the first title starting with it.
+const LETTER_KEYS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0-9'];
+const LETTER_COLS = 6;
+
+function letterGridFirstIndex(key) {
+  if (!vsFilteredList || vsFilteredList.length === 0) return -1;
+  for (let i = 0; i < vsFilteredList.length; i++) {
+    const t = (vsFilteredList[i].title || '').trim().toUpperCase();
+    if (!t) continue;
+    const c = t[0];
+    if (key === '0-9') { if (c >= '0' && c <= '9') return i; }
+    else if (c === key) return i;
+  }
+  return -1;
+}
+
+function letterGridJump(key) {
+  const idx = letterGridFirstIndex(key);
+  closeLetterGrid();
+  if (idx < 0) { showToast('No games starting with ' + key); return; }
+  GP_NAV.gridIdx = idx;
+  vsScrollToIndex(idx);
+  if (typeof gpHighlightCard === 'function') gpHighlightCard(idx);
+}
+
+function renderLetterGrid() {
+  let el = document.getElementById('letterGridOverlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'letterGridOverlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);';
+    el.onclick = (e) => { if (e.target === el) closeLetterGrid(); };
+    document.body.appendChild(el);
+  }
+  const cells = LETTER_KEYS.map((k, i) => {
+    const sel = i === GP_NAV.letterIdx;
+    return '<div onclick="letterGridJump(\'' + k + '\')" style="cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+      'min-width:64px;height:64px;border-radius:10px;font-family:Rajdhani,sans-serif;font-size:24px;font-weight:700;' +
+      'background:' + (sel ? 'var(--cyan)' : 'rgba(255,255,255,0.06)') + ';' +
+      'color:' + (sel ? '#001018' : '#fff') + ';' +
+      'border:1px solid ' + (sel ? 'var(--cyan)' : 'rgba(255,255,255,0.12)') + ';">' + k + '</div>';
+  }).join('');
+  el.innerHTML =
+    '<div style="background:#0b1a24;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:28px 32px;">' +
+    '<div style="font-family:Rajdhani,sans-serif;font-size:15px;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:18px;text-align:center;">Jump to letter</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(' + LETTER_COLS + ',1fr);gap:10px;">' + cells + '</div>' +
+    '</div>';
+}
+
+function openLetterGrid() {
+  if (GP_NAV.inLetterGrid) return;
+  GP_NAV.inLetterGrid = true;
+  GP_NAV.lgGate = { a:true, b:true, x:true };
+  GP_NAV.letterIdx = 0;
+  const cur = vsFilteredList && vsFilteredList[GP_NAV.gridIdx];
+  if (cur) {
+    const c = (cur.title || '').trim().toUpperCase()[0];
+    const at = LETTER_KEYS.indexOf(c);
+    if (at >= 0) GP_NAV.letterIdx = at;
+  }
+  renderLetterGrid();
+}
+
+function closeLetterGrid() {
+  GP_NAV.inLetterGrid = false;
+  GP_NAV.lgGate = { a:true, b:true, x:true };
+  const el = document.getElementById('letterGridOverlay');
+  if (el) el.remove();
+}
+
+function letterGridInput(gp) {
+  const btns = gp.buttons;
+  const axes = gp.axes;
+  const now = Date.now();
+  const fireUp    = handleDpad('up',    btns[GPB.up].pressed,    now) || handleStick('up',    axes[1] < -GP_NAV.deadzone, now);
+  const fireDown  = handleDpad('down',  btns[GPB.down].pressed,  now) || handleStick('down',  axes[1] >  GP_NAV.deadzone, now);
+  const fireLeft  = handleDpad('left',  btns[GPB.left].pressed,  now) || handleStick('left',  axes[0] < -GP_NAV.deadzone, now);
+  const fireRight = handleDpad('right', btns[GPB.right].pressed, now) || handleStick('right', axes[0] >  GP_NAV.deadzone, now);
+  let moved = false;
+  const last = LETTER_KEYS.length - 1;
+  if (fireLeft)  { GP_NAV.letterIdx = Math.max(0, GP_NAV.letterIdx - 1); moved = true; }
+  if (fireRight) { GP_NAV.letterIdx = Math.min(last, GP_NAV.letterIdx + 1); moved = true; }
+  if (fireUp)    { GP_NAV.letterIdx = Math.max(0, GP_NAV.letterIdx - LETTER_COLS); moved = true; }
+  if (fireDown)  { GP_NAV.letterIdx = Math.min(last, GP_NAV.letterIdx + LETTER_COLS); moved = true; }
+  if (moved) renderLetterGrid();
+  if (!btns[GPB.a].pressed) GP_NAV.lgGate.a = false;
+  if (!btns[GPB.b].pressed) GP_NAV.lgGate.b = false;
+  if (!btns[GPB.x].pressed) GP_NAV.lgGate.x = false;
+  const lgA = btns[GPB.a].pressed && !GP_NAV.lgGate.a;
+  const lgB = btns[GPB.b].pressed && !GP_NAV.lgGate.b;
+  const lgX = btns[GPB.x].pressed && !GP_NAV.lgGate.x;
+  if (gpShouldFire('lgA', lgA)) letterGridJump(LETTER_KEYS[GP_NAV.letterIdx]);
+  if (gpShouldFire('lgB', lgB)) closeLetterGrid();
+  if (gpShouldFire('lgX', lgX)) closeLetterGrid();
+}
+
 function gpNavPoll() {
   // FIX_2026-06-19_PSP_LIFECYCLE: when a game is running, the gamepad nav loop is
   // HARD-DISABLED — no navigation, no launching, no exit-combo handling here. The
@@ -4295,6 +4436,14 @@ function gpNavPoll() {
     requestAnimationFrame(gpNavPoll);
     return;
   }
+  // Letter grid owns input while open
+  if (GP_NAV.inLetterGrid) {
+    const lgPads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    for (const gp of lgPads) { letterGridInput(gp); break; }
+    requestAnimationFrame(gpNavPoll);
+    return;
+  }
+
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
   let handled = false;
   for (const gp of gps) {
@@ -4412,36 +4561,29 @@ let addGamesHasFiles = null;
 let addGamesSystem = null;
 let addGamesFolder = null;
 
+// Keep in sync with BLOCKED_ALWAYS / BLOCKED_ON_WINDOWS in RetroArchBridge.js —
+// a system listed here can be assigned manually even if detection skips it.
 const ADD_GAMES_SYSTEMS = [
   { id:'psx',         name:'PlayStation' },
-  { id:'ps2',         name:'PlayStation 2' },
   { id:'psp',         name:'PlayStation Portable' },
   { id:'pspmini',     name:'PSP Mini' },
-  { id:'ps3',         name:'PlayStation 3' },
   { id:'n64',         name:'Nintendo 64' },
   { id:'gamecube',    name:'GameCube' },
-  { id:'wii',         name:'Nintendo Wii' },
-  { id:'wiiu',        name:'Nintendo Wii U' },
   { id:'snes',        name:'Super Nintendo' },
   { id:'nes',         name:'NES' },
   { id:'gba',         name:'Game Boy Advance' },
   { id:'gbc',         name:'Game Boy Color' },
   { id:'gb',          name:'Game Boy' },
-  { id:'gb',          name:'Game Boy' },
   { id:'genesis',     name:'Sega Genesis' },
-  { id:'saturn',      name:'Sega Saturn' },
-  { id:'dreamcast',   name:'Sega Dreamcast' },
   { id:'gamegear',    name:'Game Gear' },
   { id:'mastersystem',name:'Master System' },
   { id:'jaguar',      name:'Atari Jaguar' },
-  { id:'switch',      name:'Nintendo Switch' },
   { id:'mame',        name:'MAME Arcade' },
   { id:'mame2003',    name:'MAME Arcade (2003)' },
   { id:'arcade',      name:'Arcade (FinalBurn Neo)' },
   { id:'neogeo',      name:'Neo Geo' },
   { id:'atari2600',   name:'Atari 2600' },
   { id:'atari7800',   name:'Atari 7800' },
-  { id:'msdos',       name:'MS-DOS' },
 ];
 
 function showTestPlanModal() {
@@ -4576,6 +4718,9 @@ function addGamesRenderStep() {
           '<div class="frw-choice-label">Import my whole collection</div>' +
           '<div class="frw-choice-desc">Add all my game folders at once</div>' +
         '</div>' +
+      '</div>' +
+      '<div style="margin-top:20px;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:Calibri,Arial,sans-serif;font-size:13px;color:var(--muted);line-height:1.6;">' +
+        '<strong style="color:var(--cyan);">Supported systems:</strong> NES, SNES, Nintendo 64, GameCube, Game Boy / Color / Advance, Sega Genesis, Master System, Game Gear, PlayStation, PlayStation Portable, PSP Minis, Atari 2600 / 7800 / Jaguar, Neo Geo, MAME Arcade, Arcade.' +
       '</div>';
   }
 

@@ -124,3 +124,11 @@ function copyDirRecursive(src, dest) {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// FIX_2026-09-29_NINTENDO_RELAUNCH: relaunch EasyArc after a game when a Nintendo
+// controller is connected. Only a fresh app start re-initializes it (reload doesn't).
+ipcMain.handle('app:relaunchForController', () => {
+  console.log('[MAIN] Relaunching to re-initialize Nintendo controller');
+  app.relaunch();
+  app.exit(0);
+});
