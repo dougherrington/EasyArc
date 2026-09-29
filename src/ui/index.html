@@ -4311,7 +4311,13 @@ if (window.easyarc && window.easyarc.onGameExited) {
       if (_hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
         console.log('[UI] game-exited -> Nintendo controller present, relaunching');
         localStorage.setItem('easyarc_nintendo_resume', JSON.stringify({ ts: Date.now(), system: currentSystem, gameId: selectedGame ? selectedGame.id : null }));
-        window.easyarc.relaunchForController();
+        // FIX_2026-09-29_SMOOTH_RELAUNCH: show a message so the restart looks intentional
+        window.__easyarcGameRunning = true;
+        const _ov = document.createElement('div');
+        _ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,0.94);color:#fff;font:600 30px Rajdhani,Orbitron,sans-serif;letter-spacing:1px;';
+        _ov.textContent = 'Reconnecting your controller\u2026';
+        document.body.appendChild(_ov);
+        setTimeout(() => window.easyarc.relaunchForController(), 900);
         return;
       }
     } catch (e) { console.log('[UI] Nintendo relaunch check failed:', e.message); }

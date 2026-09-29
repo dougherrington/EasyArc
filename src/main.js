@@ -12,9 +12,14 @@ let mainWindow;
 let bridge; // declared here, instantiated before app.whenReady
 
 function createWindow() {
+  // FIX_2026-09-29_SMOOTH_RELAUNCH: open at full work-area size so the later
+  // maximize() causes no visible resize.
+  const _wa = require('electron').screen.getPrimaryDisplay().workArea;
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    x: _wa.x,
+    y: _wa.y,
+    width: _wa.width,
+    height: _wa.height,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0a0a0f',
@@ -27,10 +32,11 @@ function createWindow() {
       gamepad: true,
     },
   });
-  mainWindow.maximize();
   mainWindow.loadFile(path.join(__dirname, 'ui/index.html'));
   mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.maximize();
     mainWindow.show();
+    mainWindow.focus();
   });
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -129,6 +135,7 @@ app.on('window-all-closed', () => {
 // controller is connected. Only a fresh app start re-initializes it (reload doesn't).
 ipcMain.handle('app:relaunchForController', () => {
   console.log('[MAIN] Relaunching to re-initialize Nintendo controller');
+  if (mainWindow) mainWindow.setOpacity(0);
   app.relaunch();
   app.exit(0);
 });
