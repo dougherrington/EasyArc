@@ -43,6 +43,21 @@ function createWindow() {
   }
 }
 
+// FIX_2026-09-29_SINGLE_INSTANCE: only one EasyArc at a time. A second launch
+// brings the existing window forward instead of opening another copy.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      mainWindow.setOpacity(1);
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(async () => {
   await ensureRetroArchReady();
   await ensurePPSSPPReady();
@@ -133,7 +148,11 @@ app.on('window-all-closed', () => {
 
 // FIX_2026-09-29_NINTENDO_RELAUNCH: relaunch EasyArc after a game when a Nintendo
 // controller is connected. Only a fresh app start re-initializes it (reload doesn't).
+let _eaRelaunching = false; // FIX_2026-09-29_SINGLE_INSTANCE
 ipcMain.handle('app:relaunchForController', () => {
+  if (_eaRelaunching) return;
+  _eaRelaunching = true;
+  app.releaseSingleInstanceLock();
   console.log('[MAIN] Relaunching to re-initialize Nintendo controller');
   if (mainWindow) mainWindow.setOpacity(0);
   app.relaunch();

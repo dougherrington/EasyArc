@@ -4299,6 +4299,7 @@ if (window.easyarc && window.easyarc.onGameStarted) {
   window.easyarc.onGameStarted(() => {
     console.log('[UI] game-started -> nav disabled');
     window.__easyarcGameRunning = true;
+    window.__eaGameStartedAt = Date.now(); // FIX_2026-09-29_REAL_GAME_ONLY
     // FIX_2026-08-27_SCRAPER_PAUSE: pause scraper when game launches
     if (scrapeRunning) {
       console.log('[UI] game-started -> scraper paused');
@@ -4319,9 +4320,17 @@ if (window.easyarc && window.easyarc.onGameExited) {
       const _hasNintendo = _gps.some(g => /057e/i.test(g.id || ''));
       const _sys = selectedGame && selectedGame.system;
       const _isPsp = (_sys === 'psp' || _sys === 'pspmini');
-      if (_hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
+      // FIX_2026-09-29_REAL_GAME_ONLY: ignore exit signals with no game behind them
+      // (e.g. background emulator checks at startup), which caused a false relaunch.
+      const _hadGame = !!window.__eaGameStartedAt;
+      window.__eaGameStartedAt = 0;
+      if (!_hadGame) console.log('[UI] game-exited with no game-started - relaunch skipped');
+      if (_hadGame && _hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
         console.log('[UI] game-exited -> Nintendo controller present, relaunching');
         localStorage.setItem('easyarc_nintendo_resume', JSON.stringify({ ts: Date.now(), system: currentSystem, gameId: selectedGame ? selectedGame.id : null }));
+        // FIX_2026-09-29_SINGLE_INSTANCE: relaunch at most once per exit
+        if (window.__eaRelaunching) return;
+        window.__eaRelaunching = true;
         // FIX_2026-09-29_SMOOTH_RELAUNCH: show a message so the restart looks intentional
         window.__easyarcGameRunning = true;
         const _ov = document.createElement('div');
