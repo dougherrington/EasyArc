@@ -2710,10 +2710,46 @@ let _eaNintendoResume = false;
 try {
   const _n = JSON.parse(localStorage.getItem('easyarc_nintendo_resume') || 'null');
   localStorage.removeItem('easyarc_nintendo_resume');
-  if (_n && _n.ts && (Date.now() - _n.ts) < 30000) _eaNintendoResume = true;
+  // FIX_2026-09-29_NINTENDO_RESUME_POS: keep the note so the position can be restored
+  if (_n && _n.ts && (Date.now() - _n.ts) < 30000) { _eaNintendoResume = true; window.__eaResumeData = _n; }
 } catch (e) {}
 const _easyarcPostAddReload = sessionStorage.getItem('easyarc_post_add_reload') === '1' || _eaNintendoResume;
 if (_easyarcPostAddReload) sessionStorage.removeItem('easyarc_post_add_reload');
+
+// FIX_2026-09-29_NINTENDO_RESUME_POS: after a controller relaunch, return to the saved
+// system and game using existing functions only (sidebar button click, selectGameByIndex,
+// vsScrollToIndex). Retries briefly while the library loads; on any failure it simply
+// leaves the user at the top of the library.
+function _eaRestoreAfterRelaunch(d, tries) {
+  tries = tries || 0;
+  try {
+    if (!d) return;
+    const container = document.getElementById('vs-container');
+    if (!container || vsFilteredList.length === 0) {
+      if (tries < 20) setTimeout(() => _eaRestoreAfterRelaunch(d, tries + 1), 150);
+      return;
+    }
+    const sys = d.system || 'all';
+    if (sys !== 'all' && !d._sysDone) {
+      const btn = document.querySelector('.system-btn[data-sys="' + sys + '"]');
+      if (btn) {
+        d._sysDone = true;
+        btn.click();
+        setTimeout(() => _eaRestoreAfterRelaunch(d, tries + 1), 150);
+        return;
+      }
+      if (tries < 20) { setTimeout(() => _eaRestoreAfterRelaunch(d, tries + 1), 150); return; }
+    }
+    if (!d.gameId) return;
+    const idx = vsFilteredList.findIndex(g => g && g.id === d.gameId);
+    if (idx < 0) { console.log('[UI] Restore: saved game not in list'); return; }
+    selectGameByIndex(idx);
+    GP_NAV.gridIdx = idx;
+    vsScrollToIndex(idx);
+    if (GP_NAV.active && !GP_NAV.inSidebar && typeof gpHighlightCard === 'function') gpHighlightCard(idx);
+    console.log('[UI] Restored position after relaunch:', sys, idx);
+  } catch (e) { console.log('[UI] Restore after relaunch failed:', e.message); }
+}
 
 // Splash screen — logo fades in over dimmed UI, then reveals
 const splash = document.getElementById('splashScreen');
@@ -2723,6 +2759,8 @@ if (_easyarcPostAddReload) {
   if (shell) shell.classList.remove('dimmed');
   renderGrid();
   loadArtworkCache();
+  // FIX_2026-09-29_NINTENDO_RESUME_POS
+  if (window.__eaResumeData) setTimeout(() => _eaRestoreAfterRelaunch(window.__eaResumeData), 200);
 } else if (splash && shell) {
   playStartup();
   // Step 1: After 3 seconds, fade out splash and brighten UI
@@ -4270,7 +4308,7 @@ if (window.easyarc && window.easyarc.onGameExited) {
       const _isPsp = (_sys === 'psp' || _sys === 'pspmini');
       if (_hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
         console.log('[UI] game-exited -> Nintendo controller present, relaunching');
-        localStorage.setItem('easyarc_nintendo_resume', JSON.stringify({ ts: Date.now(), system: currentSystem }));
+        localStorage.setItem('easyarc_nintendo_resume', JSON.stringify({ ts: Date.now(), system: currentSystem, gameId: selectedGame ? selectedGame.id : null }));
         window.easyarc.relaunchForController();
         return;
       }
