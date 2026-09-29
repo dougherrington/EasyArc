@@ -2734,7 +2734,9 @@ function _eaRestoreAfterRelaunch(d, tries) {
       const btn = document.querySelector('.system-btn[data-sys="' + sys + '"]');
       if (btn) {
         d._sysDone = true;
-        btn.click();
+        // FIX_2026-09-29_RESUME_SYSTEM: system buttons have no onclick (mouse-off),
+        // so call filterSystem directly; Favorites/Recent keep their HTML onclick.
+        if (sys === 'favorites' || sys === 'recent') btn.click(); else filterSystem(sys, btn);
         setTimeout(() => _eaRestoreAfterRelaunch(d, tries + 1), 150);
         return;
       }
