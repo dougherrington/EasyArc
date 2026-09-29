@@ -289,7 +289,12 @@ class DolphinBridge {
         gcpadConfig = this._getGCPadConfigMixed(controllerTypes);
         console.log('[DOLPHIN] Writing mixed GCPadNew.ini for controllers:', controllerTypes);
       } else {
-        gcpadConfig = isDualShock
+        // FIX_2026-09-29_DOLPHIN_NINTENDO: Nintendo pads use the DualShock SDL template
+        // with the Pro Controller device name.
+        const isNintendo = (controllerType === 'switch');
+        gcpadConfig = isNintendo
+          ? this._getGCPadConfigDualShock().replace('Device = SDL/0/PS4 Controller', 'Device = SDL/0/Nintendo Switch Pro Controller')
+          : isDualShock
           ? this._getGCPadConfigDualShock()
           : this._getGCPadConfigXInput();
       }
@@ -316,13 +321,22 @@ class DolphinBridge {
       fs.mkdirSync(cfgDir, { recursive: true });
 
       const isDualShock = (controllerType === 'ds4' || controllerType === 'dualsense' || controllerType === 'ds3');
-      const device = isDualShock ? 'SDL/0/PS4 Controller' : 'SDL/0/XInput Controller #1';
-      const exitBinding = isDualShock ? '@(Start+Back)' : 'Back&Guide&Start';
+      // FIX_2026-09-29_DOLPHIN_NINTENDO: Pro Controller hotkeys on its own SDL device.
+      const isNintendo = (controllerType === 'switch');
+      const device = isNintendo ? 'SDL/0/Nintendo Switch Pro Controller'
+        : isDualShock ? 'SDL/0/PS4 Controller' : 'SDL/0/XInput Controller #1';
+      // FIX_2026-09-28_DOLPHIN_EXIT_ANYPAD: keep the clone's SDL binding, OR any XInput pad
+      // (genuine Xbox incl. Series over Bluetooth) via Dolphin's XInput backend, Back+Start.
+      const exitBinding = (isDualShock || isNintendo)
+        ? '@(Start+Back)'
+        : '(Back&Guide&Start) | (`XInput/0/Gamepad:Back` & `XInput/0/Gamepad:Start`)';
 
       const hotkeyConfig = [
         '[Hotkeys]',
         'Device = ' + device,
-        'General/Stop = ESCAPE',
+        // FIX_2026-09-28_DOLPHIN_ESCAPE: bare ESCAPE was looked up on the controller;
+        // name the keyboard device explicitly so Escape always stops the game.
+        'General/Stop = `DInput/0/Keyboard Mouse:ESCAPE`',
         'General/Exit = ' + exitBinding
       ].join('\n');
 
@@ -338,15 +352,20 @@ class DolphinBridge {
     const lines = [];
     let xinputIndex = 0;
     let sdlIndex = 0;
+    let nintendoIndex = 0; // FIX_2026-09-29_DOLPHIN_NINTENDO
     for (let pad = 1; pad <= 4; pad++) {
       const type = controllerTypes[pad - 1] || null;
-      const isDualShock = type === 'ds4' || type === 'dualsense' || type === 'ds3';
+      const isNintendo = type === 'switch';
+      const isDualShock = type === 'ds4' || type === 'dualsense' || type === 'ds3' || isNintendo;
       lines.push(`[GCPad${pad}]`);
       if (!type) {
         lines.push('Device =');
         continue;
       }
-      if (isDualShock) {
+      if (isNintendo) {
+        lines.push(`Device = SDL/${nintendoIndex}/Nintendo Switch Pro Controller`);
+        nintendoIndex++;
+      } else if (isDualShock) {
         lines.push(`Device = SDL/${sdlIndex}/PS4 Controller`);
         sdlIndex++;
       } else {
