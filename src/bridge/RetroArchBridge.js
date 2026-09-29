@@ -60,7 +60,10 @@ const UNIQUE_EXTENSIONS = {
   mastersystem: ['.sms'],
   atari2600:    ['.a26'],
   atari7800:    ['.a78'],
-  msdos:        ['.exe', '.com', '.bat', '.img', '.ima', '.iso'],
+  // BETA_DEFER_MSDOS_2026: msdos is in BLOCKED_ALWAYS, so a unique-extension match
+  // here would claim .iso before the shared-extension logic runs, and the file would
+  // then be dropped as blocked. Restore this line only when DOS support returns.
+  // msdos:        ['.exe', '.com', '.bat', '.img', '.ima', '.iso'],
   switch:       ['.nsp', '.xci', '.nca'],
   gamecube:     ['.gcm', '.gcz', '.nkit'],
   wii:          ['.wbfs', '.wad'],
@@ -85,6 +88,19 @@ const SHARED_EXTENSIONS = {
 
 // Folder hints in priority order — most specific first
 // Short hints (3 chars or less) require exact folder name match
+// BETA_GATING_2026: systems EasyArc detects but cannot launch.
+// BLOCKED_ALWAYS — no support planned or untested; hidden on every platform.
+// BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
+// To restore a system, remove it from the relevant set.
+const BLOCKED_ALWAYS = new Set(['msdos','wii','wiiu','dreamcast','saturn','3ds']);
+const BLOCKED_ON_WINDOWS = new Set(['ps2','ps3','switch']);
+function isSystemBlocked(system) {
+  if (!system) return false;
+  if (BLOCKED_ALWAYS.has(system)) return true;
+  if (process.platform === 'win32' && BLOCKED_ON_WINDOWS.has(system)) return true;
+  return false;
+}
+
 const FOLDER_HINTS = [
   { hints: ['playstation 3','playstation3','ps3'],                           system: 'ps3' },
   { hints: ['playstation 2','playstation2','ps2'],                           system: 'ps2' },
@@ -109,8 +125,7 @@ const FOLDER_HINTS = [
   { hints: ['master system','mastersystem','sms'],                           system: 'mastersystem' },
   { hints: ['atari 2600','atari2600'],                                       system: 'atari2600' },
   { hints: ['atari 7800','atari7800'],                                       system: 'atari7800' },
-  // BETA_DEFER_MSDOS_2026: DOS support untested — uncomment to restore for v1.0
-  // { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
+  { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
   { hints: ['mame'],                                                         system: 'mame' },
@@ -777,7 +792,9 @@ class RetroArchBridge {
         // Detect PS3 games by internal folder structure
         const ps3marker = path.join(fullPath, 'PS3_GAME', 'USRDIR');
         if (fs.existsSync(ps3marker)) {
-          results.push({ title: entry.name, path: fullPath, system: 'ps3' });
+          if (!isSystemBlocked('ps3')) {
+            results.push({ title: entry.name, path: fullPath, system: 'ps3' });
+          }
           continue;
         }
         this._scanDir(fullPath, results, depth + 1);
@@ -789,6 +806,7 @@ class RetroArchBridge {
 
         const system = this._detectSystem(fullPath, ext);
         if (!system) continue;
+        if (isSystemBlocked(system)) continue;
 
         const title = ext === '.cue' ? this._getCueName(fullPath) : path.basename(entry.name, ext);
         results.push({ title, path: fullPath, system });
@@ -2046,7 +2064,8 @@ Source = 0`;
         if (SKIP_FOLDERS.has(folderName)) continue;
         const fullPath = path.join(parentFolder, entry.name);
         // Try to detect system from folder name using shared hint matcher
-        const detectedSystem = this._matchFolderHint(folderName);
+        let detectedSystem = this._matchFolderHint(folderName);
+        if (isSystemBlocked(detectedSystem)) continue;
         // Count files in folder
         let fileCount = 0;
         try {
