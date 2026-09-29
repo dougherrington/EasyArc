@@ -2748,9 +2748,18 @@ function _eaRestoreAfterRelaunch(d, tries) {
     const idx = vsFilteredList.findIndex(g => g && g.id === d.gameId);
     if (idx < 0) { console.log('[UI] Restore: saved game not in list'); return; }
     selectGameByIndex(idx);
+    // FIX_2026-09-29_RESUME_NAV: start gamepad nav in the grid on this card. Otherwise the
+    // first press runs gpActivate(), which enters the sidebar and resets to the top.
+    GP_NAV.active = true;
+    GP_NAV.inSidebar = false;
     GP_NAV.gridIdx = idx;
+    try {
+      const _btns = Array.from(document.querySelectorAll('.system-btn'));
+      const _si = _btns.findIndex(b => b.dataset.sys === sys);
+      if (_si >= 0) GP_NAV.sidebarIdx = _si;
+    } catch (e) {}
     vsScrollToIndex(idx);
-    if (GP_NAV.active && !GP_NAV.inSidebar && typeof gpHighlightCard === 'function') gpHighlightCard(idx);
+    if (typeof gpHighlightCard === 'function') gpHighlightCard(idx);
     console.log('[UI] Restored position after relaunch:', sys, idx);
   } catch (e) { console.log('[UI] Restore after relaunch failed:', e.message); }
 }
