@@ -72,6 +72,7 @@
     ],
     "asarUnpack": [
       "node_modules/node-hid/**/*",
+      "node_modules/@kmamal/sdl/**/*",
       "resources/vc_redist.x64.exe"
     ],
     "npmRebuild": false
@@ -81,6 +82,7 @@
     "electron-builder": "^24.0.0"
   },
   "dependencies": {
+    "@kmamal/sdl": "0.11.13",
     "crc-32": "^1.2.2",
     "node-hid": "^3.3.0",
     "yauzl": "^3.3.0"

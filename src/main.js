@@ -158,3 +158,39 @@ ipcMain.handle('app:relaunchForController', () => {
   app.relaunch();
   app.exit(0);
 });
+
+// FIX_2026-09-30_SDL_NINTENDO: read Nintendo controllers (vendor 057e) through SDL,
+// which keeps working after emulators exit (Chromium's copy freezes). Windows only.
+// If SDL fails to load, nothing is sent and the relaunch fallback stays active.
+if (process.platform === 'win32') {
+  process.env.SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS = '1';
+  app.whenReady().then(() => {
+    let sdl;
+    try { sdl = require('@kmamal/sdl'); console.log('[SDL] loaded'); }
+    catch (e) { console.log('[SDL] failed to load; relaunch fallback stays active:', e.message); return; }
+    let inst = null;
+    const openNintendo = () => {
+      if (inst && !inst.closed) return;
+      const dev = sdl.controller.devices.find(d => d.vendor === 0x057e);
+      if (!dev) return;
+      try {
+        inst = sdl.controller.openDevice(dev);
+        // These listeners look empty but are required: the SDL package only polls the
+        // controller quickly while something is listening. Without them, input lags ~1 second.
+        inst.on('axisMotion', () => {});
+        inst.on('buttonDown', () => {});
+        inst.on('close', () => { inst = null; console.log('[SDL] Nintendo controller closed'); });
+        console.log('[SDL] opened Nintendo controller:', dev.name);
+      } catch (e) { inst = null; console.log('[SDL] open failed:', e.message); }
+    };
+    openNintendo();
+    sdl.controller.on('deviceAdd', () => openNintendo());
+    sdl.controller.on('deviceRemove', () => { if (inst && inst.closed) inst = null; });
+    setInterval(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const on = !!(inst && !inst.closed);
+      mainWindow.webContents.send('sdl-nintendo', { active: true, connected: on,
+        buttons: on ? inst.buttons : {}, axes: on ? inst.axes : {} });
+    }, 16);
+  });
+}

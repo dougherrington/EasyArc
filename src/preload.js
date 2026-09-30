@@ -1,6 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// FIX_2026-09-30_SDL_NINTENDO: latest SDL state for the Nintendo controller
+let _sdlNintendoState = null;
+ipcRenderer.on('sdl-nintendo', (_e, s) => { _sdlNintendoState = s; });
 contextBridge.exposeInMainWorld('easyarc', {
+  sdlNintendoState: () => _sdlNintendoState,
   hidTest: () => ipcRenderer.invoke('bridge:hidTest'),
   hidProbe: (targets, durationMs) => ipcRenderer.invoke('bridge:hidProbe', targets, durationMs),
   hidDetectPress: (targets, durationMs, threshold, excludeSerials) => ipcRenderer.invoke('bridge:hidDetectPress', targets, durationMs, threshold, excludeSerials),

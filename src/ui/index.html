@@ -674,6 +674,53 @@ body::after {
 .toolbar-center-btn { font-size:20px; padding:0 40px; align-self:stretch; height:auto; }
 
 </style>
+<script>
+// FIX_2026-09-30_SDL_NINTENDO: overlay live SDL input onto Chromium's Nintendo gamepad entry.
+// Keeps Chromium's id, index and slot so every existing lookup works unchanged; only the
+// button and stick values come from SDL. Other controllers pass through untouched.
+(function () {
+  const api = window.easyarc;
+  if (!api || !api.sdlNintendoState || !navigator.getGamepads) return;
+  const orig = navigator.getGamepads.bind(navigator);
+  const STD = { b:0, a:1, y:2, x:3, leftShoulder:4, rightShoulder:5, back:8, start:9,
+    leftStick:10, rightStick:11, dpadUp:12, dpadDown:13, dpadLeft:14, dpadRight:15, guide:16 };
+  const isNin = (g) => !!(g && /057e/i.test(g.id || ''));
+  let shell = null, announced = false;
+  function makePad(sh, st) {
+    const btn = (p, v) => ({ pressed: p, touched: p, value: v });
+    const buttons = []; for (let i = 0; i < 17; i++) buttons.push(btn(false, 0));
+    for (const k in (st.buttons || {})) { const i = STD[k]; if (i !== undefined && st.buttons[k]) buttons[i] = btn(true, 1); }
+    const ax = st.axes || {};
+    const lt = Math.max(0, ax.leftTrigger || 0), rt = Math.max(0, ax.rightTrigger || 0);
+    buttons[6] = btn(lt > 0.5, lt); buttons[7] = btn(rt > 0.5, rt);
+    return { id: sh.id, index: sh.index, mapping: sh.mapping || 'standard', connected: true,
+      timestamp: performance.now(), buttons: buttons,
+      axes: [ax.leftStickX || 0, ax.leftStickY || 0, ax.rightStickX || 0, ax.rightStickY || 0] };
+  }
+  navigator.getGamepads = function () {
+    const list = orig();
+    const st = api.sdlNintendoState();
+    if (!st || !st.connected) return list;
+    const arr = Array.from(list);
+    const base = arr.find(isNin);
+    if (base) shell = { id: base.id, index: base.index, mapping: base.mapping };
+    if (!shell) return list;
+    const occupant = arr[shell.index];
+    if (occupant && !isNin(occupant)) return list;   // slot taken by another pad: never hide it
+    while (arr.length <= shell.index) arr.push(null);
+    arr[shell.index] = makePad(shell, st);
+    if (!announced) { announced = true; console.log('[SDL-OVERLAY] active for', shell.id, 'at index', shell.index); }
+    return arr;
+  };
+  window.addEventListener('gamepaddisconnected', function (e) {
+    const st = api.sdlNintendoState();
+    if (st && st.connected && e.gamepad && isNin(e.gamepad)) {
+      e.stopImmediatePropagation();
+      console.log('[SDL-OVERLAY] ignored Chromium disconnect for Nintendo pad (SDL still connected)');
+    }
+  }, true);
+})();
+</script>
 </head>
 <body>
 <div id="scanlines"></div>
@@ -4325,7 +4372,10 @@ if (window.easyarc && window.easyarc.onGameExited) {
       const _hadGame = !!window.__eaGameStartedAt;
       window.__eaGameStartedAt = 0;
       if (!_hadGame) console.log('[UI] game-exited with no game-started - relaunch skipped');
-      if (_hadGame && _hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
+      // FIX_2026-09-30_SDL_NINTENDO: no relaunch needed while SDL is reading the Nintendo controller
+      const _sdlNin = (window.easyarc && window.easyarc.sdlNintendoState) ? window.easyarc.sdlNintendoState() : null;
+      if (_sdlNin && _sdlNin.connected) console.log('[UI] game-exited -> SDL has the Nintendo controller, relaunch skipped');
+      if (!(_sdlNin && _sdlNin.connected) && _hadGame && _hasNintendo && !_isPsp && window.easyarc && window.easyarc.relaunchForController) {
         console.log('[UI] game-exited -> Nintendo controller present, relaunching');
         localStorage.setItem('easyarc_nintendo_resume', JSON.stringify({ ts: Date.now(), system: currentSystem, gameId: selectedGame ? selectedGame.id : null }));
         // FIX_2026-09-29_SINGLE_INSTANCE: relaunch at most once per exit
