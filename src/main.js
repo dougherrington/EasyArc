@@ -165,9 +165,32 @@ ipcMain.handle('app:relaunchForController', () => {
 if (process.platform === 'win32') {
   process.env.SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS = '1';
   app.whenReady().then(() => {
+    // FIX_2026-10-01_SDL_AFTER_LOAD: (1) start SDL only after the page has loaded, matching the
+    // sandbox setup proven to coexist with Chromium's controller support; (2) off switch: a file
+    // named disable-sdl (or disable-sdl.txt) in %APPDATA%\easyarc skips SDL entirely; (3) report
+    // status to the page so DevTools shows whether SDL is disabled, failed, or running.
+    const sendStatus = (st) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('sdl-nintendo', st); };
+    const startWhenLoaded = (fn) => {
+      const w = mainWindow;
+      if (w && !w.isDestroyed()) {
+        if (w.webContents.isLoading()) w.webContents.once('did-finish-load', fn); else fn();
+      } else setTimeout(() => startWhenLoaded(fn), 200);
+    };
+    startWhenLoaded(() => {
+    const _p = require('path'), _fs = require('fs');
+    const _dir = _p.join(app.getPath('appData'), 'easyarc');
+    if (_fs.existsSync(_p.join(_dir, 'disable-sdl')) || _fs.existsSync(_p.join(_dir, 'disable-sdl.txt'))) {
+      console.log('[SDL] disabled by switch file');
+      setInterval(() => sendStatus({ active: false, disabled: true, connected: false }), 500);
+      return;
+    }
     let sdl;
     try { sdl = require('@kmamal/sdl'); console.log('[SDL] loaded'); }
-    catch (e) { console.log('[SDL] failed to load; relaunch fallback stays active:', e.message); return; }
+    catch (e) {
+      console.log('[SDL] failed to load; relaunch fallback stays active:', e.message);
+      setInterval(() => sendStatus({ active: false, error: String(e.message), connected: false }), 500);
+      return;
+    }
     let inst = null;
     const openNintendo = () => {
       if (inst && !inst.closed) return;
@@ -192,5 +215,7 @@ if (process.platform === 'win32') {
       mainWindow.webContents.send('sdl-nintendo', { active: true, connected: on,
         buttons: on ? inst.buttons : {}, axes: on ? inst.axes : {} });
     }, 16);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus();
+    });
   });
 }
