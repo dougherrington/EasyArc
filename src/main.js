@@ -192,6 +192,7 @@ if (process.platform === 'win32') {
       return;
     }
     let inst = null;
+    let reopening = false; // FIX_2026-10-01_SDL_REOPEN
     const openNintendo = () => {
       if (inst && !inst.closed) return;
       const dev = sdl.controller.devices.find(d => d.vendor === 0x057e);
@@ -207,12 +208,22 @@ if (process.platform === 'win32') {
       } catch (e) { inst = null; console.log('[SDL] open failed:', e.message); }
     };
     openNintendo();
+    // FIX_2026-10-01_SDL_REOPEN: after a game, SDL's view of the Nintendo controller can freeze;
+    // closing and reopening it clears that (same effect as the power-cycle test). While reopening,
+    // the page receives a neutral controller, so there's no runaway scrolling and no relaunch.
+    ipcMain.handle('sdl:reopenNintendo', () => {
+      if (!inst || inst.closed) { openNintendo(); return; }
+      reopening = true;
+      try { inst.close(); } catch (e) {}
+      inst = null;
+      setTimeout(() => { openNintendo(); reopening = false; console.log('[SDL] Nintendo controller reopened after game'); }, 500);
+    });
     sdl.controller.on('deviceAdd', () => openNintendo());
     sdl.controller.on('deviceRemove', () => { if (inst && inst.closed) inst = null; });
     setInterval(() => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       const on = !!(inst && !inst.closed);
-      mainWindow.webContents.send('sdl-nintendo', { active: true, connected: on,
+      mainWindow.webContents.send('sdl-nintendo', { active: true, connected: on || reopening,
         buttons: on ? inst.buttons : {}, axes: on ? inst.axes : {} });
     }, 16);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus();

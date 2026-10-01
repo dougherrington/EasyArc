@@ -4358,6 +4358,8 @@ if (window.easyarc && window.easyarc.onGameExited) {
   window.easyarc.onGameExited(() => {
     console.log('[UI] game-exited -> nav re-enabled');
     window.__easyarcGameRunning = false;
+    // FIX_2026-10-01_SDL_REOPEN: reopen the Nintendo controller in SDL to clear any post-game freeze
+    try { if (window.easyarc && window.easyarc.sdlReopenNintendo) window.easyarc.sdlReopenNintendo(); } catch (e) {}
     // FIX_2026-09-29_NINTENDO_RELAUNCH: Nintendo controllers (vendor 057e) go stale in
     // Chromium after SDL-based emulators exit; only a fresh app start restores them.
     // Skipped after PSP, since PPSSPP doesn't cause the freeze.
