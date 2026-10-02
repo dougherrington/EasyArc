@@ -235,3 +235,37 @@ if (process.platform === 'win32') {
     });
   });
 }
+
+// FIX_2026-10-02_DIAG_FULLMODE: diagnostic only. Sends Nintendo subcommand 0x03
+// ("Set Input Report Mode") with 0x30 (full mode) to any vendor-057e HID device, the same
+// command Chromium, SDL and the Linux driver use at setup. Reports each step's outcome.
+// Run manually from DevTools: window.easyarc.diagNintendoFullMode()
+let _diagPacket = 0;
+ipcMain.handle('diag:nintendoFullMode', () => {
+  let HID;
+  try { HID = require('node-hid'); } catch (e) { return { ok: false, step: 'require', error: String(e.message) }; }
+  let all;
+  try { all = HID.devices().filter(d => d.vendorId === 0x057e); } catch (e) { return { ok: false, step: 'list', error: String(e.message) }; }
+  if (!all.length) return { ok: false, step: 'find', error: 'no Nintendo (057e) HID device found' };
+  const results = [], seen = new Set();
+  for (const d of all) {
+    if (seen.has(d.path)) continue; seen.add(d.path);
+    const r = { product: d.product, usagePage: d.usagePage, usage: d.usage, open: false, writes: [] };
+    let dev;
+    try { dev = new HID.HID(d.path); r.open = true; }
+    catch (e) { r.openError = String(e.message); results.push(r); continue; }
+    for (const len of [49, 64]) {
+      const buf = new Array(len).fill(0);
+      buf[0] = 0x01;                                   // output report: rumble + subcommand
+      buf[1] = (_diagPacket++) & 0x0f;                 // packet counter
+      [0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40].forEach((b, i) => { buf[2 + i] = b; }); // neutral rumble
+      buf[10] = 0x03;                                  // subcommand: set input report mode
+      buf[11] = 0x30;                                  // full mode
+      try { const n = dev.write(buf); r.writes.push({ len, ok: true, wrote: n }); break; }
+      catch (e) { r.writes.push({ len, ok: false, error: String(e.message) }); }
+    }
+    try { dev.close(); } catch (e) {}
+    results.push(r);
+  }
+  return { ok: results.some(r => r.writes.some(w => w.ok)), results };
+});

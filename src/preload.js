@@ -6,6 +6,7 @@ ipcRenderer.on('sdl-nintendo', (_e, s) => { _sdlNintendoState = s; });
 contextBridge.exposeInMainWorld('easyarc', {
   sdlNintendoState: () => _sdlNintendoState,
   sdlReopenNintendo: () => ipcRenderer.invoke('sdl:reopenNintendo'), // FIX_2026-10-01_SDL_REOPEN
+  diagNintendoFullMode: () => ipcRenderer.invoke('diag:nintendoFullMode'), // FIX_2026-10-02_DIAG_FULLMODE
   hidTest: () => ipcRenderer.invoke('bridge:hidTest'),
   hidProbe: (targets, durationMs) => ipcRenderer.invoke('bridge:hidProbe', targets, durationMs),
   hidDetectPress: (targets, durationMs, threshold, excludeSerials) => ipcRenderer.invoke('bridge:hidDetectPress', targets, durationMs, threshold, excludeSerials),
