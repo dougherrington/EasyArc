@@ -184,47 +184,52 @@ if (process.platform === 'win32') {
       setInterval(() => sendStatus({ active: false, disabled: true, connected: false }), 500);
       return;
     }
-    let sdl;
-    try { sdl = require('@kmamal/sdl'); console.log('[SDL] loaded'); }
-    catch (e) {
-      console.log('[SDL] failed to load; relaunch fallback stays active:', e.message);
-      setInterval(() => sendStatus({ active: false, error: String(e.message), connected: false }), 500);
-      return;
-    }
-    let inst = null;
-    let reopening = false; // FIX_2026-10-01_SDL_REOPEN
-    const openNintendo = () => {
-      if (inst && !inst.closed) return;
-      const dev = sdl.controller.devices.find(d => d.vendor === 0x057e);
-      if (!dev) return;
-      try {
-        inst = sdl.controller.openDevice(dev);
-        // These listeners look empty but are required: the SDL package only polls the
-        // controller quickly while something is listening. Without them, input lags ~1 second.
-        inst.on('axisMotion', () => {});
-        inst.on('buttonDown', () => {});
-        inst.on('close', () => { inst = null; console.log('[SDL] Nintendo controller closed'); });
-        console.log('[SDL] opened Nintendo controller:', dev.name);
-      } catch (e) { inst = null; console.log('[SDL] open failed:', e.message); }
+    // FIX_2026-10-02_SDL_HELPER: SDL now runs in a restartable helper process (src/sdl-helper.js).
+    // Evidence: SDL frozen after a game is cured by a fresh process; reopening in-process is not.
+    // After each game (Nintendo connected only), the helper is stopped, waited for, and replaced;
+    // the page sees a neutral controller meanwhile. If the helper fails, status shows the error
+    // and the relaunch fallback stays active.
+    const { utilityProcess } = require('electron');
+    const helperPath = _p.join(__dirname, 'sdl-helper.js').replace('app.asar' + _p.sep, 'app.asar.unpacked' + _p.sep);
+    let helper = null, last = null, restarting = false, restartStartedAt = 0, lastRestartMs = null, helperError = null;
+    const startHelper = () => {
+      let h;
+      try { h = utilityProcess.fork(helperPath, [], { serviceName: 'EasyArc SDL helper' }); }
+      catch (e) { helperError = 'helper failed to start: ' + String(e && e.message); restarting = false; return; }
+      helper = h;
+      h.on('message', (msg) => {
+        if (h !== helper || !msg) return;
+        if (msg.type === 'state') {
+          last = msg;
+          if (restarting) { restarting = false; lastRestartMs = Date.now() - restartStartedAt; console.log('[SDL] helper restarted in', lastRestartMs, 'ms'); }
+        } else if (msg.type === 'error') { helperError = msg.error; restarting = false; }
+      });
+      h.on('exit', (code) => {
+        if (h !== helper) return;
+        helper = null; last = null;
+        if (!restarting && !helperError) helperError = 'helper exited unexpectedly (code ' + code + ')';
+      });
     };
-    openNintendo();
-    // FIX_2026-10-01_SDL_REOPEN: after a game, SDL's view of the Nintendo controller can freeze;
-    // closing and reopening it clears that (same effect as the power-cycle test). While reopening,
-    // the page receives a neutral controller, so there's no runaway scrolling and no relaunch.
+    startHelper();
+    // The page already calls this after every game exit (see FIX_2026-10-01_SDL_REOPEN in index.html).
     ipcMain.handle('sdl:reopenNintendo', () => {
-      if (!inst || inst.closed) { openNintendo(); return; }
-      reopening = true;
-      try { inst.close(); } catch (e) {}
-      inst = null;
-      setTimeout(() => { openNintendo(); reopening = false; console.log('[SDL] Nintendo controller reopened after game'); }, 500);
+      if (restarting || helperError) return;
+      if (!last || !last.connected) return;           // no Nintendo controller: nothing to reset
+      restarting = true; restartStartedAt = Date.now();
+      const old = helper; helper = null;               // ignore anything the old helper still sends
+      if (!old) { startHelper(); return; }
+      let done = false;
+      const next = () => { if (done) return; done = true; startHelper(); };
+      old.once('exit', next);                          // never start the new helper before the old one exits
+      try { old.postMessage({ type: 'shutdown' }); } catch (e) {}
+      setTimeout(() => { if (!done) { try { old.kill(); } catch (e) {} } }, 1500);
     });
-    sdl.controller.on('deviceAdd', () => openNintendo());
-    sdl.controller.on('deviceRemove', () => { if (inst && inst.closed) inst = null; });
     setInterval(() => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      const on = !!(inst && !inst.closed);
-      mainWindow.webContents.send('sdl-nintendo', { active: true, connected: on || reopening,
-        buttons: on ? inst.buttons : {}, axes: on ? inst.axes : {} });
+      if (restarting && Date.now() - restartStartedAt > 5000) { restarting = false; helperError = 'helper restart timed out'; }
+      if (helperError) { sendStatus({ active: false, error: helperError, connected: false }); return; }
+      if (restarting) { sendStatus({ active: true, connected: true, restarting: true, buttons: {}, axes: {}, lastRestartMs }); return; }
+      const on = !!(last && last.connected);
+      sendStatus({ active: true, connected: on, buttons: on ? last.buttons : {}, axes: on ? last.axes : {}, lastRestartMs });
     }, 16);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus();
     });
