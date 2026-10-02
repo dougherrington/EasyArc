@@ -191,7 +191,7 @@ if (process.platform === 'win32') {
     // and the relaunch fallback stays active.
     const { utilityProcess } = require('electron');
     const helperPath = _p.join(__dirname, 'sdl-helper.js').replace('app.asar' + _p.sep, 'app.asar.unpacked' + _p.sep);
-    let helper = null, last = null, restarting = false, restartStartedAt = 0, lastRestartMs = null, helperError = null;
+    let helper = null, last = null, restarting = false, restartStartedAt = 0, lastRestartMs = null, helperError = null, lastFullMode = null;
     const startHelper = () => {
       let h;
       try { h = utilityProcess.fork(helperPath, [], { serviceName: 'EasyArc SDL helper' }); }
@@ -201,7 +201,15 @@ if (process.platform === 'win32') {
         if (h !== helper || !msg) return;
         if (msg.type === 'state') {
           last = msg;
-          if (restarting) { restarting = false; lastRestartMs = Date.now() - restartStartedAt; console.log('[SDL] helper restarted in', lastRestartMs, 'ms'); }
+          if (restarting) {
+            restarting = false; lastRestartMs = Date.now() - restartStartedAt; console.log('[SDL] helper restarted in', lastRestartMs, 'ms');
+            // FIX_2026-10-02_AUTO_FULLMODE: a game leaves the controller in basic mode (dead D-pad,
+            // off-center stick); switch it back to full mode, as the manual tests proved.
+            setTimeout(() => {
+              try { const r = _sendNintendoFullMode(); lastFullMode = { ok: !!r.ok, at: Date.now() }; console.log('[SDL] full-mode command sent:', r.ok); }
+              catch (e) { lastFullMode = { ok: false, at: Date.now(), error: String(e && e.message) }; }
+            }, 300);
+          }
         } else if (msg.type === 'error') { helperError = msg.error; restarting = false; }
       });
       h.on('exit', (code) => {
@@ -229,7 +237,7 @@ if (process.platform === 'win32') {
       if (helperError) { sendStatus({ active: false, error: helperError, connected: false }); return; }
       if (restarting) { sendStatus({ active: true, connected: true, restarting: true, buttons: {}, axes: {}, lastRestartMs }); return; }
       const on = !!(last && last.connected);
-      sendStatus({ active: true, connected: on, buttons: on ? last.buttons : {}, axes: on ? last.axes : {}, lastRestartMs });
+      sendStatus({ active: true, connected: on, buttons: on ? last.buttons : {}, axes: on ? last.axes : {}, lastRestartMs, lastFullMode });
     }, 16);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus();
     });
@@ -241,7 +249,8 @@ if (process.platform === 'win32') {
 // command Chromium, SDL and the Linux driver use at setup. Reports each step's outcome.
 // Run manually from DevTools: window.easyarc.diagNintendoFullMode()
 let _diagPacket = 0;
-ipcMain.handle('diag:nintendoFullMode', () => {
+// FIX_2026-10-02_AUTO_FULLMODE: shared function, used after each game and by the console command
+function _sendNintendoFullMode() {
   let HID;
   try { HID = require('node-hid'); } catch (e) { return { ok: false, step: 'require', error: String(e.message) }; }
   let all;
@@ -268,4 +277,5 @@ ipcMain.handle('diag:nintendoFullMode', () => {
     results.push(r);
   }
   return { ok: results.some(r => r.writes.some(w => w.ok)), results };
-});
+}
+ipcMain.handle('diag:nintendoFullMode', () => _sendNintendoFullMode());
