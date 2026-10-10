@@ -256,9 +256,26 @@ function httpsGetText(url) {
     https.get(url, (res) => {
       let data = '';
       res.on('data', c => data += c);
-      res.on('end', () => resolve(data));
+      res.on('end', () => {
+        // FIX_2026-10-10_SS_BLOCK: stop cleanly when ScreenScraper refuses requests
+        const block = String(url).includes('screenscraper.fr') ? ssBlockReason(data) : null;
+        if (block) { const e = new Error('ScreenScraper refused: ' + block); e.ssBlock = block; return reject(e); }
+        resolve(data);
+      });
     }).on('error', reject);
   });
+}
+
+// FIX_2026-10-10_SS_BLOCK: classify ScreenScraper refusal messages (busy, quota, closed, login)
+function ssBlockReason(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const t = raw.trim();
+  if (t.startsWith('{')) return null;
+  if (/non membres|non-registered members|nombre maximum de threads|maximum threads allowed/i.test(t)) return 'busy';
+  if (/quota de scrape|fichiers roms/i.test(t)) return 'quota';
+  if (/totalement ferm|API closed/i.test(t)) return 'closed';
+  if (/identifiants/i.test(t)) return 'login';
+  return null;
 }
 
 function httpsGetBinary(url) {
@@ -2104,7 +2121,20 @@ Source = 0`;
     return null;
   }
 
+  // FIX_2026-10-10_SS_BLOCK: wrapper turns a ScreenScraper refusal into { blocked: reason }
   async scrapeGame(game, ssUser, ssPassword) {
+    try {
+      return await this._scrapeGameInner(game, ssUser, ssPassword);
+    } catch (err) {
+      if (err && err.ssBlock) {
+        console.log('[Bridge] ScreenScraper refused request:', err.ssBlock);
+        return { success: false, blocked: err.ssBlock, error: 'Blocked: ' + err.ssBlock };
+      }
+      throw err;
+    }
+  }
+
+  async _scrapeGameInner(game, ssUser, ssPassword) {
     const SS_IDS = {
       gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 43, msdos: 135,
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
@@ -2153,8 +2183,8 @@ Source = 0`;
 
     const baseParams =
       'devid=dnherrington67&devpassword=LpQS8obmTnC&softname=EasyArc' +
-      '&ssid=' + encodeURIComponent(ssUser) +
-      '&sspassword=' + encodeURIComponent(ssPassword) +
+      // FIX_2026-10-10_SS_LOGIN: anonymous unless the user entered a login
+      (ssUser && ssPassword ? '&ssid=' + encodeURIComponent(ssUser) + '&sspassword=' + encodeURIComponent(ssPassword) : '') +
       '&output=json';
     let jeuData = null;
     // MAME: romnom-based lookup, no hash needed
@@ -2169,6 +2199,7 @@ Source = 0`;
           jeuData = null;
         }
       } catch (err) {
+        if (err && err.ssBlock) throw err; // FIX_2026-10-10_SS_BLOCK
         console.log('[Bridge] MAME error:', err.message);
         jeuData = null;
       }
@@ -2185,6 +2216,7 @@ Source = 0`;
         console.log('[Bridge] Hash lookup failed:', hashResult.reason);
       }
     } catch (err) {
+      if (err && err.ssBlock) throw err; // FIX_2026-10-10_SS_BLOCK
       console.log('[Bridge] CRC/hash error:', err.message);
     }
     // Phase 2: Title fallback

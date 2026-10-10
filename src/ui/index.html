@@ -925,11 +925,11 @@ body::after {
         <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
-          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value="dnherrington67"></div>
+          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value=""></div>
         </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
-          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password" value="Sammie139485"></div>
+          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password" value=""></div>
         </div>
         <div class="setting-row">
           <div class="setting-info">
@@ -5216,12 +5216,21 @@ let scrapeResumeIndex = 0;      // saved position when paused by game launch
 let scrapeResumeCredentials = null; // saved credentials when paused
 const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
+// FIX_2026-10-10_SS_BLOCK: plain-English messages when ScreenScraper refuses requests
+function ssBlockMessage(reason) {
+  if (reason === "busy") return "ScreenScraper is busy and is only serving signed-in users right now. Scrape again later to finish your box art. A free ScreenScraper account (entered in EasyArc settings) gets priority.";
+  if (reason === "quota") return "You have reached the daily ScreenScraper limit. Scrape again tomorrow to finish your box art.";
+  if (reason === "closed") return "ScreenScraper is temporarily down. Scrape again later to finish your box art.";
+  if (reason === "login") return "ScreenScraper did not accept your username or password. Check them in EasyArc settings.";
+  return "ScreenScraper stopped responding. Scrape again later.";
+}
+
 async function startScrape() {
   if (!window.easyarc) { showToast('Not available in browser'); return; }
   const ssUser = document.getElementById('ssUser').value.trim();
   const ssPass = document.getElementById('ssPass') ? document.getElementById('ssPass').value.trim() : '';
-  // localStorage.setItem('ss_user', ssUser);
-  // localStorage.setItem('ss_pass', ssPass);
+  localStorage.setItem('ss_user', ssUser);
+  localStorage.setItem('ss_pass', ssPass);
 
   const toScrape = games.filter(g => SCRAPE_SYSTEMS.includes(g.system) && !artworkCache[g.path]);
   if (toScrape.length === 0) { showToast('All games already scraped!'); return; }
@@ -5239,6 +5248,7 @@ async function startScrape() {
   let partial = 0;
   let failed = 0;
   let skipped = 0;
+  let scrapeBlocked = null;
   const logLines = [];
   const scrapeStart = new Date().toLocaleString();
   logLines.push('EasyArc Scrape Log — ' + scrapeStart);
@@ -5261,6 +5271,7 @@ async function startScrape() {
     } catch (err) {
       result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
     }
+    if (result && result.blocked) { scrapeBlocked = result.blocked; break; }
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI(pathToFileUrl(result.path));
       if (result.metadata) metadataCache[g.path] = result.metadata;
@@ -5302,7 +5313,8 @@ async function startScrape() {
   const led2 = document.getElementById('scrapeLed');
   if (led2) led2.classList.remove('active');
   if (row) row.style.display = 'none';
-  showToast('Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)');
+  if (scrapeBlocked) logLines.push('STOPPED: ScreenScraper ' + scrapeBlocked);
+  showToast(scrapeBlocked ? ssBlockMessage(scrapeBlocked) : 'Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)');
   renderGrid();
 
   if (window.easyarc && window.easyarc.writeScrapeLog) {
@@ -5332,6 +5344,7 @@ async function resumeScrape() {
   let partial = 0;
   let failed = 0;
   let skipped = 0;
+  let scrapeBlocked = null;
 
   for (const g of toScrape) {
     scrapeResumeIndex++;
@@ -5344,6 +5357,7 @@ async function resumeScrape() {
     } catch (err) {
       result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
     }
+    if (result && result.blocked) { scrapeBlocked = result.blocked; break; }
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI(pathToFileUrl(result.path));
       if (result.metadata) metadataCache[g.path] = result.metadata;
@@ -5368,7 +5382,7 @@ async function resumeScrape() {
   const led2 = document.getElementById('scrapeLed');
   if (led2) led2.classList.remove('active');
   if (row) row.style.display = 'none';
-  showToast('Scraping resumed and complete! ' + succeeded + '/' + done + ' scraped.');
+  showToast(scrapeBlocked ? ssBlockMessage(scrapeBlocked) : 'Scraping resumed and complete! ' + succeeded + '/' + done + ' scraped.');
   renderGrid();
 }
 
