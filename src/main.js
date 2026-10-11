@@ -23,6 +23,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0a0a0f',
+    autoHideMenuBar: true, // FIX_2026-10-10_POLISH: hide File/Edit/View menu (Alt shows it)
     show: false,
     titleBarStyle: 'hiddenInset',
     webPreferences: {

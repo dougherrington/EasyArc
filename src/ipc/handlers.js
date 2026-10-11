@@ -321,7 +321,7 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   });
 
   // FIX_2026-10-10_SS_SETUP: open the ScreenScraper sign-up page (fixed address only)
-  handle('app:openScreenScraperSignup', () => require('electron').shell.openExternal('https://www.screenscraper.fr/membreinscription.php'));
+  handle('app:openScreenScraperSignup', () => require('electron').shell.openExternal('https://www.screenscraper.fr/membreinscription.php#:~:text=Nickname%20between%204%20and%2025')); // FIX_2026-10-10_POLISH: jump to the form
 }
 
 module.exports = registerIpcHandlers;

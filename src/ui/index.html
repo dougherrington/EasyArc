@@ -870,7 +870,7 @@ body::after {
         <!-- FIX_2026-10-10_SS_SETUP: free account setup -->
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">Free ScreenScraper Account</div><div class="setting-desc">Get box art for about 7,000 games a day instead of 400. Free, and takes about 2 minutes.</div></div>
-          <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="ssSetupOpen(false, false)">Set Up Free Account...</button></div>
+          <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="ssSetupOpen(false, false);ssSetupShowSignup()">Set Up Free Account...</button></div>
         </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
@@ -4072,13 +4072,14 @@ function gpHandleInput(gp) {
   if (up || down || left || right) gpActivate();
 
   // ── Toolbar mode ─────────────────────────────────────────────────────
-  // RIGHT: Refresh(0) > Add Games(1) > Remove Games(2) > Get Art(3) > Library > Controller > Dev Options
+  // FIX_2026-10-10_TOPNAV: order matches the screen
+  // RIGHT: Add Games(0) > Remove Games(1) > Back to Library(2) > Get Art(3) > Map Controllers > Advanced Options
   // LEFT:  reverse
   if (GP_NAV.inToolbar) {
     const toolbarBtns = [
-      document.getElementById('rescanBtn'),
       document.getElementById('addGamesBtn'),
       document.getElementById('removeGamesBtn'),
+      document.getElementById('rescanBtn'),
       document.getElementById('getArtBtn')
     ];
     const highlightToolbar = (idx) => {
@@ -4100,7 +4101,7 @@ function gpHandleInput(gp) {
         GP_NAV.inToolbar = false;
         GP_NAV.inTopNav = true;
         GP_NAV.topNavIdx = 0;
-        const navBtns2 = Array.from(document.querySelectorAll(".nav-btn"));
+        const navBtns2 = Array.from(document.querySelectorAll(".nav-btn")).filter(b => getComputedStyle(b).display !== "none");
         navBtns2.forEach((b,i) => b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none");
       } else {
         GP_NAV.toolbarIdx = GP_NAV.toolbarIdx + 1;
@@ -4123,7 +4124,7 @@ function gpHandleInput(gp) {
   // ── Top nav mode (Library, Setup, Controller, Settings) ──────────────
   if (GP_NAV.inTopNav) {
     const views = ["library", "wizard", "controller", "settings"];
-    const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
+    const navBtns = Array.from(document.querySelectorAll(".nav-btn")).filter(b => getComputedStyle(b).display !== "none");
     if (fireLeft) {
       if (GP_NAV.topNavIdx === 0) {
         // Left from Library — go to Get Art (last toolbar button)
@@ -4132,9 +4133,9 @@ function gpHandleInput(gp) {
         GP_NAV.inToolbar = true;
         GP_NAV.toolbarIdx = 3;
         const toolbarBtns2 = [
-          document.getElementById('rescanBtn'),
           document.getElementById('addGamesBtn'),
           document.getElementById('removeGamesBtn'),
+          document.getElementById('rescanBtn'),
           document.getElementById('getArtBtn')
         ];
         toolbarBtns2.forEach((b,i) => { if(b) b.style.outline = i === 3 ? "2px solid var(--cyan)" : "none"; });
@@ -4159,8 +4160,9 @@ function gpHandleInput(gp) {
       GP_NAV.inToolbar = true;
       GP_NAV.toolbarIdx = 0;
       const toolbarBtns = [
-        document.getElementById('rescanBtn'),
         document.getElementById('addGamesBtn'),
+        document.getElementById('removeGamesBtn'),
+        document.getElementById('rescanBtn'),
         document.getElementById('getArtBtn')
       ];
       toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
@@ -4168,7 +4170,7 @@ function gpHandleInput(gp) {
     if (gpShouldFire("a", aBtn)) {
       GP_NAV.inTopNav = false;
       navBtns.forEach(b => b.style.outline = "none");
-      showView(views[GP_NAV.topNavIdx]);
+      if (navBtns[GP_NAV.topNavIdx]) navBtns[GP_NAV.topNavIdx].click(); // FIX_2026-10-10_TOPNAV: press the real button
     }
     if (fireDown || gpShouldFire("b", bBtn)) {
       GP_NAV.inTopNav = false;
@@ -4187,11 +4189,11 @@ function gpHandleInput(gp) {
         // At top of sidebar — move up to top nav
         GP_NAV.inSidebar = false;
         gpHighlightSys(-1);
-        GP_NAV.inTopNav = true;
-        const navBtns = Array.from(document.querySelectorAll(".nav-btn"));
-        GP_NAV.topNavIdx = Array.from(navBtns).findIndex(b => b.classList.contains("active"));
-        if (GP_NAV.topNavIdx < 0) GP_NAV.topNavIdx = 0;
-        navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+        // FIX_2026-10-10_TOPNAV: Up from the system list goes to Add Games (far left)
+        GP_NAV.inToolbar = true;
+        GP_NAV.toolbarIdx = 0;
+        document.querySelectorAll(".nav-btn").forEach(b => b.style.outline = "none");
+        ['addGamesBtn','removeGamesBtn','rescanBtn','getArtBtn'].forEach((id,i) => { const b = document.getElementById(id); if (b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
       } else {
         GP_NAV.sidebarIdx = Math.max(0, GP_NAV.sidebarIdx - 1);
         gpHighlightSys(GP_NAV.sidebarIdx);
@@ -4293,18 +4295,19 @@ function gpHandleInput(gp) {
 
   // Start — enter top nav mode
   if (gpShouldFire("start", start)) {
-    GP_NAV.inTopNav = true;
+    // FIX_2026-10-10_TOPNAV: Start goes to Add Games (far left)
+    GP_NAV.inTopNav = false;
     GP_NAV.inSidebar = false;
-    const btns = document.querySelectorAll(".nav-btn");
-    GP_NAV.topNavIdx = Array.from(btns).findIndex(b => b.classList.contains("active"));
-    if (GP_NAV.topNavIdx < 0) GP_NAV.topNavIdx = 0;
-    btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
+    GP_NAV.inToolbar = true;
+    GP_NAV.toolbarIdx = 0;
+    document.querySelectorAll(".nav-btn").forEach(b => b.style.outline = "none");
+    ['addGamesBtn','removeGamesBtn','rescanBtn','getArtBtn'].forEach((id,i) => { const b = document.getElementById(id); if (b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
   }
 
   // Top nav mode — left/right to move, A to select, B to exit
   if (GP_NAV.inTopNav) {
     const views = ["library", "wizard", "controller", "settings"];
-    const btns = Array.from(document.querySelectorAll(".nav-btn"));
+    const btns = Array.from(document.querySelectorAll(".nav-btn")).filter(b => getComputedStyle(b).display !== "none");
     if (fireLeft) {
       GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
       btns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
@@ -4316,7 +4319,7 @@ function gpHandleInput(gp) {
     if (gpShouldFire("a", aBtn)) {
       GP_NAV.inTopNav = false;
       btns.forEach(b => b.style.outline = "none");
-      showView(views[GP_NAV.topNavIdx]);
+      if (btns[GP_NAV.topNavIdx]) btns[GP_NAV.topNavIdx].click(); // FIX_2026-10-10_TOPNAV: press the real button
     }
     if (gpShouldFire("b", bBtn)) {
       GP_NAV.inTopNav = false;
@@ -5516,6 +5519,8 @@ ctrlUpdateScreen = function() { _origCtrlUpdateScreen.apply(this, arguments); up
 // Override showView to handle new layout
 const _origShowView = showView;
 showView = function(name) {
+  // FIX_2026-10-10_POLISH: controller mapping is not finished yet; navigation code untouched
+  if (name === 'controller') { showToast('Controller mapping is coming in version 1.0. Your controller already works automatically.'); return; }
   const sidebar = document.getElementById('sidebar');
   const libraryView = document.getElementById('library-view');
   const detailPanel = document.getElementById('detailPanel');
@@ -5634,6 +5639,8 @@ showView = function(name) {
     </div>
   </div>
 </div>
+<!-- FIX_2026-10-10_POLISH: white text in the account pop-up only -->
+<style>#ssSetupModal .frw-sub, #ssSetupModal .frw-choice-desc, #ssSetupModal .setting-name { color:#fff !important; }</style>
 <!-- FIX_2026-10-10_SS_SETUP: free ScreenScraper account setup pop-up -->
 <div class="frw-overlay hidden" id="ssSetupModal">
   <div class="frw-box" style="max-width:640px">
@@ -5662,7 +5669,7 @@ showView = function(name) {
       <div class="frw-title">CREATE YOUR FREE SCREENSCRAPER ACCOUNT</div>
       <div class="frw-sub">We've opened the ScreenScraper sign-up page in your web browser.</div>
       <div class="frw-choice-desc" style="text-align:left;font-size:13px;line-height:1.8;margin-bottom:16px;">
-        1. Fill in the sign-up form. If the page appears in French, click the British flag at the top for English.<br>
+        1. The sign-up form opens with the Username box highlighted. Choose a username (4–25 letters or numbers), a password (6–25 letters or numbers, no special characters), enter your email, and click Send.<br>
         2. Check your email and click the verification link ScreenScraper sends you.<br>
         3. Wait a minute or two for your account to activate, then enter your login below.
       </div>
