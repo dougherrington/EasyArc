@@ -319,6 +319,9 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
     });
     return result.canceled ? null : result.filePaths[0];
   });
+
+  // FIX_2026-10-10_SS_SETUP: open the ScreenScraper sign-up page (fixed address only)
+  handle('app:openScreenScraperSignup', () => require('electron').shell.openExternal('https://www.screenscraper.fr/membreinscription.php'));
 }
 
 module.exports = registerIpcHandlers;

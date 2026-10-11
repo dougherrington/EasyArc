@@ -866,6 +866,41 @@ body::after {
     <!-- Settings panel -->
     <div class="settings-panel" id="settings-view" style="grid-column:1/-1">
       <div class="settings-section">
+        <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
+        <!-- FIX_2026-10-10_SS_SETUP: free account setup -->
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Free ScreenScraper Account</div><div class="setting-desc">Get box art for about 7,000 games a day instead of 400. Free, and takes about 2 minutes.</div></div>
+          <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="ssSetupOpen(false, false)">Set Up Free Account...</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
+          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value=""></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
+          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password" value=""></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Scrape Box Art</div>
+            <div class="setting-desc">Download box art and game details for your whole library from ScreenScraper.fr.</div>
+          </div>
+          <div class="setting-control">
+            <button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="startScrape()">Scrape Now...</button>
+          </div>
+        </div>
+        <div class="setting-row" id="scrapeProgressRow" style="display:none">
+          <div class="setting-info">
+            <div class="setting-name" id="scrapeProgressTitle">Scraping...</div>
+            <div class="setting-desc" id="scrapeProgressGame"></div>
+          </div>
+          <div class="setting-control">
+            <button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;color:var(--accent)" onclick="stopScrape()">Stop</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="settings-heading">LIBRARY</div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">Run Setup Wizard</div><div class="setting-desc">Add ROM folders or reconfigure EasyArc at any time.</div></div>
@@ -921,36 +956,6 @@ body::after {
           <div class="setting-control"><select class="setting-select" id="defaultPlayerCount"><option selected>1 Player</option><option>2 Players</option><option>3 Players</option><option>4 Players</option></select></div>
         </div>
       </div>
-      <div class="settings-section">
-        <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
-        <div class="setting-row">
-          <div class="setting-info"><div class="setting-name">ScreenScraper Username</div><div class="setting-desc">Your screenscraper.fr account username.</div></div>
-          <div class="setting-control"><input id="ssUser" type="text" class="setting-select" style="min-width:180px" placeholder="username" value=""></div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info"><div class="setting-name">ScreenScraper Password</div><div class="setting-desc">Your screenscraper.fr account password.</div></div>
-          <div class="setting-control"><input id="ssPass" type="password" class="setting-select" style="min-width:180px" placeholder="password" value=""></div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name">Scrape Box Art</div>
-            <div class="setting-desc">Download box art for PS1, PS2, GameCube and Wii games. Runs in background at ~1 game/sec.</div>
-          </div>
-          <div class="setting-control">
-            <button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="startScrape()">Scrape Now...</button>
-          </div>
-        </div>
-        <div class="setting-row" id="scrapeProgressRow" style="display:none">
-          <div class="setting-info">
-            <div class="setting-name" id="scrapeProgressTitle">Scraping...</div>
-            <div class="setting-desc" id="scrapeProgressGame"></div>
-          </div>
-          <div class="setting-control">
-            <button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;color:var(--accent)" onclick="stopScrape()">Stop</button>
-          </div>
-        </div>
-      </div>
-
       <div class="settings-section">
         <div class="settings-heading">RETROARCH</div>
         <div class="setting-row">
@@ -5216,12 +5221,85 @@ let scrapeResumeIndex = 0;      // saved position when paused by game launch
 let scrapeResumeCredentials = null; // saved credentials when paused
 const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
+// FIX_2026-10-10_SS_ANON_CAP: daily cap for scraping without a ScreenScraper login (uses the shared developer quota)
+const SS_ANON_DAILY_CAP = 400;
+function ssAnonCountToday() {
+  const today = new Date().toDateString();
+  if (localStorage.getItem('ss_anon_day') !== today) {
+    localStorage.setItem('ss_anon_day', today);
+    localStorage.setItem('ss_anon_count', '0');
+  }
+  return parseInt(localStorage.getItem('ss_anon_count') || '0', 10) || 0;
+}
+function ssAnonAddOne() {
+  localStorage.setItem('ss_anon_count', String(ssAnonCountToday() + 1));
+}
+
+// FIX_2026-10-10_SS_SETUP: free ScreenScraper account setup pop-up
+let ssSetupResumeScrape = false;
+function ssSetupIsOpen() {
+  const m = document.getElementById('ssSetupModal');
+  return !!m && !m.classList.contains('hidden');
+}
+function ssSetupOpen(fromScrape, limitReached) {
+  ssSetupResumeScrape = !!fromScrape;
+  const note = document.getElementById('ssSetupLimitNote');
+  if (note) note.style.display = limitReached ? '' : 'none';
+  document.getElementById('ssSetupView1').style.display = '';
+  document.getElementById('ssSetupView2').style.display = 'none';
+  document.getElementById('ssSetupModal').classList.remove('hidden');
+}
+function ssSetupClose() {
+  const cb = document.getElementById('ssSetupDontShow');
+  if (cb && cb.checked) localStorage.setItem('ss_setup_dontshow', '1');
+  document.getElementById('ssSetupModal').classList.add('hidden');
+}
+function ssSetupContinue() {
+  localStorage.setItem('ss_setup_seen', '1');
+  const resume = ssSetupResumeScrape;
+  ssSetupClose();
+  if (resume && !scrapeRunning) startScrape();
+}
+function ssSetupShowSignup() {
+  if (window.easyarc && window.easyarc.openScreenScraperSignup) window.easyarc.openScreenScraperSignup();
+  const u = document.getElementById('ssUser'), p = document.getElementById('ssPass');
+  document.getElementById('ssSetupUser').value = u ? u.value : '';
+  document.getElementById('ssSetupPass').value = p ? p.value : '';
+  document.getElementById('ssSetupView1').style.display = 'none';
+  document.getElementById('ssSetupView2').style.display = '';
+}
+function ssSetupBack() {
+  document.getElementById('ssSetupView2').style.display = 'none';
+  document.getElementById('ssSetupView1').style.display = '';
+}
+function ssSetupSave() {
+  const user = document.getElementById('ssSetupUser').value.trim();
+  const pass = document.getElementById('ssSetupPass').value.trim();
+  if (!user || !pass) { showToast("Enter both your ScreenScraper username and password."); return; }
+  const u = document.getElementById('ssUser'), p = document.getElementById('ssPass');
+  if (u) u.value = user;
+  if (p) p.value = pass;
+  localStorage.setItem('ss_user', user);
+  localStorage.setItem('ss_pass', pass);
+  localStorage.setItem('ss_setup_seen', '1');
+  ssSetupClose();
+  if (scrapeRunning) { showToast("Login saved. It will be used the next time you scrape."); return; }
+  startScrape();
+}
+// While the pop-up is open: Escape = continue without an account; other keys do not reach the library.
+document.addEventListener('keydown', (e) => {
+  if (!ssSetupIsOpen()) return;
+  if (e.key === 'Escape') { e.preventDefault(); ssSetupContinue(); }
+  e.stopPropagation();
+}, true);
+
 // FIX_2026-10-10_SS_BLOCK: plain-English messages when ScreenScraper refuses requests
 function ssBlockMessage(reason) {
-  if (reason === "busy") return "ScreenScraper is busy and is only serving signed-in users right now. Scrape again later to finish your box art. A free ScreenScraper account (entered in EasyArc settings) gets priority.";
+  if (reason === "daylimit") return "You've reached today's limit of 400 games without an account. Scraping will continue tomorrow, or set up a free ScreenScraper account to scrape about 7,000 games a day.";
+  if (reason === "busy") return "ScreenScraper is busy and is only serving signed-in users right now. Scrape again later to finish your box art. A free ScreenScraper account gets priority.";
   if (reason === "quota") return "You have reached the daily ScreenScraper limit. Scrape again tomorrow to finish your box art.";
   if (reason === "closed") return "ScreenScraper is temporarily down. Scrape again later to finish your box art.";
-  if (reason === "login") return "ScreenScraper did not accept your username or password. Check them in EasyArc settings.";
+  if (reason === "login") return "ScreenScraper didn't accept that login yet. If you just created your account, make sure you clicked the link in your verification email. New accounts can take a few minutes to activate. Your login is saved; just click Get Art again in a few minutes. If it still doesn't work, check your username and password under Advanced Options → Box Art — ScreenScraper.";
   return "ScreenScraper stopped responding. Scrape again later.";
 }
 
@@ -5234,6 +5312,13 @@ async function startScrape() {
 
   const toScrape = games.filter(g => SCRAPE_SYSTEMS.includes(g.system) && !artworkCache[g.path]);
   if (toScrape.length === 0) { showToast('All games already scraped!'); return; }
+  // FIX_2026-10-10_SS_SETUP: offer a free account the first time someone scrapes without one
+  if (!(ssUser && ssPass) && !localStorage.getItem('ss_setup_seen') && !localStorage.getItem('ss_setup_dontshow')) { ssSetupOpen(true, false); return; }
+  if (!(ssUser && ssPass) && ssAnonCountToday() >= SS_ANON_DAILY_CAP) {
+    showToast(ssBlockMessage('daylimit'));
+    if (!localStorage.getItem('ss_setup_dontshow')) ssSetupOpen(false, true);
+    return;
+  }
 
   scrapeRunning = true;
   const led = document.getElementById('scrapeLed');
@@ -5265,6 +5350,8 @@ async function startScrape() {
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
     if (gameEl) gameEl.textContent = g.title;
+    const ssAnon = !(ssUser && ssPass); // FIX_2026-10-10_SS_ANON_CAP
+    if (ssAnon && ssAnonCountToday() >= SS_ANON_DAILY_CAP) { scrapeBlocked = 'daylimit'; break; }
     let result;
     try {
       result = await window.easyarc.scrapeGame(g, ssUser, ssPass);
@@ -5272,6 +5359,7 @@ async function startScrape() {
       result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
     }
     if (result && result.blocked) { scrapeBlocked = result.blocked; break; }
+    if (ssAnon && !result.cached && !(result.error && result.error.startsWith('Skipped'))) ssAnonAddOne(); // FIX_2026-10-10_SS_ANON_CAP
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI(pathToFileUrl(result.path));
       if (result.metadata) metadataCache[g.path] = result.metadata;
@@ -5315,6 +5403,7 @@ async function startScrape() {
   if (row) row.style.display = 'none';
   if (scrapeBlocked) logLines.push('STOPPED: ScreenScraper ' + scrapeBlocked);
   showToast(scrapeBlocked ? ssBlockMessage(scrapeBlocked) : 'Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)');
+  if (scrapeBlocked === 'daylimit' && !localStorage.getItem('ss_setup_dontshow')) ssSetupOpen(false, true); // FIX_2026-10-10_SS_SETUP
   renderGrid();
 
   if (window.easyarc && window.easyarc.writeScrapeLog) {
@@ -5351,6 +5440,8 @@ async function resumeScrape() {
     if (!scrapeRunning) break;
     if (title) title.textContent = 'Scraping ' + (scrapeResumeIndex) + ' of ' + scrapeResumeQueue.length + '...';
     if (gameEl) gameEl.textContent = g.title;
+    const ssAnon = !(ssUser && ssPass); // FIX_2026-10-10_SS_ANON_CAP
+    if (ssAnon && ssAnonCountToday() >= SS_ANON_DAILY_CAP) { scrapeBlocked = 'daylimit'; break; }
     let result;
     try {
       result = await window.easyarc.scrapeGame(g, ssUser, ssPass);
@@ -5358,6 +5449,7 @@ async function resumeScrape() {
       result = { success: false, error: 'Exception: ' + (err.message || 'unknown') };
     }
     if (result && result.blocked) { scrapeBlocked = result.blocked; break; }
+    if (ssAnon && !result.cached && !(result.error && result.error.startsWith('Skipped'))) ssAnonAddOne(); // FIX_2026-10-10_SS_ANON_CAP
     if (result.success && result.path) {
       artworkCache[g.path] = encodeURI(pathToFileUrl(result.path));
       if (result.metadata) metadataCache[g.path] = result.metadata;
@@ -5383,6 +5475,7 @@ async function resumeScrape() {
   if (led2) led2.classList.remove('active');
   if (row) row.style.display = 'none';
   showToast(scrapeBlocked ? ssBlockMessage(scrapeBlocked) : 'Scraping resumed and complete! ' + succeeded + '/' + done + ' scraped.');
+  if (scrapeBlocked === 'daylimit' && !localStorage.getItem('ss_setup_dontshow')) ssSetupOpen(false, true); // FIX_2026-10-10_SS_SETUP
   renderGrid();
 }
 
@@ -5538,6 +5631,54 @@ showView = function(name) {
     <div id="removeGamesBody" style="max-height:360px;overflow-y:auto;"></div>
     <div class="frw-btn-row" style="margin-top:16px;">
       <button class="frw-btn ghost" onclick="hideRemoveGamesModal()">CLOSE</button>
+    </div>
+  </div>
+</div>
+<!-- FIX_2026-10-10_SS_SETUP: free ScreenScraper account setup pop-up -->
+<div class="frw-overlay hidden" id="ssSetupModal">
+  <div class="frw-box" style="max-width:640px">
+    <div id="ssSetupView1">
+      <span class="frw-icon">&#128444;</span>
+      <div class="frw-title">GET BOX ART FOR YOUR WHOLE LIBRARY</div>
+      <div class="frw-status error" id="ssSetupLimitNote" style="display:none">You've reached today's limit of 400 games without an account.</div>
+      <div class="frw-sub">EasyArc gets its box art and game details from ScreenScraper.fr, a free community database. A free ScreenScraper account raises your limit from <b>400 games a day to about 7,000</b>.</div>
+      <div class="frw-choice-row">
+        <div class="frw-choice selected" onclick="ssSetupShowSignup()">
+          <span class="frw-choice-icon">&#11088;</span>
+          <div class="frw-choice-label">Set up my free account</div>
+          <div class="frw-choice-desc"><b>Recommended</b><br><b>Free.</b> No cost, ever.<br><b>Easy.</b> Takes about 2 minutes.<br><b>About 7,000 games a day.</b> Most libraries are done in one day.</div>
+        </div>
+        <div class="frw-choice" onclick="ssSetupContinue()">
+          <span class="frw-choice-icon">&#9203;</span>
+          <div class="frw-choice-label">Continue without an account</div>
+          <div class="frw-choice-desc">Up to 400 games a day.<br>Shared with other EasyArc users, so it can run out quickly.</div>
+        </div>
+      </div>
+      <div class="frw-choice-desc" style="text-align:center;margin-bottom:12px;"><i>Download limits are set by ScreenScraper.fr, not EasyArc.</i></div>
+      <label class="frw-choice-desc" style="display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ssSetupDontShow"> Don't show this again</label>
+    </div>
+    <div id="ssSetupView2" style="display:none">
+      <span class="frw-icon">&#128273;</span>
+      <div class="frw-title">CREATE YOUR FREE SCREENSCRAPER ACCOUNT</div>
+      <div class="frw-sub">We've opened the ScreenScraper sign-up page in your web browser.</div>
+      <div class="frw-choice-desc" style="text-align:left;font-size:13px;line-height:1.8;margin-bottom:16px;">
+        1. Fill in the sign-up form. If the page appears in French, click the British flag at the top for English.<br>
+        2. Check your email and click the verification link ScreenScraper sends you.<br>
+        3. Wait a minute or two for your account to activate, then enter your login below.
+      </div>
+      <div class="setting-row">
+        <div class="setting-info"><div class="setting-name">ScreenScraper username</div></div>
+        <div class="setting-control"><input id="ssSetupUser" type="text" class="setting-select" style="min-width:200px" placeholder="username"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info"><div class="setting-name">ScreenScraper password</div></div>
+        <div class="setting-control"><input id="ssSetupPass" type="password" class="setting-select" style="min-width:200px" placeholder="password"></div>
+      </div>
+      <div class="frw-choice-desc" style="margin-top:14px;"><i>Already have an account, or setting it up later? Enter your ScreenScraper username and password any time under <b>Advanced Options &rarr; Box Art &mdash; ScreenScraper</b>.</i></div>
+      <div class="frw-btn-row">
+        <button class="frw-btn ghost" onclick="ssSetupBack()">Back</button>
+        <button class="frw-btn" onclick="ssSetupSave()">SAVE &amp; START SCRAPING</button>
+      </div>
     </div>
   </div>
 </div>
