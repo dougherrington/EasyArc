@@ -1841,6 +1841,7 @@ Device = Quartz/0/Keyboard & Mouse`;
           'Square': 'SDL-0/X',
           'Start': 'SDL-0/Start',
           'Triangle': 'SDL-0/Y',
+          'AnalogDPadInDigitalMode': 'true', // FIX_2026-10-11_PSX_STICK_DPAD: left stick also works as D-pad in digital-only games
           'Type': 'AnalogController',
           'Up': 'SDL-0/DPadUp',
         },
@@ -1871,6 +1872,7 @@ Device = Quartz/0/Keyboard & Mouse`;
           'Square': 'SDL-1/X',
           'Start': 'SDL-1/Start',
           'Triangle': 'SDL-1/Y',
+          'AnalogDPadInDigitalMode': 'true', // FIX_2026-10-11_PSX_STICK_DPAD: left stick also works as D-pad in digital-only games
           'Type': 'AnalogController',
           'Up': 'SDL-1/DPadUp',
         },
