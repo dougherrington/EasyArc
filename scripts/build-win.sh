@@ -14,5 +14,5 @@ curl -sL -o /tmp/sdlwin.tgz "https://github.com/kmamal/node-sdl/releases/downloa
 tar xzf /tmp/sdlwin.tgz -C "$SDL/dist"
 echo "--- Windows SDL files:"; ls "$SDL/dist"
 rm -rf dist
-npx electron-builder --win nsis --x64
+npx electron-builder --win nsis --x64 --publish never  # FIX_2026-10-11_UPDATER: never upload; releases are published by hand
 ls -la dist/

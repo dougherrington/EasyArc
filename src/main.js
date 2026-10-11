@@ -65,6 +65,7 @@ app.whenReady().then(async () => {
   bridge = new RetroArchBridge();
   registerIpcHandlers(ipcMain, bridge, dialog);
   createWindow();
+  setupAutoUpdater(); // FIX_2026-10-11_UPDATER
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -141,6 +142,60 @@ function copyDirRecursive(src, dest) {
       fs.copyFileSync(srcPath, destPath);
     }
   }
+}
+
+// FIX_2026-10-11_UPDATER: check GitHub for a newer EasyArc once at startup (installed Windows app only).
+// Asks before downloading and before installing. "Later" on install = installs when EasyArc is next closed.
+// Any failure is ignored so EasyArc always starts and runs normally.
+function setupAutoUpdater() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  let autoUpdater;
+  try { autoUpdater = require('electron-updater').autoUpdater; }
+  catch (e) { console.log('[UPDATER] not available:', e && e.message); return; }
+  const ask = (opts) => {
+    const w = (mainWindow && !mainWindow.isDestroyed()) ? mainWindow : null;
+    return w ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts);
+  };
+  const setBar = (v) => { try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setProgressBar(v); } catch (e) {} };
+  try {
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.allowPrerelease = true;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.on('error', (err) => { setBar(-1); console.log('[UPDATER] error:', err && err.message); });
+    autoUpdater.on('update-available', async (info) => {
+      try {
+        const r = await ask({
+          type: 'info',
+          title: 'EasyArc update available',
+          message: 'A new version of EasyArc is available (' + info.version + ').',
+          detail: 'Download it now? It downloads in the background while you keep using EasyArc.\n\nIf you choose Later, EasyArc will ask again the next time it starts.',
+          buttons: ['Download now', 'Later'],
+          defaultId: 0, cancelId: 1, noLink: true
+        });
+        if (r.response === 0) autoUpdater.downloadUpdate().catch((e) => { setBar(-1); console.log('[UPDATER] download failed:', e && e.message); });
+      } catch (e) { console.log('[UPDATER] dialog error:', e && e.message); }
+    });
+    autoUpdater.on('download-progress', (p) => { if (p && typeof p.percent === 'number') setBar(Math.max(0, Math.min(1, p.percent / 100))); });
+    autoUpdater.on('update-downloaded', async (info) => {
+      setBar(-1);
+      try {
+        const r = await ask({
+          type: 'info',
+          title: 'EasyArc update ready',
+          message: 'EasyArc ' + info.version + ' is downloaded and ready to install.',
+          detail: 'Installing takes about a minute.\n\nRestart now, and EasyArc will close, install the update, and reopen by itself.\n\nIf you choose Later, it will install automatically the next time you close EasyArc. Remember, this takes about a minute. Launching too soon could cause an error.',
+          buttons: ['Restart and install now', 'Later'],
+          defaultId: 0, cancelId: 1, noLink: true
+        });
+        if (r.response === 0) setImmediate(() => autoUpdater.quitAndInstall(true, true));
+      } catch (e) { console.log('[UPDATER] dialog error:', e && e.message); }
+    });
+    setTimeout(() => {
+      try { autoUpdater.checkForUpdates().catch((e) => console.log('[UPDATER] check failed:', e && e.message)); }
+      catch (e) { console.log('[UPDATER] check failed:', e && e.message); }
+    }, 8000);
+  } catch (e) { console.log('[UPDATER] setup failed:', e && e.message); }
 }
 
 app.on('window-all-closed', () => {
