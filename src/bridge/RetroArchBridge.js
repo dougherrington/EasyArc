@@ -105,7 +105,7 @@ const FOLDER_HINTS = [
   { hints: ['playstation 3','playstation3','ps3'],                           system: 'ps3' },
   { hints: ['playstation 2','playstation2','ps2'],                           system: 'ps2' },
   { hints: ['playstation portable','psp'],                                   system: 'psp' },
-  { hints: ['psp mini','pspmini','psp-mini','psp_mini','psp minis','pspminis','psp-minis','psp_minis','mini psp','minipsp','mini-psp','playstation portable mini','playstation portable minis','ps portable mini','ps minis','playstation minis','minis','pspgo'], system: 'pspmini' },
+  { hints: ['psp mini','pspmini','psp-mini','psp_mini','psp minis','pspminis','psp-minis','psp_minis','mini psp','minipsp','mini-psp','playstation portable mini','playstation portable minis','ps portable mini','ps minis','playstation minis','minis','mini','pspgo'], system: 'pspmini' },
   { hints: ['sony playstation','playstation 1','playstation1','psx','ps1'],  system: 'psx' },
   { hints: ['sega dreamcast','dreamcast','dream cast'],                      system: 'dreamcast' },
   { hints: ['sega saturn','saturn'],                                         system: 'saturn' },
@@ -839,7 +839,7 @@ class RetroArchBridge {
     for (const hint of FOLDER_HINTS) {
       if (hint.hints.some(h => {
         // For short hints (3 chars or less) — exact match against ANY path segment
-        if (h.length <= 3) return segments.some(seg => seg === h);
+        if (h.length <= 3 || h === 'mini') return segments.some(seg => seg === h); // FIX_2026-10-17_MINI_FOLDER: plain 'mini' only as a whole folder name (not 'SNES Mini')
         // For longer hints — word boundary check against full path
         const idx = fullPath.indexOf(h);
         if (idx === -1) return false;
