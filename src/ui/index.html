@@ -4359,6 +4359,7 @@ if (window.easyarc && window.easyarc.onGameStarted) {
     if (scrapeRunning) {
       console.log('[UI] game-started -> scraper paused');
       scrapeRunning = false;
+      scrapePausedForGame = true; // FIX_2026-10-17_SCRAPE_RESUME
     }
   });
 }
@@ -5222,6 +5223,8 @@ let scrapeRunning = false;
 let scrapeResumeQueue = null;   // saved queue when paused by game launch
 let scrapeResumeIndex = 0;      // saved position when paused by game launch
 let scrapeResumeCredentials = null; // saved credentials when paused
+let scrapePausedForGame = false; // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape is paused by a game launch
+let scrapeLoopActive = false;    // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape loop is still running
 const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 // FIX_2026-10-10_SS_ANON_CAP: daily cap for scraping without a ScreenScraper login (uses the shared developer quota)
@@ -5347,6 +5350,8 @@ async function startScrape() {
   scrapeResumeQueue = toScrape;
   scrapeResumeIndex = 0;
   scrapeResumeCredentials = { ssUser, ssPass };
+  scrapeLoopActive = true;      // FIX_2026-10-17_SCRAPE_RESUME
+  scrapePausedForGame = false;  // FIX_2026-10-17_SCRAPE_RESUME
 
   for (const g of toScrape) {
     scrapeResumeIndex = toScrape.indexOf(g);
@@ -5385,6 +5390,18 @@ async function startScrape() {
     }
   }
 
+  // FIX_2026-10-17_SCRAPE_RESUME: if a game launch paused us mid-list, keep the saved
+  // queue/position (skip the end-of-scrape cleanup) so game-exit can resume.
+  scrapeLoopActive = false;
+  if (scrapePausedForGame && !scrapeBlocked && done < toScrape.length) {
+    console.log('[UI] scraper paused for game at index', scrapeResumeIndex);
+    const ledP = document.getElementById('scrapeLed');
+    if (ledP) ledP.classList.remove('active');
+    if (row) row.style.display = 'none';
+    if (!window.__easyarcGameRunning) setTimeout(resumeScrape, 0);
+    return;
+  }
+  scrapePausedForGame = false;
   const attempted = done - skipped;
   const pct = attempted > 0 ? Math.round((succeeded / attempted) * 100) : 0;
   logLines.push('');
@@ -5418,6 +5435,12 @@ async function startScrape() {
 async function resumeScrape() {
   if (!scrapeResumeQueue || scrapeResumeIndex >= scrapeResumeQueue.length) return;
   if (scrapeRunning) return;
+  // FIX_2026-10-17_SCRAPE_RESUME: never start while the paused loop is still winding
+  // down (it will call us itself) or while a game is running (game-exit will call us).
+  if (scrapeLoopActive) return;
+  if (window.__easyarcGameRunning) return;
+  scrapeLoopActive = true;
+  scrapePausedForGame = false;
 
   const toScrape = scrapeResumeQueue.slice(scrapeResumeIndex);
   const ssUser = scrapeResumeCredentials ? scrapeResumeCredentials.ssUser : '';
@@ -5438,10 +5461,14 @@ async function resumeScrape() {
   let skipped = 0;
   let scrapeBlocked = null;
 
-  for (const g of toScrape) {
-    scrapeResumeIndex++;
+  // FIX_2026-10-17_SCRAPE_RESUME: track the absolute position of the game about to be
+  // scraped, so a second pause resumes at that game instead of skipping it.
+  const resumeBase = scrapeResumeIndex;
+  for (let i = 0; i < toScrape.length; i++) {
+    const g = toScrape[i];
+    scrapeResumeIndex = resumeBase + i;
     if (!scrapeRunning) break;
-    if (title) title.textContent = 'Scraping ' + (scrapeResumeIndex) + ' of ' + scrapeResumeQueue.length + '...';
+    if (title) title.textContent = 'Scraping ' + (scrapeResumeIndex + 1) + ' of ' + scrapeResumeQueue.length + '...';
     if (gameEl) gameEl.textContent = g.title;
     const ssAnon = !(ssUser && ssPass); // FIX_2026-10-10_SS_ANON_CAP
     if (ssAnon && ssAnonCountToday() >= SS_ANON_DAILY_CAP) { scrapeBlocked = 'daylimit'; break; }
@@ -5470,6 +5497,17 @@ async function resumeScrape() {
     }
   }
 
+  // FIX_2026-10-17_SCRAPE_RESUME: paused again by another game launch -> keep position.
+  scrapeLoopActive = false;
+  if (scrapePausedForGame && !scrapeBlocked && done < toScrape.length) {
+    console.log('[UI] resumed scraper paused again for game at index', scrapeResumeIndex);
+    const ledP = document.getElementById('scrapeLed');
+    if (ledP) ledP.classList.remove('active');
+    if (row) row.style.display = 'none';
+    if (!window.__easyarcGameRunning) setTimeout(resumeScrape, 0);
+    return;
+  }
+  scrapePausedForGame = false;
   scrapeRunning = false;
   scrapeResumeQueue = null;
   scrapeResumeIndex = 0;

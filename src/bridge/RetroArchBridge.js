@@ -2138,9 +2138,9 @@ Source = 0`;
 
   async _scrapeGameInner(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 43, msdos: 135,
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, msdos: 135, neogeo: 142, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
-      gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 62, ps3: 59
+      gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 61, ps3: 59 // FIX_2026-10-17_SS_IDS: PSP Minis use the PSP system (62 is PS Vita)
     };
     const systemId = SS_IDS[game.system];
     if (!systemId) {
