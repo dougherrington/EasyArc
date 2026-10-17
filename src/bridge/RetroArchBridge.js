@@ -1028,6 +1028,10 @@ class RetroArchBridge {
         'input_rewind_btn': 'nul',
         'input_exit_emulator_btn': 'nul',
         'input_hold_fast_forward_btn': 'nul',
+        // FIX_2026-10-17_RA_SAVESTATE_HOTKEYS: controller save/load states - hold Select + R1 = save, Select + L1 = load (SDL standard button numbers; tested Xbox clone, Pro, DualShock)
+        'input_enable_hotkey_btn': '4',
+        'input_save_state_btn': '10',
+        'input_load_state_btn': '9',
         'ui_companion_start_on_boot': 'false',
         'video_fullscreen': 'true',
         'quit_on_close_content': '2'
