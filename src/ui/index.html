@@ -996,7 +996,7 @@ const systemNames = {
   dreamcast:'Sega Dreamcast',
   jaguar:'Atari Jaguar', genesis:'Sega Genesis',
   gamegear:'Game Gear', mastersystem:'Master System',
-  atari2600:'Atari 2600', atari7800:'Atari 7800', msdos:'MS-DOS',
+  atari2600:'Atari 2600', atari7800:'Atari 7800', pcengine:'TurboGrafx-16', supergrafx:'SuperGrafx', msdos:'MS-DOS',
   psx:'PlayStation', ps2:'PlayStation 2',
   psp:'PlayStation Portable', pspmini:'PSP Mini', ps3:'PlayStation 3',
   saturn:'Sega Saturn',
@@ -1008,7 +1008,7 @@ const systemNames = {
 const systemColors = {
   gbc:'#1a2a1a', gb:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
   n64:'#2a2a1a', gamecube:'#1a2a2a', jaguar:'#0a0a0a', genesis:'#0a1a0a',
-  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', msdos:'#0a2a0a',
+  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', pcengine:'#2a1a0a', supergrafx:'#1a0a2a', msdos:'#0a2a0a',
   psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', pspmini:'#1a0a2a', ps3:'#0a0a1a',
   saturn:'#2a0a0a',
   mame:'#1a1a0a', mame2003:'#1a1a0a', arcade:'#2a0a1a', neogeo:'#1a0a0a',
@@ -1026,6 +1026,8 @@ const systemIcons = {
   mastersystem:String.fromCodePoint(0x2B1C),
   atari2600:String.fromCodePoint(0x1F7E0),
   atari7800:String.fromCodePoint(0x1F7E5),
+  pcengine:String.fromCodePoint(0x1F536),
+  supergrafx:String.fromCodePoint(0x1F537),
   msdos:String.fromCodePoint(0x1F4BB),
   psx:String.fromCodePoint(0x25FD),
   ps2:String.fromCodePoint(0x25FC),
@@ -1264,6 +1266,8 @@ function showSupportedSystems() {
     {sys:'pspmini', name:'PSP Mini'},
     {sys:'atari2600', name:'Atari 2600'},
     {sys:'atari7800', name:'Atari 7800'},
+    {sys:'pcengine', name:'TurboGrafx-16'},
+    {sys:'supergrafx', name:'SuperGrafx'},
     {sys:'jaguar', name:'Atari Jaguar'},
     {sys:'neogeo', name:'Neo Geo'},
     {sys:'mame2003', name:'MAME Arcade'},
@@ -1757,7 +1761,7 @@ function updateCounts() {
   const order = [
     'gbc','gb','gba','nes','snes','n64','gamecube',
     'genesis','gamegear','mastersystem','saturn','dreamcast',
-    'atari2600','atari7800','msdos','jaguar',
+    'atari2600','atari7800','msdos','jaguar','pcengine','supergrafx',
     'mame','mame2003','arcade','neogeo',
     'psx','ps2','psp','pspmini','ps3',
     'wii',
@@ -4711,6 +4715,8 @@ const ADD_GAMES_SYSTEMS = [
   { id:'neogeo',      name:'Neo Geo' },
   { id:'atari2600',   name:'Atari 2600' },
   { id:'atari7800',   name:'Atari 7800' },
+  { id:'pcengine',    name:'TurboGrafx-16' }, // FIX_2026-10-17_PCENGINE
+  { id:'supergrafx',  name:'SuperGrafx' },
 ];
 
 function showTestPlanModal() {
@@ -5225,7 +5231,7 @@ let scrapeResumeIndex = 0;      // saved position when paused by game launch
 let scrapeResumeCredentials = null; // saved credentials when paused
 let scrapePausedForGame = false; // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape is paused by a game launch
 let scrapeLoopActive = false;    // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape loop is still running
-const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
+const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'pcengine', 'supergrafx', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 // FIX_2026-10-10_SS_ANON_CAP: daily cap for scraping without a ScreenScraper login (uses the shared developer quota)
 const SS_ANON_DAILY_CAP = 400;

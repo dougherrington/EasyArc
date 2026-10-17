@@ -60,6 +60,8 @@ const UNIQUE_EXTENSIONS = {
   mastersystem: ['.sms'],
   atari2600:    ['.a26'],
   atari7800:    ['.a78'],
+  pcengine:     ['.pce'],        // FIX_2026-10-17_PCENGINE: TurboGrafx-16 / PC Engine
+  supergrafx:   ['.sgx'],        // FIX_2026-10-17_PCENGINE: SuperGrafx
   // BETA_DEFER_MSDOS_2026: msdos is in BLOCKED_ALWAYS, so a unique-extension match
   // here would claim .iso before the shared-extension logic runs, and the file would
   // then be dropped as blocked. Restore this line only when DOS support returns.
@@ -72,8 +74,8 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
-  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','jaguar','msdos','psp','psx','mame','mame2003','arcade','neogeo'],
+  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
+  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','psx','mame','mame2003','arcade','neogeo'],
   '.bin':  ['atari2600','atari7800','genesis','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','pspmini','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],
@@ -125,6 +127,9 @@ const FOLDER_HINTS = [
   { hints: ['master system','mastersystem','sms'],                           system: 'mastersystem' },
   { hints: ['atari 2600','atari2600'],                                       system: 'atari2600' },
   { hints: ['atari 7800','atari7800'],                                       system: 'atari7800' },
+  // FIX_2026-10-17_PCENGINE: SuperGrafx listed before TurboGrafx so 'PC Engine SuperGrafx' folders go to SuperGrafx
+  { hints: ['pc engine supergrafx','supergrafx','super grafx','sgx'],      system: 'supergrafx' },
+  { hints: ['turbografx-16','turbografx 16','turbografx16','turbografx','turbo grafx','tg-16','tg16','pc engine','pc-engine','pcengine','pce'], system: 'pcengine' },
   { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
@@ -177,6 +182,8 @@ const CORE_REMAP_FOLDERS = {
   gamecube:    'Dolphin',
   atari2600:   'Stella',
   atari7800:   'ProSystem',
+  pcengine:    'Beetle PCE Fast',     // FIX_2026-10-17_PCENGINE
+  supergrafx:  'Beetle SuperGrafx',   // FIX_2026-10-17_PCENGINE
   msdos:       'DOSBox-Pure',
 };
 
@@ -237,6 +244,8 @@ const SYSTEM_CORES = {
   gamecube:     'dolphin_libretro.dylib',
   atari2600:    'stella_libretro.dylib',
   atari7800:    'prosystem_libretro.dylib',
+  pcengine:     'mednafen_pce_fast_libretro.dylib',     // FIX_2026-10-17_PCENGINE
+  supergrafx:   'mednafen_supergrafx_libretro.dylib',   // FIX_2026-10-17_PCENGINE
   msdos:        'dosbox_pure_libretro.dylib',
   mame:         'mame_libretro.dylib',
   mame2003:     'mame2003_plus_libretro.dylib',
@@ -2142,7 +2151,7 @@ Source = 0`;
 
   async _scrapeGameInner(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, msdos: 135, neogeo: 142, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 61, ps3: 59 // FIX_2026-10-17_SS_IDS: PSP Minis use the PSP system (62 is PS Vita)
     };

@@ -43,7 +43,7 @@ function isCandidateRomEntry(entry) {
   const ext = path.extname(base).toLowerCase();
   const romExts = [
     '.nes', '.sfc', '.smc', '.gba', '.gb', '.gbc',
-    '.gen', '.md', '.bin', '.pce', '.n64', '.z64',
+    '.gen', '.md', '.bin', '.pce', '.sgx', '.n64', '.z64', // FIX_2026-10-17_PCENGINE
     '.v64', '.iso', '.cue', '.gdi',
     '.a26', '.rom', '.int', '.col', '.sms', '.sg'
   ];
