@@ -62,6 +62,7 @@ const UNIQUE_EXTENSIONS = {
   atari7800:    ['.a78'],
   pcengine:     ['.pce'],        // FIX_2026-10-17_PCENGINE: TurboGrafx-16 / PC Engine
   supergrafx:   ['.sgx'],        // FIX_2026-10-17_PCENGINE: SuperGrafx
+  dreamcast:    ['.gdi'],        // FIX_2026-10-17_DREAMCAST: .gdi (track .bin/.raw files stay hidden); .chd/.cdi/.cue/.iso via shared list
   // BETA_DEFER_MSDOS_2026: msdos is in BLOCKED_ALWAYS, so a unique-extension match
   // here would claim .iso before the shared-extension logic runs, and the file would
   // then be dropped as blocked. Restore this line only when DOS support returns.
@@ -94,7 +95,7 @@ const SHARED_EXTENSIONS = {
 // BLOCKED_ALWAYS — no support planned or untested; hidden on every platform.
 // BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
 // To restore a system, remove it from the relevant set.
-const BLOCKED_ALWAYS = new Set(['msdos','wii','wiiu','dreamcast','saturn','3ds']);
+const BLOCKED_ALWAYS = new Set(['msdos','wii','wiiu','saturn','3ds']); // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
 const BLOCKED_ON_WINDOWS = new Set(['ps2','ps3','switch']);
 function isSystemBlocked(system) {
   if (!system) return false;

@@ -1008,7 +1008,7 @@ const systemNames = {
 const systemColors = {
   gbc:'#1a2a1a', gb:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
   n64:'#2a2a1a', gamecube:'#1a2a2a', jaguar:'#0a0a0a', genesis:'#0a1a0a',
-  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', pcengine:'#2a1a0a', supergrafx:'#1a0a2a', msdos:'#0a2a0a',
+  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', pcengine:'#2a1a0a', supergrafx:'#1a0a2a', dreamcast:'#2a0a0a', msdos:'#0a2a0a',
   psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', pspmini:'#1a0a2a', ps3:'#0a0a1a',
   saturn:'#2a0a0a',
   mame:'#1a1a0a', mame2003:'#1a1a0a', arcade:'#2a0a1a', neogeo:'#1a0a0a',
@@ -1268,6 +1268,7 @@ function showSupportedSystems() {
     {sys:'atari7800', name:'Atari 7800'},
     {sys:'pcengine', name:'TurboGrafx-16'},
     {sys:'supergrafx', name:'SuperGrafx'},
+    {sys:'dreamcast', name:'Sega Dreamcast'},
     {sys:'jaguar', name:'Atari Jaguar'},
     {sys:'neogeo', name:'Neo Geo'},
     {sys:'mame2003', name:'MAME Arcade'},
@@ -4717,6 +4718,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'atari7800',   name:'Atari 7800' },
   { id:'pcengine',    name:'TurboGrafx-16' }, // FIX_2026-10-17_PCENGINE
   { id:'supergrafx',  name:'SuperGrafx' },
+  { id:'dreamcast',   name:'Sega Dreamcast' }, // FIX_2026-10-17_DREAMCAST
 ];
 
 function showTestPlanModal() {
