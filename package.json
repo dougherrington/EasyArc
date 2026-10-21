@@ -68,6 +68,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources/pcsx2-bundle/",
+        "to": "pcsx2-bundle/",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asarUnpack": [

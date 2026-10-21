@@ -208,6 +208,9 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
     return result;
   });
   handle('bridge:scanForPSXBios', () => bridge.scanForPSXBios());
+  // FIX_2026-10-19_PS2_WINDOWS
+  handle('bridge:scanForPS2Bios', () => bridge.scanForPS2Bios());
+  handle('bridge:configurePS2Bios', (biosDir) => bridge.copyPS2BiosToPortable(biosDir));
   handle('bridge:configureDuckStationBios', (biosDir) => {
     // Update DuckStation's settings.ini with EasyArc-required settings (Main + Pad sections)
     bridge.writeDuckStationConfig();

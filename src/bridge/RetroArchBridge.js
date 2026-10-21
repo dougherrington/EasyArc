@@ -13,7 +13,7 @@ const ScraperPipeline = require('../scraper/ScraperPipeline');
 
 const PCSX2_LOCATIONS = {
   darwin: ['/Applications/PCSX2.app/Contents/MacOS/PCSX2'],
-  win32:  ['C:\\Program Files\\PCSX2\\pcsx2-qt.exe'],
+  win32:  [require('path').join(process.env.APPDATA || require('os').homedir(), 'easyarc', 'pcsx2', 'pcsx2-qt.exe')], // FIX_2026-10-19_PS2_WINDOWS
   linux:  ['/usr/bin/pcsx2'],
 };
 
@@ -96,7 +96,7 @@ const SHARED_EXTENSIONS = {
 // BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
 // To restore a system, remove it from the relevant set.
 const BLOCKED_ALWAYS = new Set(['msdos','wii','wiiu','saturn','3ds']); // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
-const BLOCKED_ON_WINDOWS = new Set(['ps2','ps3','switch']);
+const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WINDOWS: ps2 unblocked
 function isSystemBlocked(system) {
   if (!system) return false;
   if (BLOCKED_ALWAYS.has(system)) return true;
@@ -1416,28 +1416,180 @@ Device = Quartz/0/Keyboard & Mouse`;
     }
   }
 
+  // FIX_2026-10-19_PS2_WINDOWS: Windows writes into EasyArc's bundled portable PCSX2; the Mac keeps its own path.
+  // Settings are written into their proper [sections]. This also removes the duplicate
+  // ConfirmShutdown lines the old code appended on every launch.
+  getPCSX2Dir() {
+    return path.join(process.env.APPDATA || os.homedir(), 'easyarc', 'pcsx2');
+  }
+
   writePCSX2Config() {
-    const cfgPath = require('path').join(require('os').homedir(), 'Library/Application Support/PCSX2/inis/PCSX2.ini');
+    const isWin = process.platform === 'win32';
+    const cfgPath = isWin
+      ? path.join(this.getPCSX2Dir(), 'inis', 'PCSX2.ini')
+      : path.join(os.homedir(), 'Library/Application Support/PCSX2/inis/PCSX2.ini');
     try {
-      let cfg = '';
-      const fs = require('fs');
-      if (fs.existsSync(cfgPath)) cfg = fs.readFileSync(cfgPath, 'utf8');
-      // Write ConfirmShutdown setting
-      const shutdownRegex = new RegExp('^ConfirmShutdown\s*=.*$', 'm');
-      if (shutdownRegex.test(cfg)) { cfg = cfg.replace(shutdownRegex, 'ConfirmShutdown = false'); }
-      else { cfg += '\nConfirmShutdown = false'; }
-      // Write Pad1 controller config
-      const pad1 = '[Pad1]\nType = DualShock2\nInvertL = 0\nInvertR = 0\nDeadzone = 0\nAxisScale = 1.33\nLargeMotorScale = 1\nSmallMotorScale = 1\nButtonDeadzone = 0\nPressureModifier = 0.5\nUp = SDL-0/DPadUp\nRight = SDL-0/DPadRight\nDown = SDL-0/DPadDown\nLeft = SDL-0/DPadLeft\nTriangle = SDL-0/FaceNorth\nCircle = SDL-0/FaceEast\nCross = SDL-0/FaceSouth\nSquare = SDL-0/FaceWest\nSelect = SDL-0/Back\nStart = SDL-0/Start\nL1 = SDL-0/LeftShoulder\nL2 = SDL-0/+LeftTrigger\nR1 = SDL-0/RightShoulder\nR2 = SDL-0/+RightTrigger\nL3 = SDL-0/LeftStick\nR3 = SDL-0/RightStick\nLUp = SDL-0/-LeftY\nLRight = SDL-0/+LeftX\nLDown = SDL-0/+LeftY\nLLeft = SDL-0/-LeftX\nRUp = SDL-0/-RightY\nRRight = SDL-0/+RightX\nRDown = SDL-0/+RightY\nRLeft = SDL-0/-RightX\nAnalog = SDL-0/Guide\nLargeMotor = SDL-0/LargeMotor\nSmallMotor = SDL-0/SmallMotor';
-      if (cfg.includes('[Pad1]')) {
-        cfg = cfg.replace(/\[Pad1\][\s\S]*?(?=\n\[|\s*$)/, pad1);
-      } else {
-        cfg += '\n' + pad1;
+      fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+      let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
+      cfg = cfg.replace(/\r\n/g, '\n');
+      cfg = this.setIniValue(cfg, 'UI', 'ConfirmShutdown', 'false');
+      cfg = this.removeIniKeyOutside(cfg, 'UI', 'ConfirmShutdown');
+      if (isWin) {
+        // A brand-new file needs SettingsVersion, or PCSX2 resets it to defaults.
+        cfg = this.setIniValue(cfg, 'UI', 'SettingsVersion', '1', true);
+        cfg = this.setIniValue(cfg, 'UI', 'SetupWizardIncomplete', 'false');
+        cfg = this.setIniValue(cfg, 'AutoUpdater', 'CheckAtStartup', 'false');
+        cfg = this.setIniValue(cfg, 'Folders', 'Bios', 'bios');
+        const bios = this.pickPS2Bios(path.join(this.getPCSX2Dir(), 'bios'),
+          this.getIniValue(cfg, 'Filenames', 'BIOS'));
+        if (bios) cfg = this.setIniValue(cfg, 'Filenames', 'BIOS', bios);
+        console.log('[Bridge] PCSX2 BIOS:', bios || 'none found');
       }
+      const pad1 = 'Type = DualShock2\nInvertL = 0\nInvertR = 0\nDeadzone = 0\nAxisScale = 1.33\nLargeMotorScale = 1\nSmallMotorScale = 1\nButtonDeadzone = 0\nPressureModifier = 0.5\nUp = SDL-0/DPadUp\nRight = SDL-0/DPadRight\nDown = SDL-0/DPadDown\nLeft = SDL-0/DPadLeft\nTriangle = SDL-0/FaceNorth\nCircle = SDL-0/FaceEast\nCross = SDL-0/FaceSouth\nSquare = SDL-0/FaceWest\nSelect = SDL-0/Back\nStart = SDL-0/Start\nL1 = SDL-0/LeftShoulder\nL2 = SDL-0/+LeftTrigger\nR1 = SDL-0/RightShoulder\nR2 = SDL-0/+RightTrigger\nL3 = SDL-0/LeftStick\nR3 = SDL-0/RightStick\nLUp = SDL-0/-LeftY\nLRight = SDL-0/+LeftX\nLDown = SDL-0/+LeftY\nLLeft = SDL-0/-LeftX\nRUp = SDL-0/-RightY\nRRight = SDL-0/+RightX\nRDown = SDL-0/+RightY\nRLeft = SDL-0/-RightX\nAnalog = SDL-0/Guide\nLargeMotor = SDL-0/LargeMotor\nSmallMotor = SDL-0/SmallMotor';
+      cfg = this.replaceIniSection(cfg, 'Pad1', pad1);
+      cfg = this.replaceIniSection(cfg, 'Pad2', pad1.split('SDL-0/').join('SDL-1/'));
       fs.writeFileSync(cfgPath, cfg);
-      console.log('[Bridge] Wrote PCSX2 config');
+      console.log('[Bridge] Wrote PCSX2 config:', cfgPath);
     } catch(e) {
       console.error('[Bridge] Failed to write PCSX2 config:', e.message);
     }
+  }
+
+  // Line range of an ini [section]: header index and end (index of next header, or file end).
+  findIniSection(lines, section) {
+    const start = lines.findIndex(l => l.trim() === '[' + section + ']');
+    if (start === -1) return null;
+    let end = start + 1;
+    while (end < lines.length && !/^\s*\[/.test(lines[end])) end++;
+    return { start, end };
+  }
+
+  getIniValue(cfg, section, key) {
+    const lines = cfg.split('\n');
+    const s = this.findIniSection(lines, section);
+    if (!s) return null;
+    for (let i = s.start + 1; i < s.end; i++) {
+      const m = lines[i].match(/^\s*([^=]+?)\s*=\s*(.*?)\s*$/);
+      if (m && m[1] === key) return m[2];
+    }
+    return null;
+  }
+
+  // Set key = value inside [section], adding the line or section if missing.
+  // onlyIfMissing: leave an existing value alone.
+  setIniValue(cfg, section, key, value, onlyIfMissing) {
+    const lines = cfg.split('\n');
+    const line = key + ' = ' + value;
+    const s = this.findIniSection(lines, section);
+    if (!s) {
+      while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+      if (lines.length) lines.push('');
+      lines.push('[' + section + ']', line, '');
+      return lines.join('\n');
+    }
+    for (let i = s.start + 1; i < s.end; i++) {
+      const m = lines[i].match(/^\s*([^=]+?)\s*=/);
+      if (m && m[1] === key) {
+        if (!onlyIfMissing) lines[i] = line;
+        return lines.join('\n');
+      }
+    }
+    let at = s.end;
+    while (at > s.start + 1 && lines[at - 1].trim() === '') at--;
+    lines.splice(at, 0, line);
+    return lines.join('\n');
+  }
+
+  // Delete every `key = ...` line that sits outside [section] (clears the old duplicates).
+  removeIniKeyOutside(cfg, section, key) {
+    let current = null;
+    return cfg.split('\n').filter(l => {
+      const h = l.match(/^\s*\[(.*)\]\s*$/);
+      if (h) { current = h[1]; return true; }
+      const m = l.match(/^\s*([^=]+?)\s*=/);
+      return !(m && m[1] === key && current !== section);
+    }).join('\n');
+  }
+
+  // Replace a whole [section] with new contents, or add it at the end.
+  replaceIniSection(cfg, section, body) {
+    const lines = cfg.split('\n');
+    const block = ['[' + section + ']'].concat(body.split('\n'));
+    const s = this.findIniSection(lines, section);
+    if (!s) {
+      while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+      if (lines.length) lines.push('');
+      return lines.concat(block, ['']).join('\n');
+    }
+    const rest = lines.slice(s.end);
+    return lines.slice(0, s.start).concat(block, [''], rest).join('\n');
+  }
+
+  // PS2 System Files (BIOS): names vary by dumping tool, so match by size (exactly 4 MB) and .bin.
+  isPS2BiosFile(fullPath) {
+    try {
+      return /\.bin$/i.test(fullPath) && fs.statSync(fullPath).size === 4 * 1024 * 1024;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Choose a BIOS in dir: keep `preferred` if valid, else one with "USA" in the name, else the first.
+  pickPS2Bios(dir, preferred) {
+    let names;
+    try {
+      names = fs.readdirSync(dir).filter(n => this.isPS2BiosFile(path.join(dir, n))).sort();
+    } catch (e) {
+      return null;
+    }
+    if (!names.length) return null;
+    if (preferred && names.includes(preferred)) return preferred;
+    return names.find(n => /usa/i.test(n)) || names[0];
+  }
+
+  async scanForPS2Bios() {
+    const home = os.homedir();
+    const candidates = [
+      path.join(this.getPCSX2Dir(), 'bios'),
+      path.join(home, 'Downloads'),
+      path.join(home, 'Documents'),
+      home,
+      path.join(home, 'Desktop'),
+    ];
+    for (const dir of candidates) {
+      const file = this.pickPS2Bios(dir);
+      if (file) {
+        console.log('[PS2-BIOS] Found', file, 'in', dir);
+        return { found: true, directory: dir, file };
+      }
+    }
+    console.log('[PS2-BIOS] No PS2 BIOS found in', candidates);
+    return { found: false, directory: null };
+  }
+
+  // Copy every PS2 BIOS file from sourceDir into the bundled PCSX2's bios folder (originals untouched).
+  copyPS2BiosToPortable(sourceDir) {
+    const targetDir = path.join(this.getPCSX2Dir(), 'bios');
+    if (path.resolve(sourceDir) === path.resolve(targetDir)) {
+      return this.pickPS2Bios(targetDir) ? { success: true, copied: 0 }
+        : { success: false, error: 'No PlayStation 2 System Files found', copied: 0 };
+    }
+    let copied = 0;
+    try {
+      fs.mkdirSync(targetDir, { recursive: true });
+      for (const name of fs.readdirSync(sourceDir)) {
+        const src = path.join(sourceDir, name);
+        if (!this.isPS2BiosFile(src)) continue;
+        fs.copyFileSync(src, path.join(targetDir, name));
+        console.log('[PS2-BIOS] Copied', name);
+        copied++;
+      }
+    } catch (e) {
+      console.error('[PS2-BIOS] Copy failed:', e.message);
+      return { success: false, error: e.message, copied };
+    }
+    if (!copied) return { success: false, error: 'No PlayStation 2 System Files found in that folder', copied: 0 };
+    return { success: true, copied };
   }
 
   writeDolphinConfig() {

@@ -3294,6 +3294,14 @@ async function ctestMaybeLaunch(game) {
     return;
   }
 
+  // FIX_2026-10-19_PS2_WINDOWS: on Windows, make sure PS2 System Files (BIOS) are in place, then fall
+  // through to the normal launch (same path the Mac uses). The Mac skips this entirely.
+  if (game.system === 'ps2' && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
+    console.log('[CLICK-HANDLER] PS2 branch matched - checking System Files');
+    const ps2Ready = await ps2EnsureBios();
+    if (!ps2Ready) return;
+  }
+
   // STAGE_5: GameCube games go through dedicated install+launch path via Dolphin.
   if (game.system === 'gamecube' && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
     console.log('[CLICK-HANDLER] GameCube branch matched - calling gamecubeEnsureReadyAndLaunch');
@@ -3383,6 +3391,71 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   } else {
     showToast('Could not launch ' + game.title + ': ' + (result.error || 'unknown error'));
   }
+}
+
+// FIX_2026-10-19_PS2_WINDOWS: make sure the bundled PCSX2 has PS2 System Files (BIOS).
+// Silent when they are found; otherwise reuses the PlayStation pop-up with a Browse button.
+// Returns true when ready, false if the user cancels.
+async function ps2EnsureBios() {
+  let scan = null;
+  try {
+    scan = await window.easyarc.scanForPS2Bios();
+  } catch (err) {
+    console.log('[PS2-FLOW] scanForPS2Bios threw:', err.message);
+  }
+  console.log('[PS2-FLOW] BIOS scan result:', JSON.stringify(scan));
+  if (scan && scan.found) {
+    try {
+      const cfg = await window.easyarc.configurePS2Bios(scan.directory);
+      console.log('[PS2-FLOW] configurePS2Bios result:', JSON.stringify(cfg));
+      if (cfg && cfg.success) return true;
+    } catch (err) {
+      console.log('[PS2-FLOW] configurePS2Bios threw:', err.message);
+    }
+  }
+
+  const modal = document.getElementById('psxSetupModal');
+  const title = document.getElementById('psxSetupTitle');
+  const status = document.getElementById('psxSetupStatus');
+  const progressWrap = document.getElementById('psxSetupProgressWrap');
+  const oldAction = document.getElementById('psxSetupActionBtn');
+  const oldCancel = document.getElementById('psxSetupCancelBtn');
+  if (!modal || !title || !status || !oldAction || !oldCancel) {
+    showToast('PlayStation 2 System Files (BIOS) not found');
+    return false;
+  }
+
+  return await new Promise((resolve) => {
+    title.textContent = 'SYSTEM FILES NEEDED';
+    status.innerHTML = 'EasyArc could not find your PlayStation 2 System Files (BIOS).<br><br>If you have them, click <b>Browse</b> to point EasyArc at the folder.';
+    if (progressWrap) progressWrap.style.display = 'none';
+
+    const actionBtn = oldAction.cloneNode(true);
+    oldAction.parentNode.replaceChild(actionBtn, oldAction);
+    actionBtn.textContent = 'Browse...';
+    actionBtn.style.display = 'inline-block';
+    const cancelBtn = oldCancel.cloneNode(true);
+    oldCancel.parentNode.replaceChild(cancelBtn, oldCancel);
+
+    actionBtn.addEventListener('click', async () => {
+      const browseResult = await window.easyarc.browseForBiosFolder();
+      if (!browseResult || browseResult.canceled) return;
+      const cfg = await window.easyarc.configurePS2Bios(browseResult.directory);
+      if (cfg && cfg.success) {
+        modal.classList.add('hidden');
+        resolve(true);
+      } else {
+        status.textContent = 'Could not set up System Files: ' + ((cfg && cfg.error) || 'unknown');
+      }
+    });
+    cancelBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      resolve(false);
+    });
+
+    modal.classList.remove('hidden');
+    setTimeout(() => actionBtn.focus(), 50);
+  });
 }
 
 async function psxEnsureReadyAndLaunch(game) {
@@ -4697,6 +4770,7 @@ let addGamesFolder = null;
 // a system listed here can be assigned manually even if detection skips it.
 const ADD_GAMES_SYSTEMS = [
   { id:'psx',         name:'PlayStation' },
+  { id:'ps2',         name:'PlayStation 2' },
   { id:'psp',         name:'PlayStation Portable' },
   { id:'pspmini',     name:'PSP Mini' },
   { id:'n64',         name:'Nintendo 64' },

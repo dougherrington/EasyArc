@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('easyarc', {
   findDuckStation: () => ipcRenderer.invoke('bridge:findDuckStation'),
   installDuckStation: () => ipcRenderer.invoke('bridge:installDuckStation'),
   scanForPSXBios: () => ipcRenderer.invoke('bridge:scanForPSXBios'),
+  scanForPS2Bios: () => ipcRenderer.invoke('bridge:scanForPS2Bios'), // FIX_2026-10-19_PS2_WINDOWS
+  configurePS2Bios: (dir) => ipcRenderer.invoke('bridge:configurePS2Bios', dir),
   configureDuckStationBios: (biosDir) => ipcRenderer.invoke('bridge:configureDuckStationBios', biosDir),
   browseForBiosFolder: () => ipcRenderer.invoke('bridge:browseForBiosFolder'),
   onDuckStationDownloadProgress: (callback) => ipcRenderer.on('duckstation:downloadProgress', (_e, data) => callback(data)),

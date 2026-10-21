@@ -62,6 +62,7 @@ if (!app.requestSingleInstanceLock()) {
 app.whenReady().then(async () => {
   await ensureRetroArchReady();
   await ensurePPSSPPReady();
+  await ensurePCSX2Ready(); // FIX_2026-10-19_PS2_WINDOWS
   bridge = new RetroArchBridge();
   registerIpcHandlers(ipcMain, bridge, dialog);
   createWindow();
@@ -128,6 +129,35 @@ async function ensureRetroArchReady() {
     console.log('[RETROARCH-BUNDLE] Copy complete.');
   } catch (err) {
     console.log('[RETROARCH-BUNDLE] Copy failed:', err.message);
+  }
+}
+
+// FIX_2026-10-19_PS2_WINDOWS: copy bundled PCSX2 (portable) to appdata on first run.
+async function ensurePCSX2Ready() {
+  if (process.platform !== 'win32') return;
+  const appData = process.env.APPDATA || os.homedir();
+  const destDir = path.join(appData, 'easyarc', 'pcsx2');
+  const destExe = path.join(destDir, 'pcsx2-qt.exe');
+
+  if (fs.existsSync(destExe)) {
+    console.log('[PCSX2-BUNDLE] Already installed at:', destDir);
+    return;
+  }
+
+  console.log('[PCSX2-BUNDLE] First run — copying PCSX2 bundle...');
+  const bundleDir = path.join(process.resourcesPath, 'pcsx2-bundle');
+
+  if (!fs.existsSync(bundleDir)) {
+    console.log('[PCSX2-BUNDLE] Bundle not found at:', bundleDir);
+    return;
+  }
+
+  try {
+    fs.mkdirSync(destDir, { recursive: true });
+    copyDirRecursive(bundleDir, destDir);
+    console.log('[PCSX2-BUNDLE] Copy complete.');
+  } catch (err) {
+    console.log('[PCSX2-BUNDLE] Copy failed:', err.message);
   }
 }
 
