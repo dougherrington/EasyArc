@@ -648,6 +648,13 @@ body::after {
   animation:pulse 1s ease-in-out infinite;
 }
 .titlebar-status { margin-left:auto; display:flex; align-items:center; gap:10px; }
+/* FIX_2026-10-23_SCRAPE_COUNT_ADV_COLORS: main-screen scrape counter beside the scrape dot.
+   Shown only while the dot is lit (.active), so it hides itself when scraping pauses, finishes or stops. */
+.scrape-count { display:none; margin-left:8px; color:#fff; font-size:13px; letter-spacing:0.5px; vertical-align:middle; font-family:'Rajdhani',sans-serif; }
+.scrape-led.active + .scrape-count { display:inline; }
+/* FIX_2026-10-23_SCRAPE_COUNT_ADV_COLORS: Advanced page only - yellow item names, white descriptions (same size) */
+#settings-view .setting-name { color:var(--yellow); }
+#settings-view .setting-desc { color:#fff; }
 .toolbar-row {
   grid-column:1/-1;
   display:flex; align-items:stretch;
@@ -778,7 +785,7 @@ body::after {
     </div>
     <div class="toolbar-center">
       <button class="toolbar-btn toolbar-center-btn" id="rescanBtn" onclick="playClick();rescanLibrary()">&#x27f3; Back to Library</button>
-      <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();showGetArtModal()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span>
+      <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();showGetArtModal()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span><span id="scrapeCount" class="scrape-count"></span>
     </div>
     <div class="toolbar-right">
       <button class="toolbar-btn nav-btn" onclick="playClick();showView('controller')">&#x1f3ae; Map Controllers</button>
@@ -5438,7 +5445,7 @@ async function startScrape() {
   for (const g of toScrape) {
     scrapeResumeIndex = toScrape.indexOf(g);
     if (!scrapeRunning) break;
-    if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...';
+    if (title) title.textContent = 'Scraping ' + (done+1) + ' of ' + toScrape.length + '...'; { const sc = document.getElementById('scrapeCount'); if (sc) sc.textContent = 'Scraping ' + (done+1).toLocaleString() + ' of ' + (toScrape.length).toLocaleString(); }
     if (gameEl) gameEl.textContent = g.title;
     const ssAnon = !(ssUser && ssPass); // FIX_2026-10-10_SS_ANON_CAP
     if (ssAnon && ssAnonCountToday() >= SS_ANON_DAILY_CAP) { scrapeBlocked = 'daylimit'; break; }
@@ -5550,7 +5557,7 @@ async function resumeScrape() {
     const g = toScrape[i];
     scrapeResumeIndex = resumeBase + i;
     if (!scrapeRunning) break;
-    if (title) title.textContent = 'Scraping ' + (scrapeResumeIndex + 1) + ' of ' + scrapeResumeQueue.length + '...';
+    if (title) title.textContent = 'Scraping ' + (scrapeResumeIndex + 1) + ' of ' + scrapeResumeQueue.length + '...'; { const sc = document.getElementById('scrapeCount'); if (sc) sc.textContent = 'Scraping ' + (scrapeResumeIndex + 1).toLocaleString() + ' of ' + (scrapeResumeQueue.length).toLocaleString(); }
     if (gameEl) gameEl.textContent = g.title;
     const ssAnon = !(ssUser && ssPass); // FIX_2026-10-10_SS_ANON_CAP
     if (ssAnon && ssAnonCountToday() >= SS_ANON_DAILY_CAP) { scrapeBlocked = 'daylimit'; break; }

@@ -337,7 +337,11 @@ class DolphinBridge {
         // FIX_2026-09-28_DOLPHIN_ESCAPE: bare ESCAPE was looked up on the controller;
         // name the keyboard device explicitly so Escape always stops the game.
         'General/Stop = `DInput/0/Keyboard Mouse:ESCAPE`',
-        'General/Exit = ' + exitBinding
+        'General/Exit = ' + exitBinding,
+        // FIX_2026-10-23_DOLPHIN_PPSSPP_SAVELOAD: Select+R1 save, Select+L1 load (slot 1),
+        // captured verbatim from Dolphin's own Hotkeys.ini.
+        'Save State/Save State Slot 1 = @(`Shoulder R`+Back)',
+        'Load State/Load State Slot 1 = @(Back+`Shoulder L`)'
       ].join('\n');
 
       fs.writeFileSync(cfgPath, hotkeyConfig);

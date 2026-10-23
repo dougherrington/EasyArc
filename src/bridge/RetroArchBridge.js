@@ -1104,12 +1104,32 @@ class RetroArchBridge {
       console.log('[Bridge] Launching PS2 game via PCSX2:', romPath);
       try {
         this.retroarchProcess = spawn(pcsx2.path, ['-batch', '-nogui', '-fullscreen', romPath], { detached: false, stdio: 'ignore' });
-        this.retroarchProcess.on('exit', () => {
+        // FIX_2026-10-21_HOTKEYS_PS2_BLEED: emit game-started / game-exited (same pattern as DuckStation)
+        // so EasyArc stops reacting to the controller while a PS2 game runs (input bleed).
+        const sendToRenderer = (channel) => {
+          try {
+            const { BrowserWindow } = require('electron');
+            for (const w of BrowserWindow.getAllWindows()) {
+              if (!w.isDestroyed()) w.webContents.send(channel);
+            }
+          } catch (e) { console.log('[Bridge] sendToRenderer ' + channel + ' failed:', e.message); }
+        };
+        sendToRenderer('game-started');
+        let pcsx2Done = false;
+        const onPCSX2Exit = () => {
+          if (pcsx2Done) return;
+          pcsx2Done = true;
           console.log('[Bridge] PCSX2 exited');
           this.retroarchProcess = null;
+          sendToRenderer('game-exited');
           const { BrowserWindow } = require('electron');
           const wins = BrowserWindow.getAllWindows();
           if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+        };
+        this.retroarchProcess.on('exit', onPCSX2Exit);
+        this.retroarchProcess.on('error', (err) => {
+          console.log('[Bridge] PCSX2 spawn error:', err.message);
+          onPCSX2Exit();
         });
         return { success: true };
       } catch(err) {
@@ -1446,6 +1466,10 @@ Device = Quartz/0/Keyboard & Mouse`;
         console.log('[Bridge] PCSX2 BIOS:', bios || 'none found');
       }
       const pad1 = 'Type = DualShock2\nInvertL = 0\nInvertR = 0\nDeadzone = 0\nAxisScale = 1.33\nLargeMotorScale = 1\nSmallMotorScale = 1\nButtonDeadzone = 0\nPressureModifier = 0.5\nUp = SDL-0/DPadUp\nRight = SDL-0/DPadRight\nDown = SDL-0/DPadDown\nLeft = SDL-0/DPadLeft\nTriangle = SDL-0/FaceNorth\nCircle = SDL-0/FaceEast\nCross = SDL-0/FaceSouth\nSquare = SDL-0/FaceWest\nSelect = SDL-0/Back\nStart = SDL-0/Start\nL1 = SDL-0/LeftShoulder\nL2 = SDL-0/+LeftTrigger\nR1 = SDL-0/RightShoulder\nR2 = SDL-0/+RightTrigger\nL3 = SDL-0/LeftStick\nR3 = SDL-0/RightStick\nLUp = SDL-0/-LeftY\nLRight = SDL-0/+LeftX\nLDown = SDL-0/+LeftY\nLLeft = SDL-0/-LeftX\nRUp = SDL-0/-RightY\nRRight = SDL-0/+RightX\nRDown = SDL-0/+RightY\nRLeft = SDL-0/-RightX\nAnalog = SDL-0/Guide\nLargeMotor = SDL-0/LargeMotor\nSmallMotor = SDL-0/SmallMotor';
+      // FIX_2026-10-21_HOTKEYS_PS2_BLEED: controller hotkeys, captured verbatim from PCSX2's own PCSX2.ini.
+      cfg = this.setIniValue(cfg, 'Hotkeys', 'ShutdownVM', 'SDL-0/Start & SDL-0/Back');
+      cfg = this.setIniValue(cfg, 'Hotkeys', 'SaveStateToSlot', 'SDL-0/Back & SDL-0/RightShoulder');
+      cfg = this.setIniValue(cfg, 'Hotkeys', 'LoadStateFromSlot', 'SDL-0/Back & SDL-0/LeftShoulder');
       cfg = this.replaceIniSection(cfg, 'Pad1', pad1);
       cfg = this.replaceIniSection(cfg, 'Pad2', pad1.split('SDL-0/').join('SDL-1/'));
       fs.writeFileSync(cfgPath, cfg);
@@ -2053,6 +2077,9 @@ Device = Quartz/0/Keyboard & Mouse`;
         // section-aware merge below, so a keyboard fallback always remains.
         'Hotkeys': {
           'PowerOff': 'SDL-0/Back & SDL-0/Start',
+          // FIX_2026-10-21_HOTKEYS_PS2_BLEED: Select+R1 save, Select+L1 load, captured verbatim from DuckStation.
+          'SaveSelectedSaveState': 'SDL-0/RightShoulder & SDL-0/Back',
+          'LoadSelectedSaveState': 'SDL-0/LeftShoulder & SDL-0/Back',
         }
       };
       let cfg = '';

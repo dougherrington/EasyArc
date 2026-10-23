@@ -27,6 +27,73 @@ class PPSSPPBridge {
   // ampersands, and parentheses in the ROM filename are safe without quoting.
   // cwd is the PPSSPP folder so it finds its assets/ and DLLs (same reason Dolphin
   // sets cwd to its binary's parent).
+  // FIX_2026-10-23_DOLPHIN_PPSSPP_SAVELOAD: Select+R1 save, Select+L1 load.
+  // Values captured verbatim from PPSSPP's own controls.ini (20 = XInput, 10 = DInput pad).
+  // Only the two lines are touched; everything else (including Exit App) is left alone.
+  // Also sets [Control] AllowMappingCombos = True in ppsspp.ini. Never blocks a launch.
+  writeSaveLoadHotkeys(ppssppDir) {
+    const sysDir = path.join(ppssppDir, 'memstick', 'PSP', 'SYSTEM');
+    const keyOf = (l) => l.split('=')[0].trim();
+
+    try {
+      const ctlPath = path.join(sysDir, 'controls.ini');
+      if (fs.existsSync(ctlPath)) {
+        const text = fs.readFileSync(ctlPath, 'utf8');
+        const eol = text.includes('\r\n') ? '\r\n' : '\n';
+        const lines = text.split(/\r?\n/);
+        const want = [
+          ['Save State', '20-103:20-109,10-196:10-195'],
+          ['Load State', '10-194:10-196,20-102:20-109']
+        ];
+        let insertAt = lines.findIndex(l => keyOf(l) === 'Exit App') + 1;
+        for (const [key, val] of want) {
+          const line = key + ' = ' + val;
+          const i = lines.findIndex(l => keyOf(l) === key);
+          if (i >= 0) {
+            lines[i] = line;
+          } else if (insertAt > 0) {
+            lines.splice(insertAt, 0, line);
+            insertAt++;
+          } else {
+            console.log('[PPSSPP] controls.ini has no Exit App line; skipped', key);
+          }
+        }
+        fs.writeFileSync(ctlPath, lines.join(eol));
+        console.log('[PPSSPP] Save/Load hotkeys written to', ctlPath);
+      } else {
+        console.log('[PPSSPP] controls.ini not found; hotkeys skipped:', ctlPath);
+      }
+    } catch (err) {
+      console.log('[PPSSPP] controls.ini write failed:', err.message);
+    }
+
+    try {
+      const iniPath = path.join(sysDir, 'ppsspp.ini');
+      if (fs.existsSync(iniPath)) {
+        const text = fs.readFileSync(iniPath, 'utf8');
+        const eol = text.includes('\r\n') ? '\r\n' : '\n';
+        const lines = text.split(/\r?\n/);
+        const start = lines.findIndex(l => l.trim() === '[Control]');
+        if (start >= 0) {
+          let end = lines.findIndex((l, idx) => idx > start && l.trim().startsWith('['));
+          if (end < 0) end = lines.length;
+          const i = lines.findIndex((l, idx) => idx > start && idx < end && keyOf(l) === 'AllowMappingCombos');
+          if (i >= 0) lines[i] = 'AllowMappingCombos = True';
+          else lines.splice(start + 1, 0, 'AllowMappingCombos = True');
+        } else {
+          lines.push('[Control]', 'AllowMappingCombos = True');
+        }
+        fs.writeFileSync(iniPath, lines.join(eol));
+      } else {
+        fs.mkdirSync(sysDir, { recursive: true });
+        fs.writeFileSync(iniPath, '[Control]\r\nAllowMappingCombos = True\r\n');
+      }
+      console.log('[PPSSPP] AllowMappingCombos = True set in', iniPath);
+    } catch (err) {
+      console.log('[PPSSPP] ppsspp.ini write failed:', err.message);
+    }
+  }
+
   async launchPPSSPP(romPath) {
     console.log('[PPSSPP] launchPPSSPP called with romPath:', romPath);
 
@@ -43,6 +110,8 @@ class PPSSPPBridge {
       return { success: false, error: 'ROM not found at: ' + romPath };
     }
 
+    // FIX_2026-10-23_DOLPHIN_PPSSPP_SAVELOAD: save/load hotkeys before every launch.
+    this.writeSaveLoadHotkeys(path.dirname(binaryPath));
     const cwd = path.dirname(binaryPath);
     // STAGE_A: --fullscreen only. Clean-exit flag (--escape-exit) deliberately held
     // back until we observe natural exit behavior first.
