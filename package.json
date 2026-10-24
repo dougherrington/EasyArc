@@ -1,6 +1,6 @@
 {
   "name": "easyarc",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.3.5",
   "description": "The easiest way to play your retro game collection",
   "main": "src/main.js",
   "scripts": {
@@ -18,6 +18,7 @@
       "target": "dmg"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "zip"
@@ -29,8 +30,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "EasyArc",
-      "installerIcon": null,
-      "uninstallerIcon": null,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
       "artifactName": "EA-Win-Beta-${version}-Setup.exe",
       "include": "resources/installer.nsh"
     },

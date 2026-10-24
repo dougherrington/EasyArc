@@ -163,7 +163,7 @@ body::after {
   overflow-y:auto;
   animation:slideInLeft 0.5s cubic-bezier(0.22,1,0.36,1) both;
   padding-right:2px;
-  cursor:none; /* FIX_2026-05-19_MOUSE_OFF: strict mouse-off in browsing area */
+  cursor:default; /* FIX_2026-10-24_MOUSE_VISIBLE: arrow visible (was hidden) */
 }
 @keyframes slideInLeft { from{opacity:0;transform:rotateY(13deg) translateZ(-18px) translateX(-24px)} to{opacity:1;transform:rotateY(13deg) translateZ(-18px) translateX(0)} }
 .sidebar::-webkit-scrollbar { width:3px; }
@@ -289,7 +289,7 @@ body::after {
 /* Game grid */
 .game-grid-wrap {
   flex:1; overflow-y:auto; padding-right:4px;
-  cursor:none; /* FIX_2026-05-19_MOUSE_OFF: strict mouse-off in browsing area */
+  cursor:default; /* FIX_2026-10-24_MOUSE_VISIBLE: arrow visible (was hidden) */
 }
 .game-grid-wrap::-webkit-scrollbar { width:3px; }
 .game-grid-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
@@ -375,7 +375,7 @@ body::after {
   height:100%;
   animation:slideInRight 0.5s cubic-bezier(0.22,1,0.36,1) 0.04s both;
   flex-shrink:0;
-  cursor:none; /* FIX_2026-05-19_MOUSE_OFF: strict mouse-off in browsing area */
+  cursor:default; /* FIX_2026-10-24_MOUSE_VISIBLE: arrow visible (was hidden) */
 }
 @keyframes slideInRight { from{opacity:0;transform:rotateY(-13deg) translateZ(-18px) translateX(24px)} to{opacity:1;transform:rotateY(-13deg) translateZ(-18px) translateX(0)} }
 
@@ -387,7 +387,7 @@ body::after {
    higher specificity. !important here overrides all those pointer rules. */
 .sidebar, .sidebar *,
 .game-grid-wrap, .game-grid-wrap *,
-.detail-panel, .detail-panel * { cursor: none !important; }
+.detail-panel, .detail-panel * { cursor: default !important; } /* FIX_2026-10-24_MOUSE_VISIBLE */
 
 .detail-card {
   background:linear-gradient(145deg,rgba(4,14,34,0.96),rgba(2,8,20,0.98));
@@ -785,7 +785,7 @@ body::after {
     </div>
     <div class="toolbar-center">
       <button class="toolbar-btn toolbar-center-btn" id="rescanBtn" onclick="playClick();rescanLibrary()">&#x27f3; Back to Library</button>
-      <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();showGetArtModal()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span><span id="scrapeCount" class="scrape-count"></span>
+      <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();artBtnClick()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span><span id="scrapeCount" class="scrape-count"></span>
     </div>
     <div class="toolbar-right">
       <button class="toolbar-btn nav-btn" onclick="playClick();showView('controller')">&#x1f3ae; Map Controllers</button>
@@ -2377,25 +2377,59 @@ async function rescanLibrary() {
   if (folders.length === 0) { showToast('No folders set. Run Setup first.'); return; }
   const btn = document.getElementById('rescanBtn');
   if (btn) { btn.classList.add('active'); btn.textContent = '⟳ Refreshing...'; btn.disabled = true; }
-  let newCount = 0;
+  // FIX_2026-10-24_RESCAN_REBUILD: rebuild the list from disk on every Refresh.
+  // Each saved folder that scans OK has its games replaced with exactly what's on disk
+  // (new files added, deleted files dropped). A folder that can't be reached (unplugged
+  // drive) keeps its games untouched. Same path -> same game object/ID, so art,
+  // favorites and recent games carry over. Excluded games stay excluded.
+  const excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
+  const norm = (p) => String(p || '').replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase();
+  const inFolder = (gamePath, folder) => {
+    const g = norm(gamePath), f = norm(folder);
+    return g === f || g.startsWith(f + '/');
+  };
+  const oldByPath = new Map(games.map(g => [g.path, g]));
+  const rebuilt = new Map();
+  const scanned = [];
   for (const folder of folders) {
     if (!window.easyarc) break;
-    const result = await window.easyarc.scanRoms(folder);
-    if (result.success) {
-      const excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
-      result.roms.forEach((rom,i) => {
-        if (!games.find(g => g.path === rom.path) && !excluded.includes(rom.path)) {
-          games.push({ id: makeGameId(rom.system, rom.path), title: rom.title, system: rom.system, path: rom.path });
-          newCount++;
-        }
-      });
+    let result = null;
+    try { result = await window.easyarc.scanRoms(folder); }
+    catch (err) { console.log('[Refresh] scan error for', folder, err && err.message); }
+    const hadGames = games.some(g => inFolder(g.path, folder));
+    const usable = result && result.success && Array.isArray(result.roms) &&
+      (result.roms.length > 0 || !hadGames);
+    if (!usable) {
+      console.log('[Refresh] folder unavailable, keeping its games:', folder);
+      continue;
     }
+    scanned.push(folder);
+    result.roms.forEach(rom => {
+      if (excluded.includes(rom.path) || rebuilt.has(rom.path)) return;
+      rebuilt.set(rom.path, oldByPath.get(rom.path) ||
+        { id: makeGameId(rom.system, rom.path), title: rom.title, system: rom.system, path: rom.path });
+    });
   }
+  // Keep games from folders that weren't scanned (unreachable) or aren't under any saved folder.
+  games.forEach(g => {
+    if (rebuilt.has(g.path)) return;
+    if (!scanned.some(f => inFolder(g.path, f))) rebuilt.set(g.path, g);
+  });
+  let newCount = 0;
+  rebuilt.forEach((g, p) => { if (!oldByPath.has(p)) newCount++; });
+  let removedCount = 0;
+  oldByPath.forEach((g, p) => { if (!rebuilt.has(p)) removedCount++; });
+  games.length = 0;
+  rebuilt.forEach(g => games.push(g));
+  console.log('[Refresh] rebuilt library:', games.length, 'games,', newCount, 'new,', removedCount, 'removed');
   updateCounts();
   renderGrid();
   loadArtworkCache();
   if (btn) { btn.classList.remove('active'); btn.textContent = '⟳ Back to Library'; btn.disabled = false; }
-  showToast(newCount > 0 ? 'Found ' + newCount + ' new games!' : 'No new games found.');
+  const parts = [];
+  if (newCount > 0) parts.push('Found ' + newCount + ' new game' + (newCount === 1 ? '' : 's'));
+  if (removedCount > 0) parts.push('removed ' + removedCount + ' missing');
+  showToast(parts.length ? parts.join(', ') + '.' : 'No changes found.');
 }
 
 let toastTimer;
@@ -5511,7 +5545,7 @@ async function startScrape() {
   if (led2) led2.classList.remove('active');
   if (row) row.style.display = 'none';
   if (scrapeBlocked) logLines.push('STOPPED: ScreenScraper ' + scrapeBlocked);
-  showToast(scrapeBlocked ? ssBlockMessage(scrapeBlocked) : 'Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)');
+  showToast(scrapeBlocked ? ssBlockMessage(scrapeBlocked) : (scrapeStoppedByUser ? 'Scraping stopped. ' + succeeded + ' games scraped.' : 'Done! ' + succeeded + '/' + done + ' scraped (' + pct + '%)')); scrapeStoppedByUser = false; /* FIX_2026-10-24_SCRAPE_STOP_BTN */
   if (scrapeBlocked === 'daylimit' && !localStorage.getItem('ss_setup_dontshow')) ssSetupOpen(false, true); // FIX_2026-10-10_SS_SETUP
   renderGrid();
 
@@ -5609,8 +5643,29 @@ async function resumeScrape() {
   renderGrid();
 }
 
+// FIX_2026-10-24_SCRAPE_STOP_BTN: Get Art button doubles as Stop while scraping.
+let scrapeStoppedByUser = false;
+function artBtnClick() {
+  if (scrapeRunning) { stopScrape(); return; }
+  scrapeStoppedByUser = false;
+  showGetArtModal();
+}
+(function syncArtBtnLabel() {
+  let shownRunning = null, idleHtml = null;
+  setInterval(() => {
+    const btn = document.getElementById('getArtBtn');
+    if (!btn) return;
+    if (idleHtml === null) idleHtml = btn.innerHTML;
+    if (scrapeRunning === shownRunning) return;
+    shownRunning = scrapeRunning;
+    btn.innerHTML = scrapeRunning ? '&#x23f9; Stop Scraping' : idleHtml;
+  }, 300);
+})();
+
 function stopScrape() {
   scrapeRunning = false;
+  scrapePausedForGame = false; // FIX_2026-10-24_SCRAPE_STOP_BTN: a stopped scrape never auto-resumes after a game
+  scrapeStoppedByUser = true;
   const led = document.getElementById('scrapeLed');
   if (led) led.classList.remove('active');
   const row = document.getElementById('scrapeProgressRow');
