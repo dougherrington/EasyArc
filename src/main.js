@@ -6,6 +6,32 @@ const os = require('os');
 app.commandLine.appendSwitch('enable-gamepad');
 const path = require('path');
 const RetroArchBridge = require('./bridge/RetroArchBridge');
+
+// FIX_2026-10-28_LOG_FILE: copy main-process log lines to a file so problems leave
+// evidence. Windows: %APPDATA%\easyarc\easyarc.log (previous run kept as easyarc.old.log).
+(() => {
+  try {
+    const logDir = process.platform === 'win32'
+      ? path.join(process.env.APPDATA || os.homedir(), 'easyarc')
+      : path.join(os.homedir(), 'Library', 'Application Support', 'easyarc');
+    fs.mkdirSync(logDir, { recursive: true });
+    const logPath = path.join(logDir, 'easyarc.log');
+    try {
+      if (fs.existsSync(logPath)) fs.renameSync(logPath, path.join(logDir, 'easyarc.old.log'));
+    } catch {}
+    const stream = fs.createWriteStream(logPath, { flags: 'a' });
+    stream.on('error', () => {});
+    const util = require('util');
+    for (const level of ['log', 'warn', 'error']) {
+      const orig = console[level].bind(console);
+      console[level] = (...args) => {
+        orig(...args);
+        try { stream.write(new Date().toISOString() + ' ' + util.format(...args) + '\n'); } catch {}
+      };
+    }
+    console.log('[LOG] EasyArc', app.getVersion(), 'started - logging to', logPath);
+  } catch (e) { /* logging is best-effort */ }
+})();
 const registerIpcHandlers = require('./ipc/handlers');
 
 let mainWindow;

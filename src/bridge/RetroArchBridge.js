@@ -76,7 +76,7 @@ const UNIQUE_EXTENSIONS = {
 // Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
   '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
-  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','psx','mame','mame2003','arcade','neogeo'],
+  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'], // FIX_2026-10-27_DOLPHIN_ZIP: + gamecube, wii
   '.bin':  ['atari2600','atari7800','genesis','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','pspmini','gamecube','wii','saturn','dreamcast'],
   '.rvz':  ['gamecube','wii'],

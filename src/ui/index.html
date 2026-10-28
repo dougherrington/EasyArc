@@ -3429,7 +3429,55 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   } catch (e) {
     console.log('[GC-FLOW] Controller detection failed:', e.message);
   }
-  const result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes);
+  // FIX_2026-10-28_WII_TUNE: one full-screen launch message for Dolphin games. Shows
+  // "Unpacking zipped game..." while a zip unpacks, then "Launching <game> - <controller>"
+  // for Wii games (the main process holds Dolphin back one second so it can be read).
+  // Repeat launches are blocked until Dolphin starts or the launch fails.
+  const _isZipped = /\.(zip|7z)$/i.test(game.path || '');
+  let _launchOverlay = null;
+  const _showLaunchOverlay = (mainText, subText) => {
+    if (!_launchOverlay) {
+      _launchOverlay = document.createElement('div');
+      _launchOverlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,15,0.94);color:#fff;font:600 30px Rajdhani,Orbitron,sans-serif;letter-spacing:1px;text-align:center;padding:0 40px;';
+      document.body.appendChild(_launchOverlay);
+    }
+    _launchOverlay.textContent = '';
+    const _m = document.createElement('div');
+    _m.textContent = mainText;
+    _launchOverlay.appendChild(_m);
+    if (subText) {
+      const _s = document.createElement('div');
+      _s.textContent = subText;
+      _s.style.cssText = 'font-weight:400;font-size:20px;opacity:0.75;margin-top:12px;';
+      _launchOverlay.appendChild(_s);
+    }
+  };
+  const _WII_PROFILE_NAMES = { Classic: 'Classic Controller', Sideways: 'Sideways Wii Remote', Nunchuk: 'Wii Remote + Nunchuk' };
+  let _unpackTimer = null;
+  window.__easyarcGameRunning = true;
+  if (_isZipped) {
+    _unpackTimer = setTimeout(() => _showLaunchOverlay('Unpacking zipped game\u2026', 'Unzip your games to launch faster.'), 500);
+  }
+  if (window.easyarc.onDolphinLaunchInfo && !window.__eaDolphinInfoHooked) {
+    window.__eaDolphinInfoHooked = true;
+    window.easyarc.onDolphinLaunchInfo((info) => { if (window.__eaOnDolphinInfo) window.__eaOnDolphinInfo(info); });
+  }
+  window.__eaOnDolphinInfo = (info) => {
+    clearTimeout(_unpackTimer);
+    const _name = info && _WII_PROFILE_NAMES[info.profile];
+    if (_name) _showLaunchOverlay('Launching ' + game.title + ' \u2014 ' + _name);
+  };
+  let result;
+  try {
+    result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes);
+  } catch (err) {
+    result = { success: false, error: err && err.message };
+  }
+  if (!result) result = { success: false, error: 'no response' };
+  clearTimeout(_unpackTimer);
+  window.__eaOnDolphinInfo = null;
+  if (_launchOverlay) _launchOverlay.remove();
+  if (!result.success) window.__easyarcGameRunning = false;
   console.log('[GC-FLOW] launchDolphin returned:', JSON.stringify(result));
   if (result.success) {
     showToast('Launching ' + game.title + '...');

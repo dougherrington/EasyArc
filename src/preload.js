@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   // FIX_2026-06-19_PSP_LIFECYCLE: game-running lifecycle events from main process.
   onGameStarted: (callback) => ipcRenderer.on('game-started', () => callback()),
   onGameExited:  (callback) => ipcRenderer.on('game-exited',  () => callback()),
+  onDolphinLaunchInfo: (callback) => ipcRenderer.on('dolphin-launch-info', (_e, info) => callback(info)), // FIX_2026-10-28_WII_TUNE
   // FIX_2026-09-29_NINTENDO_RELAUNCH
   relaunchForController: () => ipcRenderer.invoke('app:relaunchForController'),
   findDuckStation: () => ipcRenderer.invoke('bridge:findDuckStation'),

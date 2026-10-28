@@ -629,6 +629,423 @@ class DolphinBridge {
     ].join('\n');
   }
 
+  // FIX_2026-10-27_WII_PROFILES: automatic Wii controller profile per game.
+  // Reads the disc ID from the game file, looks up its first 3 characters in
+  // src/data/wii_controller_profiles.csv (Classic / Sideways / Nunchuk), and writes
+  // that profile to WiimoteNew.ini for every connected controller (up to 4) before
+  // Dolphin starts. Profiles are the ones proven on the Beelink (Classic = the
+  // "Combined" profile, plus MotionPlus off). Games not on the list get Nunchuk.
+  // GameCube games are left alone.
+  _readWiiDiscInfo(romPath) {
+    const ext = path.extname(romPath).toLowerCase();
+    if (ext === '.wad') return { isWii: true, id: null };
+    let fd;
+    try {
+      fd = fs.openSync(romPath, 'r');
+      const head = Buffer.alloc(0x8100);
+      const n = fs.readSync(fd, head, 0, head.length, 0);
+      const magic4 = head.toString('latin1', 0, 4);
+      let base = 0;                                              // .iso / .gcm / .nkit
+      if (magic4 === 'WBFS') base = 0x200;                       // .wbfs
+      else if (magic4 === 'RVZ\x01' || magic4 === 'WIA\x01') base = 0x58; // .rvz / .wia
+      else if (magic4 === 'CISO') base = 0x8000;                 // .ciso
+      if (n < base + 0x20) return { isWii: ext === '.wbfs', id: null };
+      const id = head.toString('latin1', base, base + 6);
+      const wiiMagic = head.readUInt32BE(base + 0x18) === 0x5D1C9EA3;
+      const gcMagic = head.readUInt32BE(base + 0x1C) === 0xC2339F3D;
+      return {
+        isWii: wiiMagic || (!gcMagic && ext === '.wbfs'),
+        id: /^[A-Z0-9]{6}$/.test(id) ? id : null,
+      };
+    } catch (e) {
+      console.log('[DOLPHIN] Could not read disc header:', e.message);
+      return { isWii: ext === '.wbfs', id: null };
+    } finally {
+      if (fd !== undefined) { try { fs.closeSync(fd); } catch {} }
+    }
+  }
+
+  _getWiiProfileMap() {
+    if (this._wiiProfileMap) return this._wiiProfileMap;
+    const map = new Map();
+    try {
+      const csvPath = path.join(__dirname, '..', 'data', 'wii_controller_profiles.csv');
+      const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/);
+      for (const line of lines.slice(1)) {
+        const cols = line.split(',');
+        if (cols.length >= 3 && cols[0]) map.set(cols[0].trim().toUpperCase(), cols[2].trim());
+      }
+      console.log('[DOLPHIN] Wii profile list loaded:', map.size, 'games');
+    } catch (e) {
+      console.log('[DOLPHIN] Wii profile list not loaded:', e.message);
+    }
+    this._wiiProfileMap = map;
+    return map;
+  }
+
+  _getWiiProfileLines(profile) {
+    // FIX_2026-10-28_WII_TUNE: Sideways + Nunchuk use label-matched buttons (A=A, B=B,
+    // X=1, Y=2, RB=Shake); Sideways adds tilt steering on the left stick; all three
+    // use a Relative pointer (stays where you leave it). Classic buttons unchanged.
+    const PROFILES = {
+    Classic: [
+      "Buttons/A = `Button E`",
+      "Buttons/B = `Trigger R`",
+      "Buttons/1 = `Button W`",
+      "Buttons/2 = `Button S`",
+      "Buttons/- = Back",
+      "Buttons/+ = Start",
+      "Buttons/Home = Guide",
+      "D-Pad/Up = `Pad N`",
+      "D-Pad/Down = `Pad S`",
+      "D-Pad/Left = `Pad W`",
+      "D-Pad/Right = `Pad E`",
+      "IR/Relative Input = True",
+      "IR/Up = `Right Y+`",
+      "IR/Down = `Right Y-`",
+      "IR/Left = `Right X-`",
+      "IR/Right = `Right X+`",
+      "Shake/X = `Button N`",
+      "Shake/Y = `Button N`",
+      "Shake/Z = `Button N`",
+      "IRPassthrough/Object 1 X = `IR Object 1 X`",
+      "IRPassthrough/Object 1 Y = `IR Object 1 Y`",
+      "IRPassthrough/Object 1 Size = `IR Object 1 Size`",
+      "IRPassthrough/Object 2 X = `IR Object 2 X`",
+      "IRPassthrough/Object 2 Y = `IR Object 2 Y`",
+      "IRPassthrough/Object 2 Size = `IR Object 2 Size`",
+      "IRPassthrough/Object 3 X = `IR Object 3 X`",
+      "IRPassthrough/Object 3 Y = `IR Object 3 Y`",
+      "IRPassthrough/Object 3 Size = `IR Object 3 Size`",
+      "IRPassthrough/Object 4 X = `IR Object 4 X`",
+      "IRPassthrough/Object 4 Y = `IR Object 4 Y`",
+      "IRPassthrough/Object 4 Size = `IR Object 4 Size`",
+      "IMUAccelerometer/Up = `Accel Up`",
+      "IMUAccelerometer/Down = `Accel Down`",
+      "IMUAccelerometer/Left = `Accel Left`",
+      "IMUAccelerometer/Right = `Accel Right`",
+      "IMUAccelerometer/Forward = `Accel Forward`",
+      "IMUAccelerometer/Backward = `Accel Backward`",
+      "IMUGyroscope/Pitch Up = `Gyro Pitch Up`",
+      "IMUGyroscope/Pitch Down = `Gyro Pitch Down`",
+      "IMUGyroscope/Roll Left = `Gyro Roll Left`",
+      "IMUGyroscope/Roll Right = `Gyro Roll Right`",
+      "IMUGyroscope/Yaw Left = `Gyro Yaw Left`",
+      "IMUGyroscope/Yaw Right = `Gyro Yaw Right`",
+      "Extension/Attach MotionPlus = False",
+      "Extension = Classic",
+      "Classic/Buttons/A = `Button S`",
+      "Classic/Buttons/B = `Button E`",
+      "Classic/Buttons/X = `Button W`",
+      "Classic/Buttons/Y = `Button N`",
+      "Classic/Buttons/ZL = `Shoulder L`",
+      "Classic/Buttons/ZR = `Shoulder R`",
+      "Classic/Buttons/- = Back",
+      "Classic/Buttons/+ = Start",
+      "Classic/Buttons/Home = Guide",
+      "Classic/Left Stick/Up = `Left Y+`",
+      "Classic/Left Stick/Down = `Left Y-`",
+      "Classic/Left Stick/Left = `Left X-`",
+      "Classic/Left Stick/Right = `Left X+`",
+      "Classic/Left Stick/Calibration = 100.00 101.96 108.24 111.27 113.14 111.61 108.24 101.96 100.00 101.96 108.24 114.06 119.48 117.29 108.24 101.96 100.00 101.96 108.24 120.27 123.82 119.15 108.24 101.96 100.00 101.96 108.24 119.58 121.81 119.42 108.24 101.96",
+      "Classic/Right Stick/Up = `Right Y+`",
+      "Classic/Right Stick/Down = `Right Y-`",
+      "Classic/Right Stick/Left = `Right X-`",
+      "Classic/Right Stick/Right = `Right X+`",
+      "Classic/Triggers/L = `Trigger L`",
+      "Classic/Triggers/R = `Trigger R`",
+      "Classic/Triggers/L-Analog = `Trigger L`",
+      "Classic/Triggers/R-Analog = `Trigger R`",
+      "Classic/D-Pad/Up = `Pad N`",
+      "Classic/D-Pad/Down = `Pad S`",
+      "Classic/D-Pad/Left = `Pad W`",
+      "Classic/D-Pad/Right = `Pad E`",
+    ],
+    Sideways: [
+      "Buttons/A = `Button S`",
+      "Buttons/B = `Button E`",
+      "Buttons/1 = `Button W`",
+      "Buttons/2 = `Button N`",
+      "Buttons/- = Back",
+      "Buttons/+ = Start",
+      "Buttons/Home = Guide",
+      "D-Pad/Up = `Pad N`",
+      "D-Pad/Down = `Pad S`",
+      "D-Pad/Left = `Pad W`",
+      "D-Pad/Right = `Pad E`",
+      "IR/Relative Input = True",
+      "IR/Up = `Right Y+`",
+      "IR/Down = `Right Y-`",
+      "IR/Left = `Right X-`",
+      "IR/Right = `Right X+`",
+      "Shake/X = `Shoulder R`",
+      "Shake/Y = `Shoulder R`",
+      "Shake/Z = `Shoulder R`",
+      "Tilt/Forward = `Left Y+`",
+      "Tilt/Backward = `Left Y-`",
+      "Tilt/Left = `Left X-`",
+      "Tilt/Right = `Left X+`",
+      "IRPassthrough/Object 1 X = `IR Object 1 X`",
+      "IRPassthrough/Object 1 Y = `IR Object 1 Y`",
+      "IRPassthrough/Object 1 Size = `IR Object 1 Size`",
+      "IRPassthrough/Object 2 X = `IR Object 2 X`",
+      "IRPassthrough/Object 2 Y = `IR Object 2 Y`",
+      "IRPassthrough/Object 2 Size = `IR Object 2 Size`",
+      "IRPassthrough/Object 3 X = `IR Object 3 X`",
+      "IRPassthrough/Object 3 Y = `IR Object 3 Y`",
+      "IRPassthrough/Object 3 Size = `IR Object 3 Size`",
+      "IRPassthrough/Object 4 X = `IR Object 4 X`",
+      "IRPassthrough/Object 4 Y = `IR Object 4 Y`",
+      "IRPassthrough/Object 4 Size = `IR Object 4 Size`",
+      "IMUAccelerometer/Up = `Accel Up`",
+      "IMUAccelerometer/Down = `Accel Down`",
+      "IMUAccelerometer/Left = `Accel Left`",
+      "IMUAccelerometer/Right = `Accel Right`",
+      "IMUAccelerometer/Forward = `Accel Forward`",
+      "IMUAccelerometer/Backward = `Accel Backward`",
+      "IMUGyroscope/Pitch Up = `Gyro Pitch Up`",
+      "IMUGyroscope/Pitch Down = `Gyro Pitch Down`",
+      "IMUGyroscope/Roll Left = `Gyro Roll Left`",
+      "IMUGyroscope/Roll Right = `Gyro Roll Right`",
+      "IMUGyroscope/Yaw Left = `Gyro Yaw Left`",
+      "IMUGyroscope/Yaw Right = `Gyro Yaw Right`",
+      "Extension/Attach MotionPlus = False",
+      "Classic/Buttons/A = `Button S`",
+      "Classic/Buttons/B = `Button E`",
+      "Classic/Buttons/X = `Button W`",
+      "Classic/Buttons/Y = `Button N`",
+      "Classic/Buttons/ZL = `Shoulder L`",
+      "Classic/Buttons/ZR = `Shoulder R`",
+      "Classic/Buttons/- = Back",
+      "Classic/Buttons/+ = Start",
+      "Classic/Buttons/Home = Guide",
+      "Classic/Left Stick/Up = `Left Y+`",
+      "Classic/Left Stick/Down = `Left Y-`",
+      "Classic/Left Stick/Left = `Left X-`",
+      "Classic/Left Stick/Right = `Left X+`",
+      "Classic/Left Stick/Calibration = 100.00 101.96 108.24 111.27 113.14 111.61 108.24 101.96 100.00 101.96 108.24 114.06 119.48 117.29 108.24 101.96 100.00 101.96 108.24 120.27 123.82 119.15 108.24 101.96 100.00 101.96 108.24 119.58 121.81 119.42 108.24 101.96",
+      "Classic/Right Stick/Up = `Right Y+`",
+      "Classic/Right Stick/Down = `Right Y-`",
+      "Classic/Right Stick/Left = `Right X-`",
+      "Classic/Right Stick/Right = `Right X+`",
+      "Classic/Triggers/L = `Trigger L`",
+      "Classic/Triggers/R = `Trigger R`",
+      "Classic/Triggers/L-Analog = `Trigger L`",
+      "Classic/Triggers/R-Analog = `Trigger R`",
+      "Classic/D-Pad/Up = `Pad N`",
+      "Classic/D-Pad/Down = `Pad S`",
+      "Classic/D-Pad/Left = `Pad W`",
+      "Classic/D-Pad/Right = `Pad E`",
+      "Options/Sideways Wiimote = True",
+    ],
+    Nunchuk: [
+      "Buttons/A = `Button S`",
+      "Buttons/B = `Button E`",
+      "Buttons/1 = `Button W`",
+      "Buttons/2 = `Button N`",
+      "Buttons/- = Back",
+      "Buttons/+ = Start",
+      "Buttons/Home = Guide",
+      "D-Pad/Up = `Pad N`",
+      "D-Pad/Down = `Pad S`",
+      "D-Pad/Left = `Pad W`",
+      "D-Pad/Right = `Pad E`",
+      "IR/Relative Input = True",
+      "IR/Up = `Right Y+`",
+      "IR/Down = `Right Y-`",
+      "IR/Left = `Right X-`",
+      "IR/Right = `Right X+`",
+      "Shake/X = `Shoulder R`",
+      "Shake/Y = `Shoulder R`",
+      "Shake/Z = `Shoulder R`",
+      "IRPassthrough/Object 1 X = `IR Object 1 X`",
+      "IRPassthrough/Object 1 Y = `IR Object 1 Y`",
+      "IRPassthrough/Object 1 Size = `IR Object 1 Size`",
+      "IRPassthrough/Object 2 X = `IR Object 2 X`",
+      "IRPassthrough/Object 2 Y = `IR Object 2 Y`",
+      "IRPassthrough/Object 2 Size = `IR Object 2 Size`",
+      "IRPassthrough/Object 3 X = `IR Object 3 X`",
+      "IRPassthrough/Object 3 Y = `IR Object 3 Y`",
+      "IRPassthrough/Object 3 Size = `IR Object 3 Size`",
+      "IRPassthrough/Object 4 X = `IR Object 4 X`",
+      "IRPassthrough/Object 4 Y = `IR Object 4 Y`",
+      "IRPassthrough/Object 4 Size = `IR Object 4 Size`",
+      "IMUAccelerometer/Up = `Accel Up`",
+      "IMUAccelerometer/Down = `Accel Down`",
+      "IMUAccelerometer/Left = `Accel Left`",
+      "IMUAccelerometer/Right = `Accel Right`",
+      "IMUAccelerometer/Forward = `Accel Forward`",
+      "IMUAccelerometer/Backward = `Accel Backward`",
+      "IMUGyroscope/Pitch Up = `Gyro Pitch Up`",
+      "IMUGyroscope/Pitch Down = `Gyro Pitch Down`",
+      "IMUGyroscope/Roll Left = `Gyro Roll Left`",
+      "IMUGyroscope/Roll Right = `Gyro Roll Right`",
+      "IMUGyroscope/Yaw Left = `Gyro Yaw Left`",
+      "IMUGyroscope/Yaw Right = `Gyro Yaw Right`",
+      "Extension/Attach MotionPlus = False",
+      "Extension = Nunchuk",
+      "Nunchuk/Buttons/C = `Shoulder L`",
+      "Nunchuk/Buttons/Z = `Trigger L`",
+      "Nunchuk/Stick/Up = `Left Y+`",
+      "Nunchuk/Stick/Down = `Left Y-`",
+      "Nunchuk/Stick/Left = `Left X-`",
+      "Nunchuk/Stick/Right = `Left X+`",
+      "Nunchuk/Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42",
+      "Nunchuk/Shake/X = `Shoulder R`",
+      "Nunchuk/Shake/Y = `Shoulder R`",
+      "Nunchuk/Shake/Z = `Shoulder R`",
+      "Classic/Buttons/A = `Button S`",
+      "Classic/Buttons/B = `Button E`",
+      "Classic/Buttons/X = `Button W`",
+      "Classic/Buttons/Y = `Button N`",
+      "Classic/Buttons/ZL = `Shoulder L`",
+      "Classic/Buttons/ZR = `Shoulder R`",
+      "Classic/Buttons/- = Back",
+      "Classic/Buttons/+ = Start",
+      "Classic/Buttons/Home = Guide",
+      "Classic/Left Stick/Up = `Left Y+`",
+      "Classic/Left Stick/Down = `Left Y-`",
+      "Classic/Left Stick/Left = `Left X-`",
+      "Classic/Left Stick/Right = `Left X+`",
+      "Classic/Left Stick/Calibration = 100.00 101.96 108.24 111.27 113.14 111.61 108.24 101.96 100.00 101.96 108.24 114.06 119.48 117.29 108.24 101.96 100.00 101.96 108.24 120.27 123.82 119.15 108.24 101.96 100.00 101.96 108.24 119.58 121.81 119.42 108.24 101.96",
+      "Classic/Right Stick/Up = `Right Y+`",
+      "Classic/Right Stick/Down = `Right Y-`",
+      "Classic/Right Stick/Left = `Right X-`",
+      "Classic/Right Stick/Right = `Right X+`",
+      "Classic/Triggers/L = `Trigger L`",
+      "Classic/Triggers/R = `Trigger R`",
+      "Classic/Triggers/L-Analog = `Trigger L`",
+      "Classic/Triggers/R-Analog = `Trigger R`",
+      "Classic/D-Pad/Up = `Pad N`",
+      "Classic/D-Pad/Down = `Pad S`",
+      "Classic/D-Pad/Left = `Pad W`",
+      "Classic/D-Pad/Right = `Pad E`",
+    ],
+    };
+    return PROFILES[profile] || PROFILES.Nunchuk;
+  }
+
+  writeWiimoteConfig(romPath, controllerType, controllerTypes) {
+    const info = this._readWiiDiscInfo(romPath);
+    if (!info.isWii) {
+      console.log('[DOLPHIN] Not a Wii disc - WiimoteNew.ini left as is');
+      return null;
+    }
+    const code = info.id ? info.id.slice(0, 3) : null;
+    const listed = code ? this._getWiiProfileMap().get(code) : null;
+    const profile = ['Classic', 'Sideways', 'Nunchuk'].includes(listed) ? listed : 'Nunchuk';
+    console.log('[DOLPHIN] Wii game', info.id, '-> profile', profile, listed ? '(from list)' : '(default)');
+
+    const types = (controllerTypes && controllerTypes.length)
+      ? controllerTypes.slice(0, 4)
+      : [controllerType || null];
+    const body = this._getWiiProfileLines(profile);
+    // Dolphin numbers SDL devices separately for each controller name.
+    const count = { xbox: 0, ps: 0, pro: 0 };
+    const out = [];
+    const devices = []; // FIX_2026-10-28_WII_TUNE: logged below
+    for (let i = 1; i <= 4; i++) {
+      out.push(`[Wiimote${i}]`);
+      if (i > types.length) {
+        out.push('Device = DInput/0/Keyboard Mouse', 'Source = 0');
+        continue;
+      }
+      const t = types[i - 1];
+      let device;
+      if (t === 'switch') device = `SDL/${count.pro++}/Nintendo Switch Pro Controller`;
+      else if (t === 'ds4' || t === 'dualsense' || t === 'ds3') device = `SDL/${count.ps++}/PS4 Controller`;
+      else device = `SDL/0/XInput Controller #${++count.xbox}`;
+      out.push('Device = ' + device, ...body, 'Source = 1');
+      devices.push(device);
+    }
+    out.push('[BalanceBoard]', 'Device = DInput/0/Keyboard Mouse', 'Source = 0');
+
+    const cfgDir = this._getDolphinConfigDir();
+    fs.mkdirSync(cfgDir, { recursive: true });
+    fs.writeFileSync(path.join(cfgDir, 'WiimoteNew.ini'), out.join('\n') + '\n');
+    console.log('[DOLPHIN] Wrote WiimoteNew.ini:', profile, '| controllers:', JSON.stringify(types), '| devices:', devices.join(' ; '));
+    return profile;
+  }
+
+  // FIX_2026-10-27_DOLPHIN_ZIP: zipped Wii/GameCube games (.zip/.7z) are unpacked
+  // with the bundled 7za.exe into dolphin\cache before launch. Only the most recent
+  // game is kept (cache is wiped before each new unpack), so disk use never grows
+  // past one game. Relaunching the same zip reuses the unpacked copy instantly.
+  async _prepareArchivedRom(romPath) {
+    const ext = path.extname(romPath).toLowerCase();
+    if (ext !== '.zip' && ext !== '.7z') return romPath;
+
+    const cacheDir = path.join(this.getEasyArcDolphinDir(), 'cache');
+    const markerPath = path.join(cacheDir, 'easyarc-source.json');
+    const GAME_EXTS = ['.iso', '.gcm', '.gcz', '.rvz', '.wbfs', '.ciso', '.wia', '.wad'];
+    const st = fs.statSync(romPath);
+    const source = { path: romPath, size: st.size, mtimeMs: st.mtimeMs };
+
+    // Largest Wii/GameCube game file anywhere under the cache folder.
+    const findGame = () => {
+      let best = null;
+      let bestSize = -1;
+      const walk = (dir) => {
+        let entries = [];
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) {
+            walk(full);
+          } else if (e.isFile() && GAME_EXTS.includes(path.extname(e.name).toLowerCase())) {
+            const size = fs.statSync(full).size;
+            if (size > bestSize) { best = full; bestSize = size; }
+          }
+        }
+      };
+      walk(cacheDir);
+      return best;
+    };
+
+    // Same zip as last time (same path, size and date)? Reuse the unpacked copy.
+    try {
+      if (fs.existsSync(markerPath)) {
+        const prev = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+        if (prev.path === source.path && prev.size === source.size && prev.mtimeMs === source.mtimeMs) {
+          const cached = findGame();
+          if (cached) {
+            console.log('[DOLPHIN] Reusing unpacked game:', cached);
+            return cached;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[DOLPHIN] Cache marker unreadable, unpacking fresh:', e.message);
+    }
+
+    // New game: clear the old one, then unpack.
+    console.log('[DOLPHIN] Unpacking zipped game:', romPath, '->', cacheDir);
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    fs.mkdirSync(cacheDir, { recursive: true });
+    try {
+      if (process.platform === 'darwin') {
+        await this._extractWithMacTools(romPath, cacheDir);
+      } else {
+        await this._extractWith7za(romPath, cacheDir);
+      }
+    } catch (err) {
+      console.log('[DOLPHIN] Unpack failed:', err.message);
+      try { fs.rmSync(cacheDir, { recursive: true, force: true }); } catch {}
+      throw new Error('the zipped game could not be unpacked');
+    }
+
+    const game = findGame();
+    if (!game) {
+      try { fs.rmSync(cacheDir, { recursive: true, force: true }); } catch {}
+      throw new Error('no Wii or GameCube game was found inside ' + path.basename(romPath));
+    }
+    // Marker is written only after a complete unpack, so a half-finished
+    // unpack is never reused.
+    fs.writeFileSync(markerPath, JSON.stringify(source));
+    console.log('[DOLPHIN] Unpacked game:', game);
+    return game;
+  }
+
   // STAGE_5: Launch Dolphin with a ROM. Same spawn pattern as launchDolphinBare,
   // but passes --batch (suppresses some interactive UI) and --exec=ROMPATH (loads
   // and starts the game). Matches the Mac launch pattern in RetroArchBridge.launchGame.
@@ -657,6 +1074,32 @@ class DolphinBridge {
     if (!romPath || !fs.existsSync(romPath)) {
       console.log('[DOLPHIN] ROM path missing or invalid:', romPath);
       return { success: false, error: 'ROM not found at: ' + romPath };
+    }
+
+    // FIX_2026-10-27_DOLPHIN_ZIP: unpack zipped games before handing them to Dolphin.
+    try {
+      romPath = await this._prepareArchivedRom(romPath);
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+
+    // FIX_2026-10-27_WII_PROFILES: pick and write the Wii controller profile for this game.
+    let wiiProfile = null;
+    try {
+      wiiProfile = this.writeWiimoteConfig(romPath, controllerType, controllerTypes);
+    } catch (err) {
+      console.log('[DOLPHIN] Wii profile step failed (launching anyway):', err.message);
+    }
+    // FIX_2026-10-28_WII_TUNE: tell the screen which controller profile was picked,
+    // then hold Dolphin back one second so the message can be read.
+    if (wiiProfile) {
+      try {
+        const { BrowserWindow } = require('electron');
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send('dolphin-launch-info', { profile: wiiProfile });
+        }
+      } catch (e) { console.log('[DOLPHIN] launch-info send failed:', e.message); }
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     const cwd = path.dirname(binaryPath);
