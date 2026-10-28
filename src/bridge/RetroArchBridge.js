@@ -95,7 +95,7 @@ const SHARED_EXTENSIONS = {
 // BLOCKED_ALWAYS — no support planned or untested; hidden on every platform.
 // BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
 // To restore a system, remove it from the relevant set.
-const BLOCKED_ALWAYS = new Set(['msdos','wii','wiiu','saturn','3ds']); // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
+const BLOCKED_ALWAYS = new Set(['msdos','wiiu','saturn','3ds']); // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
 const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WINDOWS: ps2 unblocked
 function isSystemBlocked(system) {
   if (!system) return false;
@@ -2331,7 +2331,7 @@ Source = 0`;
 
   async _scrapeGameInner(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 38, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 16 /* FIX_2026-10-27_WII_SS_ID: was 38 */, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 61, ps3: 59 // FIX_2026-10-17_SS_IDS: PSP Minis use the PSP system (62 is PS Vita)
     };

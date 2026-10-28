@@ -679,6 +679,8 @@ body::after {
 .toolbar-add    { border-color:var(--green); box-shadow:0 0 8px rgba(0,255,136,0.15); }
 .toolbar-remove { border-color:var(--accent); box-shadow:0 0 8px rgba(255,0,80,0.15); }
 .toolbar-center-btn { font-size:20px; padding:0 40px; align-self:stretch; height:auto; }
+/* FIX_2026-10-26_SYSTEM_NAME_LABEL */
+.system-name-label { position:absolute; transform:translate(-50%, -50%); font-size:18px; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:1px; white-space:nowrap; pointer-events:none; user-select:none; } /* FIX_2026-10-26_SYSTEM_NAME_POSITION */
 
 </style>
 <script>
@@ -784,6 +786,7 @@ body::after {
       <button class="toolbar-btn toolbar-remove" id="removeGamesBtn" onclick="playClick();showRemoveGamesModal()">&#x2715; Remove Games</button>
     </div>
     <div class="toolbar-center">
+      <span id="systemNameLabel" class="system-name-label"></span><!-- FIX_2026-10-26_SYSTEM_NAME_LABEL -->
       <button class="toolbar-btn toolbar-center-btn" id="rescanBtn" onclick="playClick();rescanLibrary()">&#x27f3; Back to Library</button>
       <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();artBtnClick()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span><span id="scrapeCount" class="scrape-count"></span>
     </div>
@@ -3344,7 +3347,8 @@ async function ctestMaybeLaunch(game) {
   }
 
   // STAGE_5: GameCube games go through dedicated install+launch path via Dolphin.
-  if (game.system === 'gamecube' && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
+  // FIX_2026-10-27_WII_ON: Wii uses the same Windows Dolphin path as GameCube.
+  if ((game.system === 'gamecube' || game.system === 'wii') && window.easyarc && navigator.userAgent.toLowerCase().includes('windows')) {
     console.log('[CLICK-HANDLER] GameCube branch matched - calling gamecubeEnsureReadyAndLaunch');
     await gamecubeEnsureReadyAndLaunch(game);
     return;
@@ -4816,6 +4820,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'pspmini',     name:'PSP Mini' },
   { id:'n64',         name:'Nintendo 64' },
   { id:'gamecube',    name:'GameCube' },
+  { id:'wii',         name:'Nintendo Wii' }, // FIX_2026-10-27_WII_ON
   { id:'snes',        name:'Super Nintendo' },
   { id:'nes',         name:'NES' },
   { id:'gba',         name:'Game Boy Advance' },
@@ -5952,6 +5957,90 @@ showView = function(name) {
     const zoom = window.innerWidth / 1920;
     document.body.style.zoom = zoom;
   })();
+</script>
+<script>
+// FIX_2026-10-26_SYSTEM_NAME_LABEL: show the selected sidebar entry's name in the top bar.
+// Read-only watcher: never changes selection, navigation or the Virtual Scroller.
+(function () {
+  function labelFor(btn) {
+    var sys = btn.getAttribute('data-sys');
+    if (sys === 'favorites') return 'Favorites';
+    if (sys === 'recent') return 'Recently Played';
+    if (sys === 'all') return 'All Games';
+    if (typeof systemNames !== 'undefined' && systemNames && systemNames[sys]) return systemNames[sys];
+    return (btn.textContent || '').replace(/[\d,]+\s*$/, '').trim();
+  }
+  function update() {
+    var el = document.getElementById('systemNameLabel');
+    if (!el) return;
+    var btn = document.querySelector('.system-btn.active');
+    el.textContent = btn ? labelFor(btn) : '';
+  }
+  var pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; update(); });
+  }
+  function init() {
+    var el = document.getElementById('systemNameLabel');
+    var rb = document.getElementById('rescanBtn');
+    if (el && rb) el.style.fontFamily = getComputedStyle(rb).fontFamily;
+    update();
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var t = muts[i].target;
+        if (t.classList && t.classList.contains('system-btn')) { schedule(); return; }
+      }
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+    var list = document.getElementById('systemList');
+    if (list) new MutationObserver(schedule).observe(list, { childList: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+<script>
+// FIX_2026-10-26_SYSTEM_NAME_POSITION: center the system name between Remove Games and Back to Library.
+// Moves only the label; buttons, navigation and the Virtual Scroller are untouched.
+(function () {
+  function place() {
+    var el = document.getElementById('systemNameLabel');
+    var rem = document.getElementById('removeGamesBtn');
+    var back = document.getElementById('rescanBtn');
+    if (!el || !rem || !back) return;
+    var row = back.closest('.toolbar-row') || document.body;
+    if (el.parentNode !== row) row.appendChild(el);
+    if (getComputedStyle(row).position === 'static') row.style.position = 'relative';
+    var r = row.getBoundingClientRect(), a = rem.getBoundingClientRect(), b = back.getBoundingClientRect();
+    el.style.left = ((a.right + b.left) / 2 - r.left) + 'px';
+    el.style.top = ((b.top + b.bottom) / 2 - r.top) + 'px';
+  }
+  var pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; place(); });
+  }
+  function init() {
+    place();
+    window.addEventListener('resize', schedule);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+    var back = document.getElementById('rescanBtn');
+    var row = back && back.closest('.toolbar-row');
+    var center = back && back.closest('.toolbar-center');
+    if (window.ResizeObserver && back) {
+      var ro = new ResizeObserver(schedule);
+      ro.observe(back);
+      var art = document.getElementById('getArtBtn');
+      if (art) ro.observe(art);
+      if (row) ro.observe(row);
+    }
+    if (center) new MutationObserver(schedule).observe(center, { childList: true, subtree: true, characterData: true, attributes: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
 </script>
 </body>
 </html>
