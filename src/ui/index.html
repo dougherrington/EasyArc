@@ -3451,7 +3451,7 @@ function wiiLsRows(profile, kind) {
   const bBtn = kind === 'pro' ? L.S : L.E;
   const plus = L.start + ' / ' + L.back;
   if (profile === 'Classic') return [
-    [aBtn, 'A'], [bBtn, 'B'], [L.W, 'X'], [L.N, 'Y'],
+    [aBtn, aBtn === L.S ? 'A · Wii 2' : 'A'], [bBtn, bBtn === L.S ? 'B · Wii 2' : 'B'], [L.W, 'X · Wii 1'], [L.N, 'Y'], // FIX_2026-10-31_WII_LS_CLASSIC_12
     [L.LB, 'ZL'], [L.RB, 'ZR'], [L.LT, 'L'], [L.RT, 'R'],
     ['Left stick', 'Left stick'], ['Right stick', 'Right stick'], ['D-pad', 'D-pad'], [plus, '+ / −'],
   ];
@@ -5082,6 +5082,35 @@ function gpNavPoll() {
     return;
   }
 
+  // FIX_2026-10-31_CORE_DL_CONTROLLER: core download pop-up. A = Download Now, B = Cancel.
+  // Buttons held when the pop-up opens must be released first.
+  const coreModal = document.getElementById('coreDownloadModal');
+  if (coreModal && !coreModal.classList.contains('hidden')) {
+    if (!GP_NAV.cdGate) GP_NAV.cdGate = { a: true, b: true };
+    const cdPads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    let cdA = false, cdB = false;
+    for (const gp of cdPads) {
+      cdA = cdA || !!(gp.buttons[0] && gp.buttons[0].pressed);
+      cdB = cdB || !!(gp.buttons[1] && gp.buttons[1].pressed);
+    }
+    if (!cdA) GP_NAV.cdGate.a = false;
+    if (!cdB) GP_NAV.cdGate.b = false;
+    if (cdA && !GP_NAV.cdGate.a) {
+      GP_NAV.cdGate.a = true;
+      const dl = document.getElementById('coreDownloadBtn');
+      if (dl && dl.style.display !== 'none') dl.click();
+    }
+    if (cdB && !GP_NAV.cdGate.b) {
+      GP_NAV.cdGate.b = true;
+      const cb = document.getElementById('coreDownloadCancelBtn');
+      if (cb) cb.click();
+    }
+    requestAnimationFrame(gpNavPoll);
+    return;
+  } else if (GP_NAV.cdGate) {
+    GP_NAV.cdGate = null;
+    GP_NAV.lgGate = { a: true, b: true, x: true }; // don't let a held A relaunch the game
+  }
   // Allow controller scrolling in Test Plan modal
   const testPlanModal = document.getElementById('instructionsModal');
   if (testPlanModal && !testPlanModal.classList.contains('hidden')) {
@@ -5259,7 +5288,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'atari7800',   name:'Atari 7800' },
   { id:'pcengine',    name:'TurboGrafx-16' }, // FIX_2026-10-17_PCENGINE
   { id:'supergrafx',  name:'SuperGrafx' },
-  { id:'saturn',      name:'Sega Saturn' }, // FIX_2026-10-31_SATURN_ON
+  // { id:'saturn',      name:'Sega Saturn' }, // FIX_2026-10-31_SATURN_OFF: returns with Saturn BIOS support
   { id:'dreamcast',   name:'Sega Dreamcast' }, // FIX_2026-10-17_DREAMCAST
 ];
 

@@ -979,6 +979,23 @@ class DolphinBridge {
 
   // FIX_2026-10-31_WII_LAUNCH_SCREEN: tell the screen which profile was picked, then wait
   // for the player's choice ('start' or 'cancel'). Starts at once if no window is open.
+  // FIX_2026-10-31_WII_GC_PORTS_OFF: Wii games use Wii Remotes only. With the four
+  // GameCube ports also on, games like Mario Kart Wii saw every controller twice.
+  // writeDolphinConfig turns the ports back on for every launch, so GameCube games are unaffected.
+  _gcPortsOffForWii() {
+    try {
+      const cfgPath = path.join(this._getDolphinConfigDir(), 'Dolphin.ini');
+      const lines = fs.readFileSync(cfgPath, 'utf8').split('\n').map((l) => {
+        for (let i = 0; i < 4; i++) {
+          if (l.trim().startsWith('SIDevice' + i + ' ') || l.trim().startsWith('SIDevice' + i + '=')) return 'SIDevice' + i + ' = 0';
+        }
+        return l;
+      });
+      fs.writeFileSync(cfgPath, lines.join('\n'));
+      console.log('[DOLPHIN] GameCube ports off for this Wii game');
+    } catch (e) { console.log('[DOLPHIN] Could not turn GameCube ports off:', e.message); }
+  }
+
   _askWiiLaunchChoice(profile) {
     return new Promise((resolve) => {
       let electron;
@@ -1129,6 +1146,7 @@ class DolphinBridge {
     // FIX_2026-10-31_WII_LAUNCH_SCREEN: the launch screen waits for the player.
     // A starts the game; B goes back and Dolphin never starts.
     if (wiiProfile) {
+      this._gcPortsOffForWii(); // FIX_2026-10-31_WII_GC_PORTS_OFF
       const choice = await this._askWiiLaunchChoice(wiiProfile);
       if (choice === 'cancel') {
         console.log('[DOLPHIN] Player went back from the Wii launch screen');

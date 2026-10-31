@@ -95,7 +95,7 @@ const SHARED_EXTENSIONS = {
 // BLOCKED_ALWAYS — no support planned or untested; hidden on every platform.
 // BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
 // To restore a system, remove it from the relevant set.
-const BLOCKED_ALWAYS = new Set(['msdos','wiiu','3ds']); // FIX_2026-10-31_SATURN_ON: saturn unblocked (Yabause core) // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
+const BLOCKED_ALWAYS = new Set(['msdos','wiiu','3ds','saturn']); // FIX_2026-10-31_SATURN_OFF: blocked until Saturn BIOS support; // FIX_2026-10-31_SATURN_ON: saturn unblocked (Yabause core) // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
 const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WINDOWS: ps2 unblocked
 function isSystemBlocked(system) {
   if (!system) return false;
