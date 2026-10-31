@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   onGameStarted: (callback) => ipcRenderer.on('game-started', () => callback()),
   onGameExited:  (callback) => ipcRenderer.on('game-exited',  () => callback()),
   onDolphinLaunchInfo: (callback) => ipcRenderer.on('dolphin-launch-info', (_e, info) => callback(info)), // FIX_2026-10-28_WII_TUNE
+  sendDolphinLaunchChoice: (id, choice) => ipcRenderer.send('dolphin-launch-choice', { id, choice }), // FIX_2026-10-31_WII_LAUNCH_SCREEN
   // FIX_2026-09-29_NINTENDO_RELAUNCH
   relaunchForController: () => ipcRenderer.invoke('app:relaunchForController'),
   findDuckStation: () => ipcRenderer.invoke('bridge:findDuckStation'),

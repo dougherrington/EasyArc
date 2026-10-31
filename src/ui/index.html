@@ -967,6 +967,11 @@ body::after {
           <div class="setting-info"><div class="setting-name">Auto-configure Known Controllers</div><div class="setting-desc">Automatically set up DualShock, Switch Pro, and Xbox controllers.</div></div>
           <div class="setting-control"><label class="toggle"><input type="checkbox" checked id="autoConfigToggle"><span class="toggle-slider"></span></label></div>
         </div>
+        <!-- FIX_2026-10-31_WII_LAUNCH_SCREEN -->
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Wii Controls Screen</div><div class="setting-desc">Show the button map before each Wii game starts.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" checked id="wiiLaunchScreenToggle" onchange="wiiLsSetEnabled(this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">Default Player Count</div><div class="setting-desc">How many players to configure when launching a game.</div></div>
           <div class="setting-control"><select class="setting-select" id="defaultPlayerCount"><option selected>1 Player</option><option>2 Players</option><option>3 Players</option><option>4 Players</option></select></div>
@@ -3404,6 +3409,207 @@ async function n64EnsureReadyAndLaunch(game) {
   await rmgLaunchWithCache(game.path);
 }
 
+// ── WII LAUNCH SCREEN, part 2 of 4: settings and button maps (FIX_2026-10-31_WII_LAUNCH_SCREEN) ──
+// Before a Wii game starts: box art, controller type and a button map for the player's
+// controller. A starts, B goes back, Y toggles "Don't show this again" (one setting for
+// all Wii games; the Advanced page turns it back on).
+const WII_LS_OFF_KEY = 'ea_wii_launch_screen_off';
+function wiiLsEnabled() {
+  try { return localStorage.getItem(WII_LS_OFF_KEY) !== '1'; } catch (e) { return true; }
+}
+function wiiLsSetEnabled(on) {
+  try { if (on) localStorage.removeItem(WII_LS_OFF_KEY); else localStorage.setItem(WII_LS_OFF_KEY, '1'); } catch (e) {}
+  const t = document.getElementById('wiiLaunchScreenToggle');
+  if (t) t.checked = !!on;
+}
+function wiiLsSyncToggle() {
+  const t = document.getElementById('wiiLaunchScreenToggle');
+  if (t) t.checked = wiiLsEnabled();
+}
+document.addEventListener('DOMContentLoaded', wiiLsSyncToggle);
+setTimeout(wiiLsSyncToggle, 0);
+
+function wiiLsKind(type) {
+  if (type === 'switch') return 'pro';
+  if (type === 'ds4' || type === 'dualsense' || type === 'ds3') return 'ps';
+  return 'xbox';
+}
+// Button names by position: S/E/W/N = bottom/right/left/top face buttons
+const WII_LS_LABELS = {
+  xbox: { S:'A',     E:'B',      W:'X',      N:'Y',        LB:'LB', RB:'RB', LT:'LT', RT:'RT', start:'Menu',    back:'View' },
+  ps:   { S:'Cross', E:'Circle', W:'Square', N:'Triangle', LB:'L1', RB:'R1', LT:'L2', RT:'R2', start:'Options', back:'Share' },
+  pro:  { S:'B',     E:'A',      W:'Y',      N:'X',        LB:'L',  RB:'R',  LT:'ZL', RT:'ZR', start:'+',       back:'−' },
+};
+// Buttons that start / go back / toggle on this screen (gamepad button numbers)
+const WII_LS_KEYS = { xbox: { start:0, back:1, toggle:3 }, ps: { start:0, back:1, toggle:3 }, pro: { start:1, back:0, toggle:2 } };
+const WII_LS_FOOT = { xbox: ['A', 'B', 'Y'], ps: ['Cross', 'Circle', 'Triangle'], pro: ['A', 'B', 'Y'] };
+
+function wiiLsRows(profile, kind) {
+  const L = WII_LS_LABELS[kind] || WII_LS_LABELS.xbox;
+  // FIX_2026-10-31_PRO_AB_SWAP: on a Pro, Wii A/B sit on the buttons labeled A/B
+  const aBtn = kind === 'pro' ? L.E : L.S;
+  const bBtn = kind === 'pro' ? L.S : L.E;
+  const plus = L.start + ' / ' + L.back;
+  if (profile === 'Classic') return [
+    [aBtn, 'A'], [bBtn, 'B'], [L.W, 'X'], [L.N, 'Y'],
+    [L.LB, 'ZL'], [L.RB, 'ZR'], [L.LT, 'L'], [L.RT, 'R'],
+    ['Left stick', 'Left stick'], ['Right stick', 'Right stick'], ['D-pad', 'D-pad'], [plus, '+ / −'],
+  ];
+  if (profile === 'Sideways') return [
+    ['D-pad', 'Move'],
+    [L.N, 'Wii 2 — jump / confirm'],
+    [L.W, 'Wii 1 — run / action'],
+    [aBtn, 'Wii A'], [bBtn, 'Wii B'],
+    [L.RB, 'Shake'],
+    ['Left stick', 'Tilt (steering)'],
+    ['Right stick', 'Pointer'],
+    [plus, 'Wii + / −'],
+  ];
+  return [
+    ['Left stick', 'Move (Nunchuk stick)'],
+    [aBtn, 'Wii A — main action'],
+    [bBtn, 'Wii B — trigger'],
+    [L.LT, 'Z'], [L.LB, 'C'],
+    [L.W, 'Wii 1'], [L.N, 'Wii 2'],
+    [L.RB, 'Shake'],
+    ['Right stick', 'Pointer'],
+    ['D-pad', 'Wii D-pad'],
+    [plus, 'Wii + / −'],
+  ];
+}
+
+function wiiLsChip(text) {
+  const c = document.createElement('span');
+  c.textContent = text;
+  c.style.cssText = 'display:inline-block;text-align:center;min-width:110px;padding:3px 12px;border-radius:8px;' +
+    'background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);font-weight:700;white-space:nowrap;';
+  return c;
+}
+
+// ── WII LAUNCH SCREEN, part 3 of 4: the screen itself (FIX_2026-10-31_WII_LAUNCH_SCREEN) ──
+function wiiLsShow(opts) {
+  const kind = wiiLsKind(opts.ctype);
+  const foot = WII_LS_FOOT[kind];
+  let dontShow = false;
+  let active = true;
+  const gate = { start: true, back: true, toggle: true }; // buttons held from launching must be released first
+
+  const ov = document.createElement('div');
+  ov.id = 'wiiLaunchScreen';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;overflow:hidden;background:#0a0a0f;color:#fff;font-family:Rajdhani,Orbitron,sans-serif;';
+  const art = getArtUrl(opts.game);
+  const bg = document.createElement('div');
+  if (art) {
+    bg.style.cssText = 'position:absolute;inset:-60px;background-position:center;background-size:cover;background-repeat:no-repeat;filter:blur(30px) brightness(0.32) saturate(1.2);';
+    bg.style.backgroundImage = 'url("' + String(art).replace(/"/g, '%22') + '")';
+  } else {
+    bg.style.cssText = 'position:absolute;inset:0;background:radial-gradient(ellipse at center,' + ((typeof systemColors !== 'undefined' && systemColors.wii) || '#1a2a3a') + 'cc 0%,#0a0a0f 75%);';
+  }
+  ov.appendChild(bg);
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;height:100%;display:flex;align-items:center;justify-content:center;gap:5vw;padding:4vh 5vw;box-sizing:border-box;';
+  ov.appendChild(wrap);
+  if (art) {
+    const img = document.createElement('img');
+    img.src = art;
+    img.style.cssText = 'max-height:70vh;max-width:30vw;object-fit:contain;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,0.65);';
+    wrap.appendChild(img);
+  }
+  const panel = document.createElement('div');
+  panel.style.cssText = 'min-width:min(560px,90vw);max-width:700px;';
+  wrap.appendChild(panel);
+
+  const tag = document.createElement('div');
+  tag.textContent = 'Wii · Controls';
+  tag.style.cssText = 'font-size:clamp(13px,1.8vh,18px);letter-spacing:3px;text-transform:uppercase;color:var(--cyan);margin-bottom:0.6vh;';
+  panel.appendChild(tag);
+  const title = document.createElement('div');
+  title.textContent = opts.game.title;
+  title.style.cssText = 'font-size:clamp(28px,4.4vh,48px);font-weight:700;line-height:1.1;';
+  panel.appendChild(title);
+  const prof = document.createElement('div');
+  prof.textContent = 'Controller: ' + opts.profileName;
+  prof.style.cssText = 'font-size:clamp(17px,2.6vh,26px);color:var(--yellow);margin-top:0.8vh;';
+  panel.appendChild(prof);
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:auto 1fr;gap:1vh 18px;align-items:center;margin-top:3vh;font-size:clamp(15px,2.3vh,23px);';
+  for (const [btn, action] of wiiLsRows(opts.profile, kind)) {
+    grid.appendChild(wiiLsChip(btn));
+    const a = document.createElement('span');
+    a.textContent = action;
+    a.style.cssText = 'opacity:0.92;';
+    grid.appendChild(a);
+  }
+  panel.appendChild(grid);
+
+  const footer = document.createElement('div');
+  footer.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:14px 30px;margin-top:3.6vh;font-size:clamp(16px,2.4vh,24px);';
+  panel.appendChild(footer);
+  const note = document.createElement('div');
+  note.style.cssText = 'margin-top:1.2vh;font-size:clamp(13px,1.9vh,18px);opacity:0.65;min-height:1.4em;';
+  panel.appendChild(note);
+
+  const footItem = (label, text, onClick) => {
+    const s = document.createElement('span');
+    s.style.cssText = 'display:inline-flex;align-items:center;gap:10px;cursor:pointer;';
+    s.appendChild(wiiLsChip(label));
+    const x = document.createElement('span');
+    x.textContent = text;
+    s.appendChild(x);
+    s.onclick = onClick;
+    return s;
+  };
+  function renderFooter() {
+    footer.textContent = '';
+    footer.appendChild(footItem(foot[0], 'Start', () => finish('start')));
+    footer.appendChild(footItem(foot[1], 'Back', () => finish('cancel')));
+    footer.appendChild(footItem(foot[2], (dontShow ? '☑' : '☐') + ' Don’t show this again', toggle));
+    note.textContent = dontShow ? 'You can turn this screen back on in Advanced Options.' : '';
+  }
+  function toggle() { dontShow = !dontShow; wiiLsSetEnabled(!dontShow); renderFooter(); }
+  function finish(choice) {
+    if (!active) return;
+    active = false;
+    window.removeEventListener('keydown', onKey, true);
+    ov.remove();
+    if (typeof GP_NAV !== 'undefined') GP_NAV.lgGate = { a: true, b: true, x: true };
+    opts.onChoice(choice);
+  }
+  function onKey(e) {
+    const k = e.key;
+    let handled = true;
+    if (k === 'Enter' || k === ' ') finish('start');
+    else if (k === 'Escape' || k === 'Backspace') finish('cancel');
+    else if (k === 'y' || k === 'Y') toggle();
+    else handled = false;
+    if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }
+  function poll() {
+    if (!active) return;
+    const pads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    let s = false, b = false, y = false;
+    for (const gp of pads) {
+      const p = ctrlGetProfile(gp.id || '');
+      const m = WII_LS_KEYS[wiiLsKind(p && p.type)];
+      const pr = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+      s = s || pr(m.start); b = b || pr(m.back); y = y || pr(m.toggle);
+    }
+    if (!s) gate.start = false;
+    if (!b) gate.back = false;
+    if (!y) gate.toggle = false;
+    if (s && !gate.start) { finish('start'); return; }
+    if (b && !gate.back)  { finish('cancel'); return; }
+    if (y && !gate.toggle) { gate.toggle = true; toggle(); }
+    requestAnimationFrame(poll);
+  }
+  renderFooter();
+  window.addEventListener('keydown', onKey, true);
+  document.body.appendChild(ov);
+  requestAnimationFrame(poll);
+}
+
 async function gamecubeEnsureReadyAndLaunch(game) {
   console.log('[GC-FLOW] gamecubeEnsureReadyAndLaunch called for', game && game.title);
   console.log('[GC-FLOW] ROM path:', game && game.path);
@@ -3471,12 +3677,22 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   }
   if (window.easyarc.onDolphinLaunchInfo && !window.__eaDolphinInfoHooked) {
     window.__eaDolphinInfoHooked = true;
-    window.easyarc.onDolphinLaunchInfo((info) => { if (window.__eaOnDolphinInfo) window.__eaOnDolphinInfo(info); });
+    window.easyarc.onDolphinLaunchInfo((info) => { if (window.__eaOnDolphinInfo) window.__eaOnDolphinInfo(info); else if (info && info.id && window.easyarc.sendDolphinLaunchChoice) window.easyarc.sendDolphinLaunchChoice(info.id, 'start'); }); // FIX_2026-10-31_WII_LAUNCH_SCREEN: never leave Dolphin waiting
   }
   window.__eaOnDolphinInfo = (info) => {
     clearTimeout(_unpackTimer);
     const _name = info && _WII_PROFILE_NAMES[info.profile];
-    if (_name) _showLaunchOverlay('Launching ' + game.title + ' \u2014 ' + _name);
+    // FIX_2026-10-31_WII_LAUNCH_SCREEN, part 4 of 4: the screen waits for the player (A start, B back)
+    const _reply = (choice) => { if (info && info.id && window.easyarc.sendDolphinLaunchChoice) window.easyarc.sendDolphinLaunchChoice(info.id, choice); };
+    const _launching = () => { if (_name) _showLaunchOverlay('Launching ' + game.title + ' — ' + _name); };
+    if (_name && info.id && wiiLsEnabled()) {
+      if (_launchOverlay) { _launchOverlay.remove(); _launchOverlay = null; }
+      wiiLsShow({ game: game, profile: info.profile, profileName: _name, ctype: detectedControllerType,
+        onChoice: (choice) => { if (choice === 'start') _launching(); _reply(choice); } });
+    } else {
+      _launching();
+      setTimeout(() => _reply('start'), 1000); // screen turned off: brief message, as before
+    }
   };
   let result;
   try {
@@ -3489,6 +3705,7 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   window.__eaOnDolphinInfo = null;
   if (_launchOverlay) _launchOverlay.remove();
   if (!result.success) window.__easyarcGameRunning = false;
+  if (result.cancelled) { console.log('[GC-FLOW] Player went back from the Wii launch screen'); return; } // FIX_2026-10-31_WII_LAUNCH_SCREEN
   console.log('[GC-FLOW] launchDolphin returned:', JSON.stringify(result));
   if (result.success) {
     showToast('Launching ' + game.title + '...');

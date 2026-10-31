@@ -955,7 +955,7 @@ class DolphinBridge {
       if (t === 'switch') device = `SDL/${count.pro++}/Nintendo Switch Pro Controller`;
       else if (t === 'ds4' || t === 'dualsense' || t === 'ds3') device = `SDL/${count.ps++}/PS4 Controller`;
       else device = `SDL/0/XInput Controller #${++count.xbox}`;
-      out.push('Device = ' + device, ...body, 'Source = 1');
+      out.push('Device = ' + device, ...(t === 'switch' ? this._swapWiiAB(body) : body), 'Source = 1'); // FIX_2026-10-31_PRO_AB_SWAP
       devices.push(device);
     }
     out.push('[BalanceBoard]', 'Device = DInput/0/Keyboard Mouse', 'Source = 0');
@@ -965,6 +965,40 @@ class DolphinBridge {
     fs.writeFileSync(path.join(cfgDir, 'WiimoteNew.ini'), out.join('\n') + '\n');
     console.log('[DOLPHIN] Wrote WiimoteNew.ini:', profile, '| controllers:', JSON.stringify(types), '| devices:', devices.join(' ; '));
     return profile;
+  }
+
+  // FIX_2026-10-31_PRO_AB_SWAP: on a Pro Controller, put Wii A and B on the buttons
+  // labeled A and B (per player, so Xbox and PlayStation pads are unaffected).
+  _swapWiiAB(lines) {
+    return lines.map((l) => {
+      if (l === 'Buttons/A = `Button S`' || l === 'Classic/Buttons/A = `Button S`') return l.replace('`Button S`', '`Button E`');
+      if (l === 'Buttons/B = `Button E`' || l === 'Classic/Buttons/B = `Button E`') return l.replace('`Button E`', '`Button S`');
+      return l;
+    });
+  }
+
+  // FIX_2026-10-31_WII_LAUNCH_SCREEN: tell the screen which profile was picked, then wait
+  // for the player's choice ('start' or 'cancel'). Starts at once if no window is open.
+  _askWiiLaunchChoice(profile) {
+    return new Promise((resolve) => {
+      let electron;
+      try { electron = require('electron'); } catch (e) { resolve('start'); return; }
+      const { ipcMain, BrowserWindow } = electron;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const onChoice = (_e, msg) => {
+        if (!msg || msg.id !== id) return;
+        ipcMain.removeListener('dolphin-launch-choice', onChoice);
+        resolve(msg.choice === 'cancel' ? 'cancel' : 'start');
+      };
+      ipcMain.on('dolphin-launch-choice', onChoice);
+      let sent = 0;
+      try {
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) { w.webContents.send('dolphin-launch-info', { profile, id }); sent++; }
+        }
+      } catch (e) { console.log('[DOLPHIN] launch-info send failed:', e.message); }
+      if (!sent) { ipcMain.removeListener('dolphin-launch-choice', onChoice); resolve('start'); }
+    });
   }
 
   // FIX_2026-10-27_DOLPHIN_ZIP: zipped Wii/GameCube games (.zip/.7z) are unpacked
@@ -1092,14 +1126,14 @@ class DolphinBridge {
     }
     // FIX_2026-10-28_WII_TUNE: tell the screen which controller profile was picked,
     // then hold Dolphin back one second so the message can be read.
+    // FIX_2026-10-31_WII_LAUNCH_SCREEN: the launch screen waits for the player.
+    // A starts the game; B goes back and Dolphin never starts.
     if (wiiProfile) {
-      try {
-        const { BrowserWindow } = require('electron');
-        for (const w of BrowserWindow.getAllWindows()) {
-          if (!w.isDestroyed()) w.webContents.send('dolphin-launch-info', { profile: wiiProfile });
-        }
-      } catch (e) { console.log('[DOLPHIN] launch-info send failed:', e.message); }
-      await new Promise((r) => setTimeout(r, 1000));
+      const choice = await this._askWiiLaunchChoice(wiiProfile);
+      if (choice === 'cancel') {
+        console.log('[DOLPHIN] Player went back from the Wii launch screen');
+        return { success: false, cancelled: true };
+      }
     }
 
     const cwd = path.dirname(binaryPath);
