@@ -678,6 +678,11 @@ body::after {
 .toolbar-btn:hover, .toolbar-btn:focus { background:var(--cyan); color:#fff; border-color:var(--cyan); box-shadow:0 0 24px rgba(0,240,255,0.6); transform:translateY(-1px); }
 .toolbar-add    { border-color:var(--green); box-shadow:0 0 8px rgba(0,255,136,0.15); }
 .toolbar-remove { border-color:var(--accent); box-shadow:0 0 8px rgba(255,0,80,0.15); }
+/* FIX_2026-10-31_HELP_BUTTON: yellow Help button, same size as Map Controllers */
+.toolbar-help { display:inline-grid; place-items:center; color:var(--yellow); border-color:var(--yellow); box-shadow:0 0 8px rgba(255,230,0,0.25); }
+.toolbar-help > span { grid-area:1 / 1; }
+.toolbar-help .help-sizer { visibility:hidden; }
+.toolbar-help:hover, .toolbar-help:focus { background:var(--yellow); color:#001018; border-color:var(--yellow); box-shadow:0 0 24px rgba(255,230,0,0.6); }
 .toolbar-center-btn { font-size:20px; padding:0 40px; align-self:stretch; height:auto; }
 /* FIX_2026-10-26_SYSTEM_NAME_LABEL */
 .system-name-label { position:absolute; transform:translate(-50%, -50%); font-size:18px; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:1px; white-space:nowrap; pointer-events:none; user-select:none; } /* FIX_2026-10-26_SYSTEM_NAME_POSITION */
@@ -791,7 +796,8 @@ body::after {
       <button class="toolbar-btn toolbar-center-btn" id="getArtBtn" onclick="playClick();artBtnClick()">&#x1f5bc; Get Game Art & Info</button><span id="scrapeLed" class="scrape-led"></span><span id="scrapeCount" class="scrape-count"></span>
     </div>
     <div class="toolbar-right">
-      <button class="toolbar-btn nav-btn" onclick="playClick();showView('controller')">&#x1f3ae; Map Controllers</button>
+      <!-- FIX_2026-10-31_HELP_BUTTON: Help replaces Map Controllers; the hidden label keeps the button at its original width -->
+      <button class="toolbar-btn nav-btn toolbar-help" onclick="playClick();openHelp()"><span class="help-sizer" aria-hidden="true">&#x1f3ae; Map Controllers</span><span class="help-label">&#x2754; Help</span></button>
       <button class="toolbar-btn nav-btn" onclick="playClick();showView('settings')">&#x2699; Advanced Options</button>
       <button class="toolbar-btn nav-btn active" onclick="showView('library')" style="display:none">Library</button>
     </div>
@@ -989,6 +995,8 @@ body::after {
     <div class="ctrl-hint"><span class="ctrl-key">Y</span> Favorite</div>
     <!-- FIX_2026-09-29_HINT_LETTER_GRID -->
     <div class="ctrl-hint"><span class="ctrl-key">X</span> Jump to Letter</div>
+    <!-- FIX_2026-10-31_SEARCH_KB -->
+    <div class="ctrl-hint"><span class="ctrl-key">LT</span> Search</div>
     <div class="ctrl-hint"><span class="ctrl-key">START</span> Menu</div>
     <div class="bottombar-status" id="bottombarStatus">No controller detected</div>
   </footer>
@@ -1980,6 +1988,9 @@ function filterSystem(sys, btn) {
   closeDetail();
   renderGrid();
 }
+
+// FIX_2026-10-31_HELP_BUTTON: open the EasyArc help page in the user's browser
+function openHelp() { if (window.easyarc && window.easyarc.openHelp) window.easyarc.openHelp(); }
 
 function filterSearch(val) { currentSearch = val; if (val) showView('library'); renderGrid(); }
 function closeDetail() {
@@ -3989,6 +4000,11 @@ const GP_NAV = {
   inTopNav:     false,
   inToolbar:    false,
   inLetterGrid: false,
+  // FIX_2026-10-31_SEARCH_KB: on-screen search keyboard state
+  inSearchKb:   false,
+  skIdx:        0,
+  skGate:       { a:false, b:false, lt:false },
+  ltGate:       false,
   letterIdx:    0,
   // Buttons held across a letter-grid open/close must be released before they act again
   lgGate:       { a:false, b:false, x:false },
@@ -4239,6 +4255,9 @@ function gpHandleInput(gp) {
   const l1    = btns[GPB.l1].pressed;
   const r1    = btns[GPB.r1].pressed;
   const start = btns[GPB.start].pressed;
+  // FIX_2026-10-31_SEARCH_KB: LT opens the search keyboard
+  if (!btns[GPB.l2].pressed) GP_NAV.ltGate = false;
+  const ltBtn = btns[GPB.l2].pressed && !GP_NAV.ltGate;
 
   if (up || down || left || right) gpActivate();
 
@@ -4449,6 +4468,8 @@ function gpHandleInput(gp) {
 
   // X — open the letter grid
   if (gpShouldFire("xOpen", xBtn)) { openLetterGrid(); return; }
+  // FIX_2026-10-31_SEARCH_KB: LT — open the search keyboard
+  if (gpShouldFire("ltOpen", ltBtn)) { openSearchKb(); return; }
 
   // L1/R1 — cycle systems from anywhere
   if (gpShouldFire("l1", l1)) {
@@ -4701,6 +4722,133 @@ function letterGridInput(gp) {
   if (gpShouldFire('lgX', lgX)) closeLetterGrid();
 }
 
+// ── SEARCH KEYBOARD (FIX_2026-10-31_SEARCH_KB) ────────────────────────────
+// LT opens an on-screen keyboard that types into the search box; the library
+// filters as you type. D-pad/stick moves, A selects. Delete, Clear and Done are
+// keys on the grid. Done or LT closes and lands on the first match; B just closes.
+const SK_KEYS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+                 '0','1','2','3','4','5','6','7','8','9','SPACE','DELETE','CLEAR','DONE'];
+const SK_COLS = 6;
+
+function skEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Count matches directly: renderGrid leaves vsFilteredList unchanged when nothing matches
+function skMatchCount() {
+  const q = (currentSearch || '').toLowerCase();
+  if (!q) return null;
+  return games.filter(g => (currentSystem === 'all' || g.system === currentSystem) &&
+    (g.title || '').toLowerCase().includes(q)).length;
+}
+
+function skSetSearch(text) {
+  const inp = document.getElementById('searchInput');
+  if (inp) inp.value = text;
+  filterSearch(text);
+}
+
+function skPress(i) {
+  const key = SK_KEYS[i];
+  if (key === undefined) return;
+  GP_NAV.skIdx = i;
+  if (key === 'DONE') { closeSearchKb(true); return; }
+  let text = currentSearch || '';
+  if (key === 'SPACE')       { if (text && !text.endsWith(' ')) text += ' '; }
+  else if (key === 'DELETE') { text = text.slice(0, -1); }
+  else if (key === 'CLEAR')  { text = ''; }
+  else                       { text += key; }
+  skSetSearch(text);
+  renderSearchKb();
+}
+
+function renderSearchKb() {
+  let el = document.getElementById('searchKbOverlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'searchKbOverlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);';
+    el.onclick = (e) => { if (e.target === el) closeSearchKb(false); };
+    document.body.appendChild(el);
+  }
+  const cells = SK_KEYS.map((k, i) => {
+    const sel = i === GP_NAV.skIdx;
+    const word = k.length > 1;
+    return '<div onclick="skPress(' + i + ')" style="cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+      'min-width:64px;height:56px;padding:0 6px;border-radius:10px;font-family:Rajdhani,sans-serif;' +
+      'font-size:' + (word ? '15px' : '24px') + ';font-weight:700;letter-spacing:' + (word ? '1px' : '0') + ';' +
+      'background:' + (sel ? 'var(--cyan)' : (word ? 'rgba(0,240,255,0.10)' : 'rgba(255,255,255,0.06)')) + ';' +
+      'color:' + (sel ? '#001018' : '#fff') + ';' +
+      'border:1px solid ' + (sel ? 'var(--cyan)' : 'rgba(255,255,255,0.12)') + ';">' + k + '</div>';
+  }).join('');
+  const text = currentSearch || '';
+  const count = skMatchCount();
+  el.innerHTML =
+    '<div style="background:#0b1a24;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px 32px;">' +
+    '<div style="font-family:Rajdhani,sans-serif;font-size:15px;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:12px;text-align:center;">Search</div>' +
+    '<div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:#fff;min-height:36px;padding:4px 12px;margin-bottom:6px;' +
+      'border-bottom:2px solid var(--cyan);text-align:center;white-space:pre;">' +
+      (text ? skEsc(text) : '<span style="opacity:0.45;font-weight:500;">Type to search...</span>') + '</div>' +
+    '<div style="font-family:Rajdhani,sans-serif;font-size:14px;color:rgba(255,255,255,0.6);text-align:center;margin-bottom:16px;min-height:18px;">' +
+      (count === null ? '' : (count === 1 ? '1 game' : count + ' games')) + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(' + SK_COLS + ',1fr);gap:10px;">' + cells + '</div>' +
+    '<div style="font-family:Rajdhani,sans-serif;font-size:14px;color:rgba(255,255,255,0.6);text-align:center;margin-top:16px;letter-spacing:1px;">' +
+      'A Select &nbsp;&middot;&nbsp; B Close &nbsp;&middot;&nbsp; LT Done</div>' +
+    '</div>';
+}
+
+function openSearchKb() {
+  if (GP_NAV.inSearchKb || GP_NAV.inLetterGrid) return;
+  GP_NAV.inSearchKb = true;
+  GP_NAV.skGate = { a:true, b:true, lt:true };
+  GP_NAV.skIdx = 0;
+  renderSearchKb();
+}
+
+function closeSearchKb(jump) {
+  GP_NAV.inSearchKb = false;
+  // Buttons still held at close must be released before the library acts on them
+  GP_NAV.lgGate = { a:true, b:true, x:true };
+  GP_NAV.ltGate = true;
+  const el = document.getElementById('searchKbOverlay');
+  if (el) el.remove();
+  if (!jump) return;
+  if (!skMatchCount()) {
+    if (currentSearch) showToast('No games match "' + currentSearch + '"');
+    return;
+  }
+  GP_NAV.gridIdx = 0;
+  vsScrollToIndex(0);
+  if (typeof gpHighlightCard === 'function') gpHighlightCard(0);
+}
+
+function searchKbInput(gp) {
+  const btns = gp.buttons;
+  const axes = gp.axes;
+  const now = Date.now();
+  const fireUp    = handleDpad('up',    btns[GPB.up].pressed,    now) || handleStick('up',    axes[1] < -GP_NAV.deadzone, now);
+  const fireDown  = handleDpad('down',  btns[GPB.down].pressed,  now) || handleStick('down',  axes[1] >  GP_NAV.deadzone, now);
+  const fireLeft  = handleDpad('left',  btns[GPB.left].pressed,  now) || handleStick('left',  axes[0] < -GP_NAV.deadzone, now);
+  const fireRight = handleDpad('right', btns[GPB.right].pressed, now) || handleStick('right', axes[0] >  GP_NAV.deadzone, now);
+  let moved = false;
+  const last = SK_KEYS.length - 1;
+  if (fireLeft)  { GP_NAV.skIdx = Math.max(0, GP_NAV.skIdx - 1); moved = true; }
+  if (fireRight) { GP_NAV.skIdx = Math.min(last, GP_NAV.skIdx + 1); moved = true; }
+  if (fireUp)    { GP_NAV.skIdx = Math.max(0, GP_NAV.skIdx - SK_COLS); moved = true; }
+  if (fireDown)  { GP_NAV.skIdx = Math.min(last, GP_NAV.skIdx + SK_COLS); moved = true; }
+  if (moved) renderSearchKb();
+  if (!btns[GPB.a].pressed)  GP_NAV.skGate.a  = false;
+  if (!btns[GPB.b].pressed)  GP_NAV.skGate.b  = false;
+  if (!btns[GPB.l2].pressed) GP_NAV.skGate.lt = false;
+  const skA  = btns[GPB.a].pressed  && !GP_NAV.skGate.a;
+  const skB  = btns[GPB.b].pressed  && !GP_NAV.skGate.b;
+  const skLT = btns[GPB.l2].pressed && !GP_NAV.skGate.lt;
+  if (gpShouldFire('skA', skA)) skPress(GP_NAV.skIdx);
+  if (!GP_NAV.inSearchKb) return;
+  if (gpShouldFire('skB', skB))  { closeSearchKb(false); return; }
+  if (gpShouldFire('skLT', skLT)) closeSearchKb(true);
+}
+
 function gpNavPoll() {
   // FIX_2026-06-19_PSP_LIFECYCLE: when a game is running, the gamepad nav loop is
   // HARD-DISABLED — no navigation, no launching, no exit-combo handling here. The
@@ -4734,6 +4882,13 @@ function gpNavPoll() {
     requestAnimationFrame(gpNavPoll);
     return;
   }
+  // FIX_2026-10-31_SEARCH_KB: search keyboard owns input while open
+  if (GP_NAV.inSearchKb) {
+    const skPads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+    for (const gp of skPads) { searchKbInput(gp); break; }
+    requestAnimationFrame(gpNavPoll);
+    return;
+  }
   // Letter grid owns input while open
   if (GP_NAV.inLetterGrid) {
     const lgPads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
@@ -4763,6 +4918,7 @@ gpNavPoll();
 document.addEventListener("keydown", (e) => {
   // Don't intercept when typing in search box
   if (document.activeElement === document.getElementById("searchInput")) return;
+  if (GP_NAV.inSearchKb) return; // FIX_2026-10-31_SEARCH_KB
   // Don't intercept when a modal is open
   if (!document.getElementById("frwOverlay").classList.contains("hidden")) return;
   if (!document.getElementById("ctrlModal").classList.contains("hidden")) return;
@@ -4886,6 +5042,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'atari7800',   name:'Atari 7800' },
   { id:'pcengine',    name:'TurboGrafx-16' }, // FIX_2026-10-17_PCENGINE
   { id:'supergrafx',  name:'SuperGrafx' },
+  { id:'saturn',      name:'Sega Saturn' }, // FIX_2026-10-31_SATURN_ON
   { id:'dreamcast',   name:'Sega Dreamcast' }, // FIX_2026-10-17_DREAMCAST
 ];
 

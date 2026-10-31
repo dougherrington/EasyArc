@@ -95,7 +95,7 @@ const SHARED_EXTENSIONS = {
 // BLOCKED_ALWAYS — no support planned or untested; hidden on every platform.
 // BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
 // To restore a system, remove it from the relevant set.
-const BLOCKED_ALWAYS = new Set(['msdos','wiiu','saturn','3ds']); // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
+const BLOCKED_ALWAYS = new Set(['msdos','wiiu','3ds']); // FIX_2026-10-31_SATURN_ON: saturn unblocked (Yabause core) // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
 const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WINDOWS: ps2 unblocked
 function isSystemBlocked(system) {
   if (!system) return false;
@@ -174,7 +174,7 @@ const CORE_REMAP_FOLDERS = {
   psx:         'DuckStation',
   ps2:         'PCSX2',
   psp:         'PPSSPP',
-  saturn:      'Beetle Saturn',
+  saturn:      'Yabause', // FIX_2026-10-31_SATURN_ON
   mame:        'MAME',
   mame2003:    'MAME 2003-Plus',
   arcade:      'FinalBurn Neo',
@@ -240,7 +240,7 @@ const SYSTEM_CORES = {
   psx:          'mednafen_psx_libretro.dylib',
   ps2:          'pcsx2_libretro.dylib',
   psp:          'ppsspp_libretro.dylib',
-  saturn:       'mednafen_saturn_libretro.dylib',
+  saturn:       'yabause_libretro.dylib', // FIX_2026-10-31_SATURN_ON: runs without a BIOS
   dreamcast:    'flycast_libretro.dylib',
   gamecube:     'dolphin_libretro.dylib',
   atari2600:    'stella_libretro.dylib',

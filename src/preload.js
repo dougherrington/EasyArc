@@ -63,4 +63,5 @@ contextBridge.exposeInMainWorld('easyarc', {
   // FIX_2026-06-07_DOLPHIN_DETECTION_RESTORE: pass controllerType through IPC
   launchDolphin: (romPath, controllerType, controllerTypes) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType, controllerTypes),
   openScreenScraperSignup: () => ipcRenderer.invoke('app:openScreenScraperSignup'), // FIX_2026-10-10_SS_SETUP
+  openHelp: () => ipcRenderer.invoke('app:openHelp'), // FIX_2026-10-31_HELP_BUTTON
 });

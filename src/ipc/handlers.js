@@ -324,6 +324,9 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   });
 
   // FIX_2026-10-10_SS_SETUP: open the ScreenScraper sign-up page (fixed address only)
+  // FIX_2026-10-31_HELP_BUTTON: Help button address (fixed). Change here to point at the FAQ page.
+  handle('app:openHelp', () => require('electron').shell.openExternal('https://easyarc.net'));
+
   handle('app:openScreenScraperSignup', () => require('electron').shell.openExternal('https://www.screenscraper.fr/membreinscription.php#:~:text=Nickname%20between%204%20and%2025')); // FIX_2026-10-10_POLISH: jump to the form
 }
 
