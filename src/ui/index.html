@@ -778,7 +778,7 @@ body::after {
     <!-- TOPBAR -->
   <header class="titlebar">
     <img src="easyarc_logo.webp" alt="EasyArc" style="height:38px;width:auto;object-fit:contain;">
-    <div class="titlebar-status">
+    <!-- FIX_2026-11-01_NO_RA_STATUS: emulator status hidden --><div class="titlebar-status" style="display:none">
       <div class="status-dot"></div>
       <span class="status-text" id="statusText">Checking...</span>
     </div>
@@ -1868,7 +1868,7 @@ function _populateDetailFromGame(game) {
     if (ssGenre)              rows.push('<div class="meta-item"><div class="meta-label">Genre</div><div class="meta-value">' + ssGenre + '</div></div>');
     if (meta && meta.annee)   rows.push('<div class="meta-item"><div class="meta-label">Year</div><div class="meta-value">' + meta.annee + '</div></div>');
     if (ssPublisher)          rows.push('<div class="meta-item"><div class="meta-label">Publisher</div><div class="meta-value">' + ssPublisher + '</div></div>');
-    if (meta && meta.joueurs) rows.push('<div class="meta-item"><div class="meta-label">Players</div><div class="meta-value">' + meta.joueurs + '</div></div>');
+    { const _pl = (meta && meta.joueurs) ? (typeof meta.joueurs === 'object' ? meta.joueurs.text : meta.joueurs) : null; if (_pl) rows.push('<div class="meta-item"><div class="meta-label">Players</div><div class="meta-value">' + _pl + '</div></div>'); } // FIX_2026-11-01_PLAYERS_TEXT
     const synopsis = ssSynopsis || 'Game description not available.';
     rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text);">' + synopsis + '</div></div>');
     if (rows.length === 0)    rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
@@ -3063,7 +3063,7 @@ function ctrlShowStartupModal() {
     clearInterval(scanInterval);
     clearInterval(buttonInterval);
     ctrlModalDismiss();
-    setTimeout(() => { ctrlStartupMode = false; }, 800);
+    setTimeout(() => { ctrlStartupMode = false; window.__eaStartupDone = true; }, 800); // FIX_2026-11-01_WHATS_NEW
   }
 
   // Only LET'S PLAY button, ENTER, or A button dismisses
@@ -3652,21 +3652,50 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   // Repeat launches are blocked until Dolphin starts or the launch fails.
   const _isZipped = /\.(zip|7z)$/i.test(game.path || '');
   let _launchOverlay = null;
+  let _launchText = null;
   const _showLaunchOverlay = (mainText, subText) => {
     if (!_launchOverlay) {
+      // FIX_2026-11-01_LAUNCH_ART: same look as the Wii controls screen - blurred box art
+      // behind, the box art itself, and the message on the right.
       _launchOverlay = document.createElement('div');
-      _launchOverlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,15,0.94);color:#fff;font:600 30px Rajdhani,Orbitron,sans-serif;letter-spacing:1px;text-align:center;padding:0 40px;';
+      _launchOverlay.style.cssText = 'position:fixed;inset:0;z-index:99999;overflow:hidden;background:#0a0a0f;color:#fff;font:600 30px Rajdhani,Orbitron,sans-serif;letter-spacing:1px;';
+      const _art = getArtUrl(game);
+      const _bg = document.createElement('div');
+      if (_art) {
+        _bg.style.cssText = 'position:absolute;inset:-60px;background-position:center;background-size:cover;background-repeat:no-repeat;filter:blur(30px) brightness(0.32) saturate(1.2);';
+        _bg.style.backgroundImage = 'url("' + String(_art).replace(/"/g, '%22') + '")';
+      } else {
+        _bg.style.cssText = 'position:absolute;inset:0;background:radial-gradient(ellipse at center,' + ((typeof systemColors !== 'undefined' && systemColors[game.system]) || '#1a2a3a') + 'cc 0%,#0a0a0f 75%);';
+      }
+      _launchOverlay.appendChild(_bg);
+      const _wrap = document.createElement('div');
+      _wrap.style.cssText = 'position:relative;height:100%;display:flex;align-items:center;justify-content:center;gap:5vw;padding:4vh 5vw;box-sizing:border-box;';
+      _launchOverlay.appendChild(_wrap);
+      if (_art) {
+        const _img = document.createElement('img');
+        _img.src = _art;
+        _img.style.cssText = 'max-height:70vh;max-width:30vw;object-fit:contain;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,0.65);';
+        _wrap.appendChild(_img);
+      }
+      _launchText = document.createElement('div');
+      _launchText.style.cssText = 'max-width:700px;text-align:' + (_art ? 'left' : 'center') + ';';
+      _wrap.appendChild(_launchText);
       document.body.appendChild(_launchOverlay);
     }
-    _launchOverlay.textContent = '';
+    _launchText.textContent = '';
+    const _t = document.createElement('div');
+    _t.textContent = (typeof systemNames !== 'undefined' && systemNames[game.system]) || '';
+    _t.style.cssText = 'font-size:clamp(13px,1.8vh,18px);letter-spacing:3px;text-transform:uppercase;color:var(--cyan);margin-bottom:0.8vh;';
+    _launchText.appendChild(_t);
     const _m = document.createElement('div');
     _m.textContent = mainText;
-    _launchOverlay.appendChild(_m);
+    _m.style.cssText = 'font-size:clamp(26px,4vh,44px);font-weight:700;line-height:1.15;';
+    _launchText.appendChild(_m);
     if (subText) {
       const _s = document.createElement('div');
       _s.textContent = subText;
-      _s.style.cssText = 'font-weight:400;font-size:20px;opacity:0.75;margin-top:12px;';
-      _launchOverlay.appendChild(_s);
+      _s.style.cssText = 'font-weight:400;font-size:clamp(16px,2.2vh,22px);opacity:0.75;margin-top:1.4vh;';
+      _launchText.appendChild(_s);
     }
   };
   const _WII_PROFILE_NAMES = { Classic: 'Classic Controller', Sideways: 'Sideways Wii Remote', Nunchuk: 'Wii Remote + Nunchuk' };
@@ -5066,6 +5095,105 @@ function searchKbInput(gp) {
   if (gpShouldFire('skLT', skLT)) closeSearchKb(true);
 }
 
+// FIX_2026-11-01_WHATS_NEW: shown once per release to people updating (new installs skip it),
+// after the Controllers screen closes. Each release: change WN_ID and the pop-up text.
+const WN_ID = '1.0.0-beta.4';
+const WN_EXISTING_USER = (() => { try { return !!localStorage.getItem('easyarc_setup_done'); } catch (e) { return false; } })();
+function whatsNewClose() { document.getElementById('whatsNewModal').classList.add('hidden'); }
+(function whatsNewCheck() {
+  let seen = null;
+  try { seen = localStorage.getItem('ea_whatsnew_seen'); } catch (e) {}
+  if (seen === WN_ID) return;
+  if (!WN_EXISTING_USER) { try { localStorage.setItem('ea_whatsnew_seen', WN_ID); } catch (e) {} return; }
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    const waited = Date.now() - t0;
+    if (waited > 180000) { clearInterval(timer); return; } // try again next launch
+    if (!window.__eaStartupDone && waited < 30000) return;
+    if (ctrlStartupMode || window.__easyarcGameRunning) return;
+    const cm = document.getElementById('ctrlModal');
+    if (cm && !cm.classList.contains('hidden')) return;
+    if (Array.from(document.querySelectorAll('.frw-overlay')).some(o => !o.classList.contains('hidden'))) return;
+    clearInterval(timer);
+    try { localStorage.setItem('ea_whatsnew_seen', WN_ID); } catch (e) {}
+    document.getElementById('whatsNewModal').classList.remove('hidden');
+  }, 500);
+})();
+
+// FIX_2026-11-01_CK_NAV: controller support for the Remove Games and scrape picker pop-ups.
+// Up/Down (or Left/Right) moves, A ticks a box or presses a button, B goes back/closes.
+function ckActiveModal() {
+  for (const id of ['whatsNewModal', 'scrapePickModal', 'removeGamesModal']) { // FIX_2026-11-01_WHATS_NEW
+    const m = document.getElementById(id);
+    if (m && !m.classList.contains('hidden')) return m;
+  }
+  return null;
+}
+function ckClearHighlight() {
+  if (GP_NAV.ckEl) { GP_NAV.ckEl.style.outline = ''; GP_NAV.ckEl.style.outlineOffset = ''; }
+  GP_NAV.ckEl = null;
+}
+function ckNavInput(modal) {
+  const now = Date.now();
+  const pads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+  let dU = false, dD = false, dL = false, dR = false, sU = false, sD = false, sL = false, sR = false, a = false, b = false;
+  for (const gp of pads) {
+    const bt = gp.buttons, ax = gp.axes;
+    dU = dU || !!(bt[GPB.up] && bt[GPB.up].pressed);
+    dD = dD || !!(bt[GPB.down] && bt[GPB.down].pressed);
+    dL = dL || !!(bt[GPB.left] && bt[GPB.left].pressed);
+    dR = dR || !!(bt[GPB.right] && bt[GPB.right].pressed);
+    sU = sU || ax[1] < -GP_NAV.deadzone;
+    sD = sD || ax[1] >  GP_NAV.deadzone;
+    sL = sL || ax[0] < -GP_NAV.deadzone;
+    sR = sR || ax[0] >  GP_NAV.deadzone;
+    a = a || !!(bt[GPB.a] && bt[GPB.a].pressed);
+    b = b || !!(bt[GPB.b] && bt[GPB.b].pressed);
+  }
+  const fireUp    = handleDpad('up', dU, now)    || handleStick('up', sU, now);
+  const fireDown  = handleDpad('down', dD, now)  || handleStick('down', sD, now);
+  const fireLeft  = handleDpad('left', dL, now)  || handleStick('left', sL, now);
+  const fireRight = handleDpad('right', dR, now) || handleStick('right', sR, now);
+  const items = Array.from(modal.querySelectorAll('label, button')).filter(e => e.offsetParent !== null);
+  if (items.length === 0) return;
+  if (items[0] !== GP_NAV.ckFirst) { // pop-up opened or redrawn
+    GP_NAV.ckFirst = items[0];
+    const def = items.findIndex(e => e.hasAttribute('data-ckdefault'));
+    GP_NAV.ckIdx = def >= 0 ? def : 0;
+    ckClearHighlight();
+  }
+  if (fireUp || fireDown || fireLeft || fireRight || a || b) GP_NAV.ckShow = true;
+  if (fireUp || fireLeft)    GP_NAV.ckIdx = Math.max(0, GP_NAV.ckIdx - 1);
+  if (fireDown || fireRight) GP_NAV.ckIdx = Math.min(items.length - 1, GP_NAV.ckIdx + 1);
+  GP_NAV.ckIdx = Math.min(GP_NAV.ckIdx, items.length - 1);
+  const el = items[GP_NAV.ckIdx];
+  if (GP_NAV.ckShow && el !== GP_NAV.ckEl) {
+    ckClearHighlight();
+    el.style.outline = '2px solid var(--cyan)';
+    el.style.outlineOffset = '3px';
+    el.scrollIntoView({ block: 'nearest' });
+    GP_NAV.ckEl = el;
+  }
+  if (!a) GP_NAV.ckGate.a = false;
+  if (!b) GP_NAV.ckGate.b = false;
+  if (a && !GP_NAV.ckGate.a) {
+    GP_NAV.ckGate.a = true;
+    playClick();
+    const cb = el.tagName === 'LABEL' ? el.querySelector('input[type=checkbox]') : null;
+    if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+    else el.click();
+    return;
+  }
+  if (b && !GP_NAV.ckGate.b) {
+    GP_NAV.ckGate.b = true;
+    playClick();
+    if (modal.id === 'removeGamesModal' && window.__rgPending) showRemoveGamesModal();
+    else if (modal.id === 'removeGamesModal') hideRemoveGamesModal();
+    else if (modal.id === 'whatsNewModal') whatsNewClose(); // FIX_2026-11-01_WHATS_NEW
+    else scrapePickClose();
+  }
+}
+
 function gpNavPoll() {
   // FIX_2026-06-19_PSP_LIFECYCLE: when a game is running, the gamepad nav loop is
   // HARD-DISABLED — no navigation, no launching, no exit-combo handling here. The
@@ -5128,6 +5256,20 @@ function gpNavPoll() {
     requestAnimationFrame(gpNavPoll);
     return;
   }
+  // FIX_2026-11-01_CK_NAV: Remove Games / scrape picker own input while open.
+  // Buttons held when a pop-up opens must be released first.
+  const ckModal = ckActiveModal();
+  if (ckModal) {
+    if (!GP_NAV.ckOpen) { GP_NAV.ckOpen = true; GP_NAV.ckGate = { a: true, b: true }; GP_NAV.ckFirst = null; GP_NAV.ckShow = false; GP_NAV.ckIdx = 0; }
+    ckNavInput(ckModal);
+    requestAnimationFrame(gpNavPoll);
+    return;
+  } else if (GP_NAV.ckOpen) {
+    GP_NAV.ckOpen = false;
+    ckClearHighlight();
+    GP_NAV.ckFirst = null;
+    GP_NAV.lgGate = { a: true, b: true, x: true }; // a held A/B must not act on the library
+  }
   // FIX_2026-10-31_SEARCH_KB: search keyboard owns input while open
   if (GP_NAV.inSearchKb) {
     const skPads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
@@ -5165,6 +5307,7 @@ document.addEventListener("keydown", (e) => {
   // Don't intercept when typing in search box
   if (document.activeElement === document.getElementById("searchInput")) return;
   if (GP_NAV.inSearchKb) return; // FIX_2026-10-31_SEARCH_KB
+  if (ckActiveModal()) return; // FIX_2026-11-01_CK_NAV
   // Don't intercept when a modal is open
   if (!document.getElementById("frwOverlay").classList.contains("hidden")) return;
   if (!document.getElementById("ctrlModal").classList.contains("hidden")) return;
@@ -5301,6 +5444,59 @@ function hideInstructionsModal() {
 }
 
 function showGetArtModal() {
+  // FIX_2026-11-01_SCRAPE_PICK: no art yet = first scrape, scrape everything as before.
+  // Once any game has art, let the player choose systems.
+  window.__eaScrapeFilter = null;
+  if (!games.some(g => artworkCache[g.path])) { startScrape(); return; }
+  scrapePickOpen();
+}
+
+function scrapePickOpen() {
+  const modal = document.getElementById('scrapePickModal');
+  const body = document.getElementById('scrapePickBody');
+  const systems = [...new Set(games.filter(g => SCRAPE_SYSTEMS.includes(g.system)).map(g => g.system))].sort();
+  if (systems.length === 0) { showToast('No games in library to scrape.'); return; }
+  body.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;margin-bottom:12px;">' +
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--cyan);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">' +
+    '<input type="checkbox" id="scrapeSelectAll" onchange="scrapePickToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;"> Select All</label>' +
+    '<button class="frw-btn" style="background:rgba(0,229,255,0.15);border:1px solid rgba(0,229,255,0.4);color:var(--cyan);padding:6px 20px;font-size:13px;" onclick="scrapePickGo()">SCRAPE SELECTED</button>' +
+    '</div>' +
+    systems.map(sys => {
+      const missing = games.filter(g => g.system === sys && !artworkCache[g.path]).length;
+      const name = systemNames[sys] || sys;
+      const emoji = systemIcons[sys] || '🎮';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">' +
+        '<label style="display:flex;align-items:center;gap:12px;cursor:pointer;flex:1;">' +
+        '<input type="checkbox" class="scrape-sys-check" data-sys="' + sys + '" style="width:16px;height:16px;cursor:pointer;">' +
+        '<span style="font-size:22px">' + emoji + '</span>' +
+        '<div>' +
+        '<div style="color:#fff;font-size:15px;font-weight:bold;">' + name + '</div>' +
+        '<div style="color:var(--muted);font-size:12px;">' + (missing > 0 ? missing.toLocaleString() + ' game' + (missing !== 1 ? 's' : '') + ' missing art' : 'All games have art') + '</div>' +
+        '</div></label>' +
+        '</div>';
+    }).join('');
+  modal.classList.remove('hidden');
+}
+
+function scrapePickToggleAll(checked) {
+  document.querySelectorAll('.scrape-sys-check').forEach(cb => cb.checked = checked);
+}
+
+function scrapePickClose() {
+  document.getElementById('scrapePickModal').classList.add('hidden');
+}
+
+function scrapePickGo() {
+  const picked = [...document.querySelectorAll('.scrape-sys-check:checked')].map(cb => cb.dataset.sys);
+  if (picked.length === 0) { showToast('No systems selected.'); return; }
+  const missing = games.filter(g => picked.includes(g.system) && !artworkCache[g.path]).length;
+  if (missing === 0) {
+    showToast(picked.length === 1 ? 'All ' + (systemNames[picked[0]] || picked[0]) + ' games already have art.' : 'All games in the selected systems already have art.');
+    return;
+  }
+  window.__eaScrapeFilter = picked;
+  scrapePickClose();
   startScrape();
 }
 
@@ -5329,6 +5525,7 @@ function showRemoveGamesModal() {
     showToast('No games in library to remove.');
     return;
   }
+  window.__rgPending = null; // FIX_2026-11-01_CK_NAV
   const selectAllId = 'removeSelectAll';
   body.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;margin-bottom:12px;">' +
@@ -5366,10 +5563,21 @@ function confirmRemoveSelected() {
   if (checked.length === 0) { showToast('No systems selected.'); return; }
   const names = checked.map(cb => systemNames[cb.dataset.sys] || cb.dataset.sys);
   const totalGames = checked.reduce((sum, cb) => sum + games.filter(g => g.system === cb.dataset.sys).length, 0);
-  if (confirm('Remove ' + names.join(', ') + '?\n\nThis will remove ' + totalGames + ' game' + (totalGames !== 1 ? 's' : '') + ' from your library. Your ROM files will NOT be deleted.')) {
-    checked.forEach(cb => removeSystem(cb.dataset.sys));
-    hideRemoveGamesModal();
-  }
+  // FIX_2026-11-01_CK_NAV: confirm inside the pop-up so a controller can answer it
+  window.__rgPending = checked.map(cb => cb.dataset.sys);
+  document.getElementById('removeGamesBody').innerHTML =
+    '<div style="padding:16px;color:#fff;font-size:15px;line-height:1.6;text-align:center;">Remove ' + names.join(', ') + '?<br>This will remove ' + totalGames.toLocaleString() + ' game' + (totalGames !== 1 ? 's' : '') + ' from your library. Your ROM files will NOT be deleted.</div>' +
+    '<div style="display:flex;gap:12px;justify-content:center;margin-top:8px;">' +
+    '<button class="frw-btn" style="background:rgba(255,60,60,0.2);border:1px solid rgba(255,60,60,0.4);color:#ff6b6b;padding:6px 20px;font-size:13px;" onclick="rgDoRemove()">REMOVE</button>' +
+    '<button class="frw-btn ghost" data-ckdefault="1" style="padding:6px 20px;font-size:13px;" onclick="showRemoveGamesModal()">CANCEL</button>' +
+    '</div>';
+}
+
+function rgDoRemove() {
+  const list = window.__rgPending || [];
+  window.__rgPending = null;
+  list.forEach(sys => removeSystem(sys));
+  hideRemoveGamesModal();
 }
 
 function confirmRemoveSystem(sys) {
@@ -5895,7 +6103,8 @@ async function startScrape() {
   localStorage.setItem('ss_user', ssUser);
   localStorage.setItem('ss_pass', ssPass);
 
-  const toScrape = games.filter(g => SCRAPE_SYSTEMS.includes(g.system) && !artworkCache[g.path]);
+  const _sf = window.__eaScrapeFilter || null; // FIX_2026-11-01_SCRAPE_PICK: systems chosen in the picker (null = all)
+  const toScrape = games.filter(g => SCRAPE_SYSTEMS.includes(g.system) && !artworkCache[g.path] && (!_sf || _sf.includes(g.system)));
   if (toScrape.length === 0) { showToast('All games already scraped!'); return; }
   // FIX_2026-10-10_SS_SETUP: offer a free account the first time someone scrapes without one
   if (!(ssUser && ssPass) && !localStorage.getItem('ss_setup_seen') && !localStorage.getItem('ss_setup_dontshow')) { ssSetupOpen(true, false); return; }
@@ -6274,6 +6483,43 @@ showView = function(name) {
     <div id="removeGamesBody" style="max-height:360px;overflow-y:auto;"></div>
     <div class="frw-btn-row" style="margin-top:16px;">
       <button class="frw-btn ghost" onclick="hideRemoveGamesModal()">CLOSE</button>
+    </div>
+  </div>
+</div>
+<!-- FIX_2026-11-01_WHATS_NEW: release notes and tips, shown once to people updating.
+     Each release: change WN_ID in the script and the text below. -->
+<div class="frw-overlay hidden" id="whatsNewModal">
+  <div class="frw-box" style="max-width:620px">
+    <span class="frw-icon">&#x2728;</span>
+    <div class="frw-title">WHAT'S NEW IN BETA 4</div>
+    <div style="text-align:left;color:#fff;font-size:15px;line-height:1.7;margin:12px 0 4px;">
+      <ul style="margin:0 0 14px 20px;padding:0;">
+        <li>Wii support: automatic controls for over 1,600 games, up to 4 players</li>
+        <li>Choose which systems to scrape in Get Game Art &amp; Info</li>
+        <li>Search with your controller: press LT and spell out a name</li>
+        <li>New Help button, the system name in the top bar, and the mouse cursor is back</li>
+        <li>Remove Games and RetroArch core downloads now work with your controller</li>
+      </ul>
+      <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">TIPS</div>
+      <ul style="margin:0 0 0 20px;padding:0;">
+        <li>Press LT to search your games by name.</li>
+        <li>Press Select to jump to the top menu.</li>
+      </ul>
+    </div>
+    <div class="frw-btn-row" style="margin-top:16px;">
+      <button class="frw-btn" onclick="whatsNewClose()">GOT IT</button>
+    </div>
+  </div>
+</div>
+<!-- FIX_2026-11-01_SCRAPE_PICK: choose which systems to scrape -->
+<div class="frw-overlay hidden" id="scrapePickModal">
+  <div class="frw-box" style="max-width:520px">
+    <span class="frw-icon">&#x1f5bc;</span>
+    <div class="frw-title">GET GAME ART &amp; INFO</div>
+    <div class="frw-sub" style="margin-bottom:16px;">Choose the systems to scrape. Only games missing art are scraped.</div>
+    <div id="scrapePickBody" style="max-height:360px;overflow-y:auto;"></div>
+    <div class="frw-btn-row" style="margin-top:16px;">
+      <button class="frw-btn ghost" onclick="scrapePickClose()">CLOSE</button>
     </div>
   </div>
 </div>
