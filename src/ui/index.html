@@ -1769,6 +1769,7 @@ function mltOpen(game) {
   if (!mltGenres(game).length) { showToast('No genre information for this game yet. Get its game art first.'); return; }
   const list = mltCompute(game);
   if (!list || !list.length) { showToast('No similar games found in your library.'); return; }
+  if (window.__eaMlt) (window.__eaMltStack = window.__eaMltStack || []).push(window.__eaMlt); else window.__eaMltStack = []; // FIX_2026-11-04_MLT_BACK: remember the list before this one
   window.__eaMlt = { src: game, title: mltCleanTitle(game), list };
   renderGrid();
   mltLabelRefresh();
@@ -1782,6 +1783,7 @@ function mltRefresh() {
 }
 function mltClose() {
   if (!window.__eaMlt) return false;
+  { const st = window.__eaMltStack || []; if (st.length) { const from = window.__eaMlt.src; const m = st.pop(); const l = mltCompute(m.src); if (l && l.length) m.list = l; window.__eaMlt = m; renderGrid(); mltLabelRefresh(); const i = Math.max(0, vsFilteredList.findIndex(g => g.path === from.path)); setTimeout(() => { if (window.__eaMlt === m) { GP_NAV.gridIdx = i; gpHighlightCard(i); } }, 80); return true; } } // FIX_2026-11-04_MLT_BACK: B goes back one list at a time
   window.__eaMlt = null;
   const ab = document.querySelector('.system-btn.active');
   const sys = ab && ab.dataset ? ab.dataset.sys : '';
@@ -2115,7 +2117,7 @@ function isFavorite(game) {
 }
 
 function filterFavorites(btn) {
-  window.__eaMlt = null; // FIX_2026-11-03_MLT
+  window.__eaMlt = null; window.__eaMltStack = []; // FIX_2026-11-03_MLT
   // FIX_2026-05-19_CTRL_PATH (Patch 1/3): route through the VS pipeline so
   // vsFilteredList matches the visible grid.
   currentSystem = 'favorites';
@@ -2150,7 +2152,7 @@ function filterFavorites(btn) {
 }
 
 function filterRecent(btn) {
-  window.__eaMlt = null; // FIX_2026-11-03_MLT
+  window.__eaMlt = null; window.__eaMltStack = []; // FIX_2026-11-03_MLT
   // FIX_2026-05-19_CTRL_PATH (Patch 1/3): route through the VS pipeline so
   // vsFilteredList matches the visible grid.
   currentSystem = 'recent';
@@ -2185,7 +2187,7 @@ function filterRecent(btn) {
 }
 
 function filterSystem(sys, btn) {
-  window.__eaMlt = null; // FIX_2026-11-03_MLT
+  window.__eaMlt = null; window.__eaMltStack = []; // FIX_2026-11-03_MLT
   currentSystem = sys;
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -2196,7 +2198,7 @@ function filterSystem(sys, btn) {
 // FIX_2026-10-31_HELP_BUTTON: open the EasyArc help page in the user's browser
 function openHelp() { if (window.easyarc && window.easyarc.openHelp) window.easyarc.openHelp(); }
 
-function filterSearch(val) { window.__eaMlt = null; currentSearch = val; if (val) showView('library'); renderGrid(); } // FIX_2026-11-03_MLT
+function filterSearch(val) { window.__eaMlt = null; window.__eaMltStack = []; currentSearch = val; if (val) showView('library'); renderGrid(); } // FIX_2026-11-03_MLT
 function closeDetail() {
   selectedGame = null;
   window.__eaDetailGame = null; { const mb = document.getElementById('mltBtn'); if (mb) mb.style.display = 'none'; } // FIX_2026-11-03_MLT
@@ -2591,7 +2593,7 @@ function showView(name) {
 }
 
 async function rescanLibrary() {
-  window.__eaMlt = null; // FIX_2026-11-03_MLT
+  window.__eaMlt = null; window.__eaMltStack = []; // FIX_2026-11-03_MLT
   showView('library');
   const folders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
   if (folders.length === 0) { showToast('No folders set. Run Setup first.'); return; }
@@ -4549,6 +4551,7 @@ function gpHighlightSys(idx) {
 
 function gpPreviewSystem(btn) {
   if (!btn) return;
+  if (window.__eaMlt) { window.__eaMlt = null; window.__eaMltStack = []; setTimeout(mltLabelRefresh, 0); } // FIX_2026-11-04_MLT_BACK: moving through the system list ends More Like This
   const sys = btn.dataset.sys || 'all';
   if (sys === 'favorites') {
     currentSystem = 'favorites';
