@@ -14,7 +14,7 @@
 :root {
   /* Original vars kept for JS compatibility */
   --bg:#020509; --bg2:#040c18; --bg3:#071224; --panel:rgba(4,14,30,0.92); --border:rgba(0,240,255,0.22);
-  --accent:#ff2d6e; --cyan:#00f0ff; --yellow:#ffe600; --green:#00ffb3; --text:#cce8ff; --muted:#3d6080;
+  --accent:#ff2d6e; --cyan:#00f0ff; --yellow:#ffe600; --green:#00ffb3; --text:#cce8ff; --muted:#9fb8d0; /* FIX_2026-11-03_READABLE: was #3d6080 */
   --glow-r:0 0 18px rgba(255,45,110,0.7); --glow-c:0 0 18px rgba(0,240,255,0.7); --glow-y:0 0 18px rgba(255,230,0,0.7);
   /* New vars */
   --cyan2:#0090ff;
@@ -284,7 +284,8 @@ body::after {
   font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px;
   color:var(--cyan); text-shadow:var(--glow-c); text-transform:uppercase;
 }
-.game-count { font-size:12px; color:var(--muted); font-family:'Rajdhani',sans-serif; }
+.game-count { font-size:12px; color:#fff; font-family:'Rajdhani',sans-serif; } /* FIX_2026-11-03_READABLE */
+#system-title { color:#fff; } /* FIX_2026-11-03_READABLE */
 
 /* Game grid */
 .game-grid-wrap {
@@ -496,6 +497,22 @@ body::after {
 /* ── TOAST ── */
 .toast { position:fixed; bottom:66px; right:24px; background:var(--panel); border:1px solid var(--green); color:var(--green); font-family:'Orbitron',monospace; font-size:9px; padding:12px 18px; border-radius:6px; z-index:10000; transform:translateY(80px); opacity:0; transition:all 0.3s; pointer-events:none; letter-spacing:1px; line-height:1.8; }
 .toast.show { transform:translateY(0); opacity:1; }
+/* FIX_2026-11-03_TOAST_BIG: larger, centered messages */
+.toast { left:50%; right:auto; transform:translate(-50%,80px); font-family:'Rajdhani',sans-serif; font-size:20px; font-weight:700; letter-spacing:0.5px; line-height:1.4; padding:14px 26px; max-width:70vw; text-align:center; }
+.toast.show { transform:translate(-50%,0); }
+/* FIX_2026-11-03_HIDE_DUPS: yellow switch beside the game count */
+.dup-toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; padding:3px 8px; border-radius:6px; margin-left:6px; user-select:none; }
+.dup-toggle .toggle-slider { border-color:var(--yellow); }
+.dup-toggle .toggle-slider::before { background:var(--yellow); opacity:0.55; }
+.dup-toggle input:checked + .toggle-slider { background:rgba(255,230,0,0.18); border-color:var(--yellow); }
+.dup-toggle input:checked + .toggle-slider::before { background:var(--yellow); opacity:1; box-shadow:0 0 8px var(--yellow); }
+.dup-label { color:#fff; font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; }
+/* FIX_2026-11-03_MLT: More Like This - same size as Launch Game, yellow */
+.launch-btn.mlt-btn { margin-top:10px; background:linear-gradient(135deg,#b39b00 0%,#ffe600 100%); color:#001018; box-shadow:0 0 22px rgba(255,230,0,0.35), 0 4px 14px rgba(0,0,0,0.4); }
+.launch-btn.mlt-btn:hover, .launch-btn.mlt-btn:focus { box-shadow:0 0 36px rgba(255,230,0,0.55), 0 8px 22px rgba(0,0,0,0.4); }
+.detail-body .launch-btn { height:40px; padding:0 13px; display:flex; align-items:center; justify-content:center; } /* identical size for both buttons */
+.mlt-key { display:inline-block; line-height:inherit; padding:0 4px; margin-right:8px; box-shadow:inset 0 0 0 1px #001018; border-radius:3px; font-size:9px; letter-spacing:1px; }
+#eaDescWrap { padding-bottom:14px !important; }
 
 /* ── OVERLAYS & MODALS (existing styles preserved) ── */
 .frw-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:5000; display:flex; align-items:center; justify-content:center; animation:frwFadeIn 0.4s ease; }
@@ -842,6 +859,8 @@ body::after {
       <div class="content-header">
         <div class="content-title" id="system-title">All Games</div>
         <span class="game-count" id="game-count">0 games</span>
+        <!-- FIX_2026-11-03_HIDE_DUPS -->
+        <label class="dup-toggle" id="dupToggleWrap"><span class="toggle"><input type="checkbox" id="dupToggle" onchange="dupSetEnabled(this.checked)"><span class="toggle-slider"></span></span><span class="dup-label">Hide duplicate games</span></label>
         <div style="display:flex;gap:8px;margin-left:auto;align-items:center;">
           <div class="search-box">
             <span class="search-icon">&#128269;</span>
@@ -866,6 +885,7 @@ body::after {
           <div class="detail-title" id="detailTitle"></div>
           <div class="detail-meta" id="detailMeta"></div>
           <button class="launch-btn" style="margin-top:auto">&#9654; LAUNCH GAME</button>
+          <button class="launch-btn mlt-btn" id="mltBtn" style="display:none" onclick="playClick();mltFromPanel()"><span class="mlt-key">RT</span>MORE LIKE THIS</button><!-- FIX_2026-11-03_MLT -->
         </div>
       </div>
     </div>
@@ -1002,6 +1022,7 @@ body::after {
     <div class="ctrl-hint"><span class="ctrl-key">X</span> Jump to Letter</div>
     <!-- FIX_2026-10-31_SEARCH_KB -->
     <div class="ctrl-hint"><span class="ctrl-key">LT</span> Search</div>
+    <div class="ctrl-hint"><span class="ctrl-key">RT</span> Similar</div><!-- FIX_2026-11-03_MLT -->
     <div class="ctrl-hint"><span class="ctrl-key">START</span> Menu</div>
     <div class="bottombar-status" id="bottombarStatus">No controller detected</div>
   </footer>
@@ -1692,19 +1713,192 @@ function vsInit() {
 // not yet exist, this listener takes no action. Activation happens in Step 4.
 window.addEventListener('resize', vsOnResize);
 
+// FIX_2026-11-03_MLT: More Like This. Uses the genres ScreenScraper saved with each game.
+// A game qualifies if it has the current game's MAIN genre anywhere in its genres.
+// Order: same system first, then games whose main genre matches, then more shared genres.
+// Results are handed to the grid like search results; the Virtual Scroller is untouched.
+window.__eaMlt = null;
+function mltGenres(game) {
+  const meta = game && metadataCache[game.path];
+  const gs = meta && Array.isArray(meta.genres) ? meta.genres : [];
+  const out = [];
+  for (const g of gs) {
+    if (!g) continue;
+    let key = (g.id !== undefined && g.id !== null && g.id !== '') ? 'id:' + g.id : '';
+    if (!key && Array.isArray(g.noms)) { const n = g.noms.find(x => x.langue === 'en') || g.noms[0]; if (n && n.text) key = 'nm:' + String(n.text).toLowerCase(); }
+    if (key) out.push({ key, main: String(g.principale) === '1', parent: (g.parentid && String(g.parentid) !== '0') ? 'id:' + g.parentid : '' });
+  }
+  return out;
+}
+function mltMainGenre(list) {
+  const mains = list.filter(x => x.main);
+  const pool = mains.length ? mains : list;
+  return pool.find(x => x.parent) || pool[0] || null;
+}
+function mltCompute(src) {
+  const sg = mltGenres(src);
+  const main = mltMainGenre(sg);
+  if (!main) return null;
+  const srcKeys = new Set(sg.map(x => x.key));
+  const scoreList = (acceptKey) => {
+    const res = [];
+    for (const g of eaVisibleGames()) {
+      if (g === src) continue;
+      const cg = mltGenres(g);
+      if (!cg.length || !cg.some(x => x.key === acceptKey)) continue;
+      const cmain = mltMainGenre(cg);
+      let shared = 0; for (const x of cg) if (srcKeys.has(x.key)) shared++;
+      res.push({ g, same: g.system === src.system ? 1 : 0, mainMatch: cmain && cmain.key === main.key ? 1 : 0, shared });
+    }
+    return res;
+  };
+  let res = scoreList(main.key);
+  if (res.length < 6 && main.parent) res = scoreList(main.parent); // too few: widen to the parent genre
+  res.sort((a, b) => (b.same - a.same) || (b.mainMatch - a.mainMatch) || (b.shared - a.shared) ||
+    String(a.g.title || '').localeCompare(String(b.g.title || '')));
+  return res.map(r => r.g);
+}
+function mltCleanTitle(game) {
+  const meta = metadataCache[game.path];
+  if (meta && meta.nom) return meta.nom;
+  return String(game.title || '').replace(/\.[a-z0-9]{1,4}$/i, '').split(/\s*[\(\[]/)[0].trim();
+}
+function mltLabelRefresh() { if (typeof window.__eaSysLabelUpdate === 'function') window.__eaSysLabelUpdate(); }
+function mltOpen(game) {
+  if (!game) return;
+  if (!mltGenres(game).length) { showToast('No genre information for this game yet. Get its game art first.'); return; }
+  const list = mltCompute(game);
+  if (!list || !list.length) { showToast('No similar games found in your library.'); return; }
+  window.__eaMlt = { src: game, title: mltCleanTitle(game), list };
+  renderGrid();
+  mltLabelRefresh();
+  if (typeof GP_NAV !== 'undefined') { GP_NAV.inSidebar = false; GP_NAV.inToolbar = false; GP_NAV.inTopNav = false; GP_NAV.gridIdx = 0; if (typeof gpHighlightCard === 'function') gpHighlightCard(0); }
+}
+function mltRefresh() {
+  const m = window.__eaMlt; if (!m) return;
+  const list = mltCompute(m.src);
+  m.list = list && list.length ? list : [];
+  renderGrid();
+}
+function mltClose() {
+  if (!window.__eaMlt) return false;
+  window.__eaMlt = null;
+  const ab = document.querySelector('.system-btn.active');
+  const sys = ab && ab.dataset ? ab.dataset.sys : '';
+  if (sys === 'favorites' || sys === 'recent') ab.click(); else renderGrid();
+  mltLabelRefresh();
+  if (typeof GP_NAV !== 'undefined') { GP_NAV.gridIdx = 0; if (typeof gpHighlightCard === 'function') gpHighlightCard(0); }
+  return true;
+}
+function mltFromPanel() {
+  const g = window.__eaDetailGame || (typeof vsFilteredList !== 'undefined' && typeof GP_NAV !== 'undefined' ? vsFilteredList[GP_NAV.gridIdx] : null);
+  mltOpen(g);
+}
+// Description stops where it would push the buttons off the panel (ends with "...").
+// FIX_2026-11-03_DESC_FIT: measure the panel against the space the screen gives it
+// (the panel grows past the screen instead of scrolling, so measuring inside it found nothing).
+function eaFitDesc() {
+  const d = document.getElementById('eaDesc');
+  const pn = document.getElementById('detailPanel');
+  const area = pn && pn.parentElement;
+  if (!d || !pn || !area || !pn.offsetHeight) return;
+  d.style.display = 'block'; d.style.webkitLineClamp = ''; d.style.overflow = '';
+  const cs = getComputedStyle(area);
+  const avail = area.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+  const lh = parseFloat(getComputedStyle(d).lineHeight) || 20.8;
+  for (let i = 0; i < 4; i++) {
+    const over = pn.offsetHeight - avail;
+    if (over <= 0) return;
+    const lines = Math.round(d.clientHeight / lh);
+    const keep = Math.max(2, lines - Math.ceil(over / lh) - 1);
+    d.style.display = '-webkit-box'; d.style.webkitBoxOrient = 'vertical'; d.style.webkitLineClamp = String(keep); d.style.overflow = 'hidden';
+    if (keep === 2) return;
+  }
+}
+
+// FIX_2026-11-03_HIDE_DUPS: hide extra regional versions/revisions of the same game.
+// Off by default. Files are never touched; turning the switch off shows everything again.
+// Groups games by system + title before the first bracket (+ disc number). Hacks,
+// translations and homebrew always stay separate. Arcade sets are never grouped.
+// The preferred copy is USA, then World, Europe, Japan; retail beats proto/beta/demo;
+// good dumps beat bad dumps; the highest revision wins.
+const DUP_SKIP_SYS = new Set(['mame','mame2003','mame arcade','MAME ARCADE','arcade','neogeo']);
+let dupCache = { arr: null, len: -1, hidden: new Set() };
+function dupEnabled() { try { return localStorage.getItem('ea_hide_dups') === '1'; } catch (e) { return false; } }
+function dupScore(tags) {
+  let s = 50;
+  if (/\b(usa|us|u)\b/.test(tags)) s = 0;
+  else if (/\bworld\b/.test(tags)) s = 10;
+  else if (/\b(europe|eur|e)\b/.test(tags)) s = 20;
+  else if (/\b(japan|jpn|j)\b/.test(tags)) s = 30;
+  if (/\b(proto|prototype|beta|demo|sample|kiosk|preview|promo)\b/.test(tags)) s += 100;
+  if (/\[b\d*\]|\bbad\b/.test(tags)) s += 200;
+  const rev = tags.match(/\brev\s*([0-9a-z]+)/);
+  if (rev) s -= (parseInt(rev[1], 36) || 0) * 0.01;
+  const ver = tags.match(/\bv(\d+)\.(\d+)/);
+  if (ver) s -= (parseInt(ver[1], 10) * 100 + parseInt(ver[2], 10)) * 0.0001;
+  if (tags.indexOf('[!]') >= 0) s -= 0.5;
+  return s;
+}
+function dupHiddenSet() {
+  if (dupCache.arr === games && dupCache.len === games.length) return dupCache.hidden;
+  const groups = new Map();
+  for (const g of games) {
+    if (!g || DUP_SKIP_SYS.has(g.system)) continue;
+    const t = String(g.title || '');
+    const base = t.replace(/\.[a-z0-9]{1,4}$/i, '').split(/\s*[\(\[]/)[0].toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!base) continue;
+    const tags = (t.match(/[\(\[][^\)\]]*[\)\]]/g) || []).join(' ').toLowerCase();
+    const disc = (tags.match(/\b(disc|disk|cd|side)\s*[0-9a-z]+/) || [''])[0];
+    const variant = /\b(hack|translat\w*|t\+\w*|t-\w*|homebrew|aftermarket|unl|pirate|fan)\b/.test(tags) ? '|' + tags : '';
+    const key = g.system + '|' + base + '|' + disc + variant;
+    const sc = dupScore(tags);
+    const cur = groups.get(key);
+    if (!cur) { groups.set(key, { keep: g, score: sc, all: [g] }); continue; }
+    cur.all.push(g);
+    if (sc < cur.score) { cur.keep = g; cur.score = sc; }
+  }
+  const hidden = new Set();
+  for (const grp of groups.values()) {
+    if (grp.all.length < 2) continue;
+    for (const g of grp.all) if (g !== grp.keep) hidden.add(g);
+  }
+  dupCache = { arr: games, len: games.length, hidden };
+  return hidden;
+}
+function eaVisibleGames() {
+  if (!dupEnabled()) return games;
+  const hidden = dupHiddenSet();
+  return hidden.size ? games.filter(g => !hidden.has(g)) : games;
+}
+function dupSetEnabled(on) {
+  try { localStorage.setItem('ea_hide_dups', on ? '1' : '0'); } catch (e) {}
+  const cb = document.getElementById('dupToggle');
+  if (cb && cb.checked !== !!on) cb.checked = !!on;
+  updateCounts();
+  if (window.__eaMlt && typeof mltRefresh === 'function') mltRefresh();
+  else if (currentSystem !== 'favorites' && currentSystem !== 'recent') renderGrid();
+  const n = on ? dupHiddenSet().size : 0;
+  showToast(on ? (n ? 'Hiding ' + n.toLocaleString() + ' duplicate game' + (n !== 1 ? 's' : '') : 'No duplicate games found') : 'Showing all games');
+}
+(function dupSyncSwitch() {
+  const sync = () => { const cb = document.getElementById('dupToggle'); if (cb) cb.checked = dupEnabled(); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sync); else sync();
+})();
+
 function renderGrid() {
   // FIX_C_ID_REDESIGN: keep the index fresh and reconcile persisted user data.
   buildGamesIndex();
   reconcileFavoritesAndRecent();
 
   const grid = document.getElementById('gameGrid');
-  const filtered = games.filter(g => {
+  const filtered = window.__eaMlt ? window.__eaMlt.list : eaVisibleGames().filter(g => { // FIX_2026-11-03_HIDE_DUPS / FIX_2026-11-03_MLT
     const sysMatch = currentSystem === 'all' || g.system === currentSystem;
     const searchMatch = !currentSearch || g.title.toLowerCase().includes(currentSearch.toLowerCase());
     return sysMatch && searchMatch;
   });
   document.getElementById('game-count').textContent = filtered.length + ' games';
-  document.getElementById('system-title').textContent = systemNames[currentSystem] || 'All Games';
+  document.getElementById('system-title').textContent = window.__eaMlt ? ('More like ' + window.__eaMlt.title) : (systemNames[currentSystem] || 'All Games'); // FIX_2026-11-03_MLT
   if (filtered.length === 0) {
     if (games.length === 0 && !localStorage.getItem('easyarc_setup_done')) {
       // No games at all — show welcome message
@@ -1755,7 +1949,7 @@ function renderGrid() {
 
 function updateCounts() {
   const allEl = document.getElementById('count-all');
-  if (allEl) allEl.textContent = games.length;
+  if (allEl) allEl.textContent = eaVisibleGames().length; // FIX_2026-11-03_HIDE_DUPS
   const recentEl = document.getElementById('count-recent');
   if (recentEl) {
     const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
@@ -1770,7 +1964,7 @@ function updateCounts() {
 
   // Find which systems have games
   const populated = {};
-  games.forEach(g => { populated[g.system] = (populated[g.system]||0) + 1; });
+  eaVisibleGames().forEach(g => { populated[g.system] = (populated[g.system]||0) + 1; }); // FIX_2026-11-03_HIDE_DUPS
 
   // Rebuild sidebar keeping the special buttons (Favorites, Recently Played, All Games)
   const favBtn = document.getElementById('favBtn');
@@ -1819,7 +2013,7 @@ function updateCounts() {
   });
 
   // Also update the All Games count
-  if (allEl) allEl.textContent = games.length;
+  if (allEl) allEl.textContent = eaVisibleGames().length; // FIX_2026-11-03_HIDE_DUPS
 }
 
 function removeSystem(sys) {
@@ -1845,6 +2039,8 @@ function removeSystem(sys) {
 // and selectGameByIndex (gamepad path). Body identical to original selectGame's
 // panel-population block.
 function _populateDetailFromGame(game) {
+  window.__eaDetailGame = game; // FIX_2026-11-03_MLT
+  { const mb = document.getElementById('mltBtn'); if (mb) mb.style.display = mltGenres(game).length ? '' : 'none'; } // FIX_2026-11-03_MLT
   const da = document.getElementById('detailArt');
   const dt = document.getElementById('detailTitle');
   const ds = document.getElementById('detailSystem');
@@ -1870,9 +2066,9 @@ function _populateDetailFromGame(game) {
     if (ssPublisher)          rows.push('<div class="meta-item"><div class="meta-label">Publisher</div><div class="meta-value">' + ssPublisher + '</div></div>');
     { const _pl = (meta && meta.joueurs) ? (typeof meta.joueurs === 'object' ? meta.joueurs.text : meta.joueurs) : null; if (_pl) rows.push('<div class="meta-item"><div class="meta-label">Players</div><div class="meta-value">' + _pl + '</div></div>'); } // FIX_2026-11-01_PLAYERS_TEXT
     const synopsis = ssSynopsis || 'Game description not available.';
-    rows.push('<div style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text);">' + synopsis + '</div></div>');
+    rows.push('<div id="eaDescWrap" style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div id="eaDesc" style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text);">' + synopsis + '</div></div>'); // FIX_2026-11-03_MLT: ids for the length limit
     if (rows.length === 0)    rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
-    dm.innerHTML = rows.join('');
+    dm.innerHTML = rows.join(''); requestAnimationFrame(eaFitDesc); // FIX_2026-11-03_MLT
   }
 }
 
@@ -1919,6 +2115,7 @@ function isFavorite(game) {
 }
 
 function filterFavorites(btn) {
+  window.__eaMlt = null; // FIX_2026-11-03_MLT
   // FIX_2026-05-19_CTRL_PATH (Patch 1/3): route through the VS pipeline so
   // vsFilteredList matches the visible grid.
   currentSystem = 'favorites';
@@ -1953,6 +2150,7 @@ function filterFavorites(btn) {
 }
 
 function filterRecent(btn) {
+  window.__eaMlt = null; // FIX_2026-11-03_MLT
   // FIX_2026-05-19_CTRL_PATH (Patch 1/3): route through the VS pipeline so
   // vsFilteredList matches the visible grid.
   currentSystem = 'recent';
@@ -1987,6 +2185,7 @@ function filterRecent(btn) {
 }
 
 function filterSystem(sys, btn) {
+  window.__eaMlt = null; // FIX_2026-11-03_MLT
   currentSystem = sys;
   document.querySelectorAll('.system-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -1997,9 +2196,10 @@ function filterSystem(sys, btn) {
 // FIX_2026-10-31_HELP_BUTTON: open the EasyArc help page in the user's browser
 function openHelp() { if (window.easyarc && window.easyarc.openHelp) window.easyarc.openHelp(); }
 
-function filterSearch(val) { currentSearch = val; if (val) showView('library'); renderGrid(); }
+function filterSearch(val) { window.__eaMlt = null; currentSearch = val; if (val) showView('library'); renderGrid(); } // FIX_2026-11-03_MLT
 function closeDetail() {
   selectedGame = null;
+  window.__eaDetailGame = null; { const mb = document.getElementById('mltBtn'); if (mb) mb.style.display = 'none'; } // FIX_2026-11-03_MLT
   const da = document.getElementById('detailArt');
   const dt = document.getElementById('detailTitle');
   const ds = document.getElementById('detailSystem');
@@ -2391,6 +2591,7 @@ function showView(name) {
 }
 
 async function rescanLibrary() {
+  window.__eaMlt = null; // FIX_2026-11-03_MLT
   showView('library');
   const folders = JSON.parse(localStorage.getItem('easyarc_rom_folders') || '[]');
   if (folders.length === 0) { showToast('No folders set. Run Setup first.'); return; }
@@ -4516,7 +4717,8 @@ function gpHandleInput(gp) {
       document.getElementById('addGamesBtn'),
       document.getElementById('removeGamesBtn'),
       document.getElementById('rescanBtn'),
-      document.getElementById('getArtBtn')
+      document.getElementById('getArtBtn'),
+      document.getElementById('dupToggleWrap') // FIX_2026-11-03_HIDE_DUPS
     ];
     const highlightToolbar = (idx) => {
       toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === idx ? "2px solid var(--cyan)" : "none"; });
@@ -4567,14 +4769,15 @@ function gpHandleInput(gp) {
         navBtns.forEach(b => b.style.outline = "none");
         GP_NAV.inTopNav = false;
         GP_NAV.inToolbar = true;
-        GP_NAV.toolbarIdx = 3;
+        GP_NAV.toolbarIdx = 4; // FIX_2026-11-03_HIDE_DUPS: last item is now the switch
         const toolbarBtns2 = [
           document.getElementById('addGamesBtn'),
           document.getElementById('removeGamesBtn'),
           document.getElementById('rescanBtn'),
-          document.getElementById('getArtBtn')
+          document.getElementById('getArtBtn'),
+      document.getElementById('dupToggleWrap') // FIX_2026-11-03_HIDE_DUPS
         ];
-        toolbarBtns2.forEach((b,i) => { if(b) b.style.outline = i === 3 ? "2px solid var(--cyan)" : "none"; });
+        toolbarBtns2.forEach((b,i) => { if(b) b.style.outline = i === 4 ? "2px solid var(--cyan)" : "none"; });
       } else {
         GP_NAV.topNavIdx = Math.max(0, GP_NAV.topNavIdx - 1);
         navBtns.forEach((b,i) => b.style.outline = i === GP_NAV.topNavIdx ? "2px solid var(--cyan)" : "none");
@@ -4599,7 +4802,8 @@ function gpHandleInput(gp) {
         document.getElementById('addGamesBtn'),
         document.getElementById('removeGamesBtn'),
         document.getElementById('rescanBtn'),
-        document.getElementById('getArtBtn')
+        document.getElementById('getArtBtn'),
+      document.getElementById('dupToggleWrap') // FIX_2026-11-03_HIDE_DUPS
       ];
       toolbarBtns.forEach((b,i) => { if(b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
     }
@@ -4629,7 +4833,7 @@ function gpHandleInput(gp) {
         GP_NAV.inToolbar = true;
         GP_NAV.toolbarIdx = 0;
         document.querySelectorAll(".nav-btn").forEach(b => b.style.outline = "none");
-        ['addGamesBtn','removeGamesBtn','rescanBtn','getArtBtn'].forEach((id,i) => { const b = document.getElementById(id); if (b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
+        ['addGamesBtn','removeGamesBtn','rescanBtn','getArtBtn','dupToggleWrap'].forEach((id,i) => { const b = document.getElementById(id); if (b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
       } else {
         GP_NAV.sidebarIdx = Math.max(0, GP_NAV.sidebarIdx - 1);
         gpHighlightSys(GP_NAV.sidebarIdx);
@@ -4701,6 +4905,7 @@ function gpHandleInput(gp) {
     }
 
     if (gpShouldFire("b", bBtn)) {
+      if (mltClose()) return; // FIX_2026-11-03_MLT: B leaves More Like This first
       const panel = document.getElementById("detailPanel");
       if (panel && !panel.classList.contains("hidden")) closeDetail();
     }
@@ -4716,6 +4921,9 @@ function gpHandleInput(gp) {
   if (gpShouldFire("xOpen", xBtn)) { openLetterGrid(); return; }
   // FIX_2026-10-31_SEARCH_KB: LT — open the search keyboard
   if (gpShouldFire("ltOpen", ltBtn)) { openSearchKb(); return; }
+  // FIX_2026-11-03_MLT: RT - More Like This for the highlighted game
+  if (!btns[GPB.r2].pressed) GP_NAV.rtGate = false;
+  if (!GP_NAV.inSidebar && gpShouldFire("rtMlt", btns[GPB.r2].pressed && !GP_NAV.rtGate)) { GP_NAV.rtGate = true; mltOpen(vsFilteredList[GP_NAV.gridIdx]); return; }
 
   // L1/R1 — cycle systems from anywhere
   if (gpShouldFire("l1", l1)) {
@@ -4739,7 +4947,7 @@ function gpHandleInput(gp) {
     GP_NAV.inToolbar = true;
     GP_NAV.toolbarIdx = 0;
     document.querySelectorAll(".nav-btn").forEach(b => b.style.outline = "none");
-    ['addGamesBtn','removeGamesBtn','rescanBtn','getArtBtn'].forEach((id,i) => { const b = document.getElementById(id); if (b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
+    ['addGamesBtn','removeGamesBtn','rescanBtn','getArtBtn','dupToggleWrap'].forEach((id,i) => { const b = document.getElementById(id); if (b) b.style.outline = i === 0 ? "2px solid var(--cyan)" : "none"; });
   }
 
   // Top nav mode — left/right to move, A to select, B to exit
@@ -4984,7 +5192,7 @@ function skEsc(s) {
 function skMatchCount() {
   const q = (currentSearch || '').toLowerCase();
   if (!q) return null;
-  return games.filter(g => (currentSystem === 'all' || g.system === currentSystem) &&
+  return eaVisibleGames().filter(g => (currentSystem === 'all' || g.system === currentSystem) && // FIX_2026-11-03_HIDE_DUPS
     (g.title || '').toLowerCase().includes(q)).length;
 }
 
@@ -6670,9 +6878,11 @@ showView = function(name) {
   function update() {
     var el = document.getElementById('systemNameLabel');
     if (!el) return;
+    if (window.__eaMlt) { el.textContent = 'More like ' + window.__eaMlt.title; return; } // FIX_2026-11-03_MLT
     var btn = document.querySelector('.system-btn.active');
     el.textContent = btn ? labelFor(btn) : '';
   }
+  window.__eaSysLabelUpdate = update; // FIX_2026-11-03_MLT
   var pending = false;
   function schedule() {
     if (pending) return;
