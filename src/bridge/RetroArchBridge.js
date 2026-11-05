@@ -97,8 +97,13 @@ const SHARED_EXTENSIONS = {
 // To restore a system, remove it from the relevant set.
 const BLOCKED_ALWAYS = new Set(['msdos','wiiu','3ds','saturn']); // FIX_2026-10-31_SATURN_OFF: blocked until Saturn BIOS support; // FIX_2026-10-31_SATURN_ON: saturn unblocked (Yabause core) // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
 const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WINDOWS: ps2 unblocked
+// FIX_2026-11-04_WIIU_PERSONAL: Wii U turns on only where Cemu sits at this exact path (Doug's own machines).
+// Everyone else keeps Wii U blocked, with no setting to find.
+const CEMU_PERSONAL_PATH = 'C:\\Program Files\\Cemu\\Cemu_2.6\\Cemu.exe';
+function personalWiiU() { try { return process.platform === 'win32' && fs.existsSync(CEMU_PERSONAL_PATH); } catch (e) { return false; } }
 function isSystemBlocked(system) {
   if (!system) return false;
+  if (system === 'wiiu' && personalWiiU()) return false; // FIX_2026-11-04_WIIU_PERSONAL
   if (BLOCKED_ALWAYS.has(system)) return true;
   if (process.platform === 'win32' && BLOCKED_ON_WINDOWS.has(system)) return true;
   return false;
@@ -1297,6 +1302,46 @@ class RetroArchBridge {
       }
     }
 
+    // FIX_2026-11-04_WIIU_PERSONAL: Wii U games launch in Cemu, full screen (-g game, -f full screen).
+    // Same lifecycle as PSP: game-started on launch, game-exited on every way out; Select+Start kills it.
+    if (options.system === 'wiiu') {
+      const sendToRenderer = (channel) => {
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const w of BrowserWindow.getAllWindows()) { if (!w.isDestroyed()) w.webContents.send(channel); }
+        } catch (e) { console.log('[Bridge] sendToRenderer ' + channel + ' failed:', e.message); }
+      };
+      if (!personalWiiU()) return { success: false, error: 'Cemu not found at: ' + CEMU_PERSONAL_PATH };
+      console.log('[Bridge] Launching Wii U game via Cemu:', options.romPath);
+      try {
+        const proc = spawn(CEMU_PERSONAL_PATH, ['-g', options.romPath, '-f'], { cwd: path.dirname(CEMU_PERSONAL_PATH), detached: false, stdio: 'ignore' });
+        this.retroarchProcess = proc;
+        sendToRenderer('game-started');
+        let settled = false;
+        const finish = (why) => {
+          if (settled) return;
+          settled = true;
+          console.log('[Bridge] Cemu ended (' + why + ') - re-enabling EasyArc nav');
+          this.retroarchProcess = null;
+          sendToRenderer('game-exited');
+          try {
+            const { BrowserWindow } = require('electron');
+            const wins = BrowserWindow.getAllWindows();
+            if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+          } catch (e) {}
+        };
+        proc.on('exit',  () => finish('exit'));
+        proc.on('close', () => finish('close'));
+        proc.on('error', (e) => { console.log('[Bridge] Cemu proc error:', e.message); finish('error'); });
+        return { success: true };
+      } catch (err) {
+        console.log('[Bridge] Wii U launch error:', err.message);
+        this.retroarchProcess = null;
+        sendToRenderer('game-exited');
+        return { success: false, error: 'Cemu launch failed: ' + err.message };
+      }
+    }
+
     // Switch games launch via Ryujinx instead of RetroArch
     if (options.system === 'switch') {
       const ryujinx = await this.findRyujinx();
@@ -2331,7 +2376,7 @@ Source = 0`;
 
   async _scrapeGameInner(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 16 /* FIX_2026-10-27_WII_SS_ID: was 38 */, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 16 /* FIX_2026-10-27_WII_SS_ID: was 38 */, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, wiiu: 18 /* FIX_2026-11-04_WIIU_PERSONAL */, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 61, ps3: 59 // FIX_2026-10-17_SS_IDS: PSP Minis use the PSP system (62 is PS Vita)
     };

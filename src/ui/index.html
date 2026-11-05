@@ -3534,7 +3534,7 @@ async function ctestMaybeLaunch(game) {
   // Step 1 — check if core is installed, offer download if not
   // Skip for systems that use standalone emulators
   // FIX_2026-05-22_DUCKSTATION_INSTALL: psx now uses DuckStation (standalone), not RetroArch
-  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'psx', 'ps2', 'ps3', 'xbox', 'xbox360', 'psp', 'pspmini'];
+  const standaloneEmulators = ['switch', 'gamecube', 'wii', 'wiiu', 'psx', 'ps2', 'ps3', 'xbox', 'xbox360', 'psp', 'pspmini']; // FIX_2026-11-04_WIIU_PERSONAL: + wiiu (Cemu)
   if (window.easyarc && !standaloneEmulators.includes(game.system)) {
     const exists = await window.easyarc.coreExists(game.system);
     if (!exists) {
@@ -6237,7 +6237,7 @@ let scrapeResumeIndex = 0;      // saved position when paused by game launch
 let scrapeResumeCredentials = null; // saved credentials when paused
 let scrapePausedForGame = false; // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape is paused by a game launch
 let scrapeLoopActive = false;    // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape loop is still running
-const SCRAPE_SYSTEMS = ['dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'pcengine', 'supergrafx', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
+const SCRAPE_SYSTEMS = ['wiiu' /* FIX_2026-11-04_WIIU_PERSONAL */, 'dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'pcengine', 'supergrafx', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 // FIX_2026-10-10_SS_ANON_CAP: daily cap for scraping without a ScreenScraper login (uses the shared developer quota)
 const SS_ANON_DAILY_CAP = 400;
