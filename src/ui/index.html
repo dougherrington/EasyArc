@@ -286,6 +286,8 @@ body::after {
 }
 .game-count { font-size:12px; color:#fff; font-family:'Rajdhani',sans-serif; } /* FIX_2026-11-03_READABLE */
 #system-title { color:#fff; } /* FIX_2026-11-03_READABLE */
+#system-title, #game-count { display:none !important; } /* FIX_2026-11-04_TOPBAR: name and count now live in the top bar */
+.system-name-label { text-align:center; } .system-name-label .snl-count { margin-top:4px; } /* FIX_2026-11-04_TOPBAR */
 
 /* Game grid */
 .game-grid-wrap {
@@ -1756,7 +1758,18 @@ function mltCompute(src) {
   if (res.length < 6 && main.parent) res = scoreList(main.parent); // too few: widen to the parent genre
   res.sort((a, b) => (b.same - a.same) || (b.mainMatch - a.mainMatch) || (b.shared - a.shared) ||
     String(a.g.title || '').localeCompare(String(b.g.title || '')));
-  return res.map(r => r.g);
+  // FIX_2026-11-04_MLT_SERIES: games from the same series (first real word of the title) come first, any genre.
+  const sk = mltSeriesKey(src); let series = [];
+  if (sk) { series = eaVisibleGames().filter(g => g !== src && mltSeriesKey(g) === sk); series.sort((a, b) => ((b.system === src.system) - (a.system === src.system)) || String(a.title || '').localeCompare(String(b.title || ''))); }
+  const inSeries = new Set(series);
+  return series.concat(res.map(r => r.g).filter(g => !inSeries.has(g)));
+}
+const MLT_SKIP_WORDS = new Set(['the','a','an','of','super','new','legend','legends','disney','disneys','classic','ultimate','pro','world','big','all','my']);
+function mltSeriesKey(game) {
+  const meta = game && metadataCache[game.path];
+  const t = String((meta && meta.nom) || (game && game.title) || '').toLowerCase().replace(/[\(\[].*$/, '').replace(/'/g, '');
+  for (const w of t.split(/[^a-z0-9]+/)) { if (w.length >= 3 && !/^\d+$/.test(w) && !MLT_SKIP_WORDS.has(w)) return w; }
+  return '';
 }
 function mltCleanTitle(game) {
   const meta = metadataCache[game.path];
@@ -1988,6 +2001,7 @@ function updateCounts() {
     'wiiu',
     'switch',
   ];
+  order.sort((a, b) => String(systemNames[a] || a).localeCompare(String(systemNames[b] || b))); // FIX_2026-11-04_SYS_ALPHA
   order.forEach(sys => {
     if (!populated[sys]) return;
     const btn = document.createElement('button');
@@ -6881,9 +6895,11 @@ showView = function(name) {
   function update() {
     var el = document.getElementById('systemNameLabel');
     if (!el) return;
-    if (window.__eaMlt) { el.textContent = 'More like ' + window.__eaMlt.title; return; } // FIX_2026-11-03_MLT
+    var gc = document.getElementById('game-count'); var cnt = gc ? gc.textContent : ''; // FIX_2026-11-04_TOPBAR
+    var setLbl = function (t) { el.textContent = t; if (t && cnt) { var d = document.createElement('div'); d.className = 'snl-count'; d.textContent = cnt; el.appendChild(d); } }; // FIX_2026-11-04_TOPBAR
+    if (window.__eaMlt) { setLbl('More like ' + window.__eaMlt.title); return; } // FIX_2026-11-03_MLT
     var btn = document.querySelector('.system-btn.active');
-    el.textContent = btn ? labelFor(btn) : '';
+    setLbl(btn ? labelFor(btn) : ''); // FIX_2026-11-04_TOPBAR
   }
   window.__eaSysLabelUpdate = update; // FIX_2026-11-03_MLT
   var pending = false;
@@ -6905,6 +6921,7 @@ showView = function(name) {
     }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
     var list = document.getElementById('systemList');
     if (list) new MutationObserver(schedule).observe(list, { childList: true });
+    var gcEl = document.getElementById('game-count'); if (gcEl) new MutationObserver(schedule).observe(gcEl, { childList: true, characterData: true, subtree: true }); // FIX_2026-11-04_TOPBAR: count changes
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
