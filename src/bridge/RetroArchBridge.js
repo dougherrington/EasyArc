@@ -78,7 +78,7 @@ const SHARED_EXTENSIONS = {
   '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
   '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'], // FIX_2026-10-27_DOLPHIN_ZIP: + gamecube, wii
   '.bin':  ['atari2600','atari7800','genesis','mastersystem','gamegear','saturn'],
-  '.iso':  ['ps2','psp','pspmini','gamecube','wii','saturn','dreamcast'],
+  '.iso':  ['ps2','psp','pspmini','gamecube','wii','saturn','dreamcast','ps3'], // FIX_2026-11-05_PS3_PERSONAL: + ps3 (RPCS3 boots ISOs)
   '.rvz':  ['gamecube','wii'],
   '.ciso': ['gamecube','wii'],
   '.cso':  ['ps2','psp','pspmini'],
@@ -100,10 +100,35 @@ const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WIND
 // FIX_2026-11-04_WIIU_PERSONAL: Wii U turns on only where Cemu sits at this exact path (Doug's own machines).
 // Everyone else keeps Wii U blocked, with no setting to find.
 const CEMU_PERSONAL_PATH = 'C:\\Program Files\\Cemu\\Cemu_2.6\\Cemu.exe';
+// FIX_2026-11-05_PS3_PERSONAL: PS3 turns on only where RPCS3 sits at this exact path (Doug's own machines).
+const RPCS3_PERSONAL_PATH = 'C:\\RPCS3\\rpcs3.exe';
+function personalPS3() { try { return process.platform === 'win32' && fs.existsSync(RPCS3_PERSONAL_PATH); } catch (e) { return false; } }
+// FIX_2026-11-05_EXIT_WATCHER: Select+Start for Cemu / RPCS3 games. Those emulators have no
+// EasyArc exit hotkey, and the EasyArc page stops reading controllers while a game runs,
+// so a small helper process (src/exit-helper.js) watches the controllers instead.
+function startExitWatcher(onExit) {
+  try {
+    const { utilityProcess } = require('electron');
+    const hp = path.join(__dirname, '..', 'exit-helper.js').replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+    const w = utilityProcess.fork(hp, [], { serviceName: 'EasyArc exit watcher' });
+    w.on('message', (m) => {
+      if (m && m.type === 'exit') { console.log('[Bridge] Select+Start held - closing game'); onExit(); }
+      else if (m && m.type === 'error') console.log('[Bridge] exit watcher error:', m.error);
+    });
+    console.log('[Bridge] exit watcher started');
+    return w;
+  } catch (e) { console.log('[Bridge] exit watcher failed to start:', e.message); return null; }
+}
+function stopExitWatcher(w) {
+  if (!w) return;
+  try { w.postMessage({ type: 'shutdown' }); } catch (e) {}
+  setTimeout(() => { try { w.kill(); } catch (e) {} }, 1500);
+}
 function personalWiiU() { try { return process.platform === 'win32' && fs.existsSync(CEMU_PERSONAL_PATH); } catch (e) { return false; } }
 function isSystemBlocked(system) {
   if (!system) return false;
   if (system === 'wiiu' && personalWiiU()) return false; // FIX_2026-11-04_WIIU_PERSONAL
+  if (system === 'ps3' && personalPS3()) return false; // FIX_2026-11-05_PS3_PERSONAL
   if (BLOCKED_ALWAYS.has(system)) return true;
   if (process.platform === 'win32' && BLOCKED_ON_WINDOWS.has(system)) return true;
   return false;
@@ -836,6 +861,7 @@ class RetroArchBridge {
         if (!ext) continue;
         if (['.xml','.txt','.png','.jpg','.jpeg','.gif','.srm','.rtc','.cfg','.sav','.state','.bak','.old','.dll','.dat'].includes(ext)) continue;
 
+        if (ext === '.pkg' && process.platform === 'win32') continue; // FIX_2026-11-05_PS3_PERSONAL: install packages, not games
         const system = this._detectSystem(fullPath, ext);
         if (!system) continue;
         if (isSystemBlocked(system)) continue;
@@ -1302,6 +1328,55 @@ class RetroArchBridge {
       }
     }
 
+    // FIX_2026-11-05_PS3_PERSONAL: PS3 games launch in RPCS3, full screen, no RPCS3 window.
+    // ISO files boot directly; game folders boot their PS3_GAME\USRDIR\EBOOT.BIN.
+    if (options.system === 'ps3' && process.platform === 'win32') {
+      const sendToRenderer = (channel) => {
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const w of BrowserWindow.getAllWindows()) { if (!w.isDestroyed()) w.webContents.send(channel); }
+        } catch (e) { console.log('[Bridge] sendToRenderer ' + channel + ' failed:', e.message); }
+      };
+      if (!personalPS3()) return { success: false, error: 'RPCS3 not found at: ' + RPCS3_PERSONAL_PATH };
+      let target = options.romPath;
+      try {
+        if (fs.statSync(target).isDirectory()) {
+          const eboot = path.join(target, 'PS3_GAME', 'USRDIR', 'EBOOT.BIN');
+          if (fs.existsSync(eboot)) target = eboot;
+        }
+      } catch (e) {}
+      console.log('[Bridge] Launching PS3 game via RPCS3:', target);
+      try {
+        const proc = spawn(RPCS3_PERSONAL_PATH, ['--no-gui', '--fullscreen', target], { cwd: path.dirname(RPCS3_PERSONAL_PATH), detached: false, stdio: 'ignore' });
+        this.retroarchProcess = proc;
+        const watcher = startExitWatcher(() => { try { proc.kill(); } catch (e) {} }); // FIX_2026-11-05_EXIT_WATCHER
+        sendToRenderer('game-started');
+        let settled = false;
+        const finish = (why) => {
+          if (settled) return;
+          settled = true;
+          console.log('[Bridge] RPCS3 ended (' + why + ') - re-enabling EasyArc nav');
+          this.retroarchProcess = null;
+          stopExitWatcher(watcher); // FIX_2026-11-05_EXIT_WATCHER
+          sendToRenderer('game-exited');
+          try {
+            const { BrowserWindow } = require('electron');
+            const wins = BrowserWindow.getAllWindows();
+            if (wins.length > 0) { wins[0].show(); wins[0].focus(); }
+          } catch (e) {}
+        };
+        proc.on('exit',  () => finish('exit'));
+        proc.on('close', () => finish('close'));
+        proc.on('error', (e) => { console.log('[Bridge] RPCS3 proc error:', e.message); finish('error'); });
+        return { success: true };
+      } catch (err) {
+        console.log('[Bridge] PS3 launch error:', err.message);
+        this.retroarchProcess = null;
+        sendToRenderer('game-exited');
+        return { success: false, error: 'RPCS3 launch failed: ' + err.message };
+      }
+    }
+
     // FIX_2026-11-04_WIIU_PERSONAL: Wii U games launch in Cemu, full screen (-g game, -f full screen).
     // Same lifecycle as PSP: game-started on launch, game-exited on every way out; Select+Start kills it.
     if (options.system === 'wiiu') {
@@ -1316,6 +1391,7 @@ class RetroArchBridge {
       try {
         const proc = spawn(CEMU_PERSONAL_PATH, ['-g', options.romPath, '-f'], { cwd: path.dirname(CEMU_PERSONAL_PATH), detached: false, stdio: 'ignore' });
         this.retroarchProcess = proc;
+        const watcher = startExitWatcher(() => { try { proc.kill(); } catch (e) {} }); // FIX_2026-11-05_EXIT_WATCHER
         sendToRenderer('game-started');
         let settled = false;
         const finish = (why) => {
@@ -1323,6 +1399,7 @@ class RetroArchBridge {
           settled = true;
           console.log('[Bridge] Cemu ended (' + why + ') - re-enabling EasyArc nav');
           this.retroarchProcess = null;
+          stopExitWatcher(watcher); // FIX_2026-11-05_EXIT_WATCHER
           sendToRenderer('game-exited');
           try {
             const { BrowserWindow } = require('electron');

@@ -82,6 +82,7 @@
       "node_modules/node-hid/**/*",
       "node_modules/@kmamal/sdl/**/*",
       "src/sdl-helper.js",
+      "src/exit-helper.js",
       "resources/vc_redist.x64.exe"
     ],
     "npmRebuild": false,

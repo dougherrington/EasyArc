@@ -5631,6 +5631,8 @@ let addGamesFolder = null;
 
 // Keep in sync with BLOCKED_ALWAYS / BLOCKED_ON_WINDOWS in RetroArchBridge.js —
 // a system listed here can be assigned manually even if detection skips it.
+// FIX_2026-11-05_ADD_GAMES_EXTRA: list plus any detected system it lacks (Wii U / PS3 only detect on Doug's machines)
+function agSystems(extra) { const l = ADD_GAMES_SYSTEMS.slice(); if (extra && !l.some(s => s.id === extra)) l.push({ id: extra, name: systemNames[extra] || extra }); return l; }
 const ADD_GAMES_SYSTEMS = [
   { id:'psx',         name:'PlayStation' },
   { id:'ps2',         name:'PlayStation 2' },
@@ -5901,7 +5903,7 @@ function addGamesRenderStep() {
           '<td style="padding:8px">' +
           (r.detectedSystem
             ? '<select class="setting-select" style="font-size:12px;padding:4px" onchange="addGamesCollectionResults[' + i + '].selectedSystem=this.value">' +
-              ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '"' + (s.id === r.detectedSystem ? ' selected' : '') + '>' + s.name + '</option>').join('') +
+              agSystems(r.detectedSystem).map(s => '<option value="' + s.id + '"' + (s.id === r.detectedSystem ? ' selected' : '') + '>' + s.name + '</option>').join('') +
               '<option value="">-- Skip --</option>' +
               '</select>'
             : '<select class="setting-select" style="font-size:12px;padding:4px;border-color:orange" onchange="addGamesCollectionResults[' + i + '].selectedSystem=this.value">' +
@@ -5935,9 +5937,9 @@ function addGamesRenderStep() {
     body.innerHTML =
       '<select id="addGamesSystemSelect" class="setting-select" style="width:100%;font-size:14px;padding:12px" onchange="addGamesSystem=this.value;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false">' +
         '<option value="">— Select a system —</option>' +
-        ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '"' + (addGamesSystem === s.id ? ' selected' : '') + '>' + s.name + '</option>').join('') +
+        agSystems(addGamesSystem).map(s => '<option value="' + s.id + '"' + (addGamesSystem === s.id ? ' selected' : '') + '>' + s.name + '</option>').join('') +
       '</select>' +
-      (addGamesSystem ? '<div class="frw-sub" style="margin-top:8px;font-size:12px">Auto-detected: ' + (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name + '</div>' : '');
+      (addGamesSystem ? '<div class="frw-sub" style="margin-top:8px;font-size:12px">Auto-detected: ' + (agSystems(addGamesSystem).find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name + '</div>' : '');
   }
 
   // Step 1b (new folder path): Select system
@@ -5950,14 +5952,14 @@ function addGamesRenderStep() {
     body.innerHTML =
       '<select id="addGamesSystemSelect" class="setting-select" style="width:100%;font-size:14px;padding:12px" onchange="addGamesSystem=this.value;document.getElementById(&quot;addGamesNextBtn&quot;).disabled=false">' +
         '<option value="">— Select a system —</option>' +
-        ADD_GAMES_SYSTEMS.map(s => '<option value="' + s.id + '"' + (addGamesSystem === s.id ? ' selected' : '') + '>' + s.name + '</option>').join('') +
+        agSystems(addGamesSystem).map(s => '<option value="' + s.id + '"' + (addGamesSystem === s.id ? ' selected' : '') + '>' + s.name + '</option>').join('') +
       '</select>';
   }
 
   // Step 2 (new folder path): Name and create folder
   else if (addGamesStep === 2 && addGamesHasExisting === false) {
     icon.textContent = String.fromCodePoint(0x1F4DD);
-    const sysName = (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
+    const sysName = (agSystems(addGamesSystem).find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
     title.textContent = 'NAME YOUR FOLDER';
     sub.textContent = 'Enter a name for your new ' + sysName + ' games folder, then choose where to create it.';
     next.textContent = 'CREATE FOLDER →';
@@ -5971,7 +5973,7 @@ function addGamesRenderStep() {
   else {
     icon.textContent = String.fromCodePoint(0x2705);
     title.textContent = 'CONFIRM';
-    const sysName = addGamesSystem ? (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name : 'Unknown';
+    const sysName = addGamesSystem ? (agSystems(addGamesSystem).find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name : 'Unknown';
     sub.textContent = 'Ready to add your games.';
     next.textContent = 'UPDATE LIBRARY →';
     next.disabled = false;
@@ -6060,7 +6062,7 @@ async function addGamesNext() {
     if (!addGamesSystem) return;
     const existingCount = games.filter(g => g.system === addGamesSystem).length;
     if (existingCount > 0) {
-      const sysName = (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
+      const sysName = (agSystems(addGamesSystem).find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
       if (!confirm('You already have ' + existingCount + ' ' + sysName + ' games in your library.\n\nNew games will be merged. Continue?')) return;
     }
   }
@@ -6072,7 +6074,7 @@ async function addGamesNext() {
     if (!addGamesSystem) return;
     const existingCount = games.filter(g => g.system === addGamesSystem).length;
     if (existingCount > 0) {
-      const sysName = (ADD_GAMES_SYSTEMS.find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
+      const sysName = (agSystems(addGamesSystem).find(s=>s.id===addGamesSystem)||{name:addGamesSystem}).name;
       if (!confirm('You already have ' + existingCount + ' ' + sysName + ' games in your library.\n\nNew games will be merged into your existing collection. Continue?')) return;
     }
   }
