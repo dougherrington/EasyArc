@@ -65,4 +65,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   launchDolphin: (romPath, controllerType, controllerTypes) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType, controllerTypes),
   openScreenScraperSignup: () => ipcRenderer.invoke('app:openScreenScraperSignup'), // FIX_2026-10-10_SS_SETUP
   openHelp: () => ipcRenderer.invoke('app:openHelp'), // FIX_2026-10-31_HELP_BUTTON
+  getVersion: () => ipcRenderer.invoke('app:getVersion'), // FIX_2026-11-07_ABOUT
+  openAboutLink: (which) => ipcRenderer.invoke('app:openAboutLink', which), // FIX_2026-11-07_ABOUT
+  openLicenses: () => ipcRenderer.invoke('app:openLicenses'), // FIX_2026-11-07_ABOUT
 });

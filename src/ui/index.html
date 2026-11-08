@@ -422,8 +422,9 @@ body::after {
 .detail-title { font-family:'Orbitron',monospace; font-size:22px; line-height:1.4; color:#fff; text-shadow:0 0 10px rgba(0,240,255,0.25); }
 .detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:6px; align-content:start; }
 .meta-item { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:7px 10px; }
-.meta-label { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px; }
-.meta-value { font-size:12px; font-weight:700; color:var(--text); font-family:'Rajdhani',sans-serif; }
+/* FIX_2026-11-07_META_SIZE: white labels; values 50% larger (12px to 18px), kept on one line */
+.meta-label { font-size:9px; color:#fff; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px; }
+.meta-value { font-size:18px; font-weight:700; color:var(--text); font-family:'Rajdhani',sans-serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 .launch-btn {
   width:100%; background:linear-gradient(135deg,#0050c0 0%,#00c6ff 100%);
@@ -903,6 +904,14 @@ body::after {
 
     <!-- Settings panel -->
     <div class="settings-panel" id="settings-view" style="grid-column:1/-1">
+      <!-- FIX_2026-11-07_ABOUT -->
+      <div class="settings-section">
+        <div class="settings-heading">ABOUT</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">About EasyArc</div><div class="setting-desc">Version, credits and licenses.</div></div>
+          <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="playClick();aboutOpen()">About...</button></div>
+        </div>
+      </div>
       <div class="settings-section">
         <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
         <!-- FIX_2026-10-10_SS_SETUP: free account setup -->
@@ -1042,7 +1051,7 @@ const systemNames = {
   dreamcast:'Sega Dreamcast',
   jaguar:'Atari Jaguar', genesis:'Sega Genesis',
   gamegear:'Game Gear', mastersystem:'Master System',
-  atari2600:'Atari 2600', atari7800:'Atari 7800', pcengine:'TurboGrafx-16', supergrafx:'SuperGrafx', msdos:'MS-DOS',
+  atari2600:'Atari 2600', atari7800:'Atari 7800', pcengine:'TurboGrafx-16', supergrafx:'SuperGrafx', wonderswan:'WonderSwan' /* FIX_2026-11-07_WONDERSWAN */, msdos:'MS-DOS',
   psx:'PlayStation', ps2:'PlayStation 2',
   psp:'PlayStation Portable', pspmini:'PSP Mini', ps3:'PlayStation 3',
   saturn:'Sega Saturn',
@@ -1054,7 +1063,7 @@ const systemNames = {
 const systemColors = {
   gbc:'#1a2a1a', gb:'#1a2a1a', gba:'#1a1a2a', snes:'#1a0a2a', nes:'#2a1a1a',
   n64:'#2a2a1a', gamecube:'#1a2a2a', jaguar:'#0a0a0a', genesis:'#0a1a0a',
-  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', pcengine:'#2a1a0a', supergrafx:'#1a0a2a', dreamcast:'#2a0a0a', msdos:'#0a2a0a',
+  gamegear:'#1a1a0a', mastersystem:'#0a1a1a', atari2600:'#2a1a0a', atari7800:'#2a0a1a', pcengine:'#2a1a0a', supergrafx:'#1a0a2a', wonderswan:'#0a1a2a', dreamcast:'#2a0a0a', msdos:'#0a2a0a',
   psx:'#0a1a2a', ps2:'#0a0a2a', psp:'#1a0a1a', pspmini:'#1a0a2a', ps3:'#0a0a1a',
   saturn:'#2a0a0a',
   mame:'#1a1a0a', mame2003:'#1a1a0a', arcade:'#2a0a1a', neogeo:'#1a0a0a',
@@ -1074,6 +1083,7 @@ const systemIcons = {
   atari7800:String.fromCodePoint(0x1F7E5),
   pcengine:String.fromCodePoint(0x1F536),
   supergrafx:String.fromCodePoint(0x1F537),
+  wonderswan:String.fromCodePoint(0x1F9A2), // FIX_2026-11-07_WONDERSWAN
   msdos:String.fromCodePoint(0x1F4BB),
   psx:String.fromCodePoint(0x25FD),
   ps2:String.fromCodePoint(0x25FC),
@@ -1314,6 +1324,7 @@ function showSupportedSystems() {
     {sys:'atari7800', name:'Atari 7800'},
     {sys:'pcengine', name:'TurboGrafx-16'},
     {sys:'supergrafx', name:'SuperGrafx'},
+    {sys:'wonderswan', name:'WonderSwan'}, // FIX_2026-11-07_WONDERSWAN
     {sys:'dreamcast', name:'Sega Dreamcast'},
     {sys:'jaguar', name:'Atari Jaguar'},
     {sys:'neogeo', name:'Neo Geo'},
@@ -1812,6 +1823,14 @@ function mltFromPanel() {
 // Description stops where it would push the buttons off the panel (ends with "...").
 // FIX_2026-11-03_DESC_FIT: measure the panel against the space the screen gives it
 // (the panel grows past the screen instead of scrolling, so measuring inside it found nothing).
+// FIX_2026-11-07_META_SIZE: shrink a long genre (or other value) just enough to fit on one line
+function eaFitMeta() {
+  document.querySelectorAll('#detailMeta .meta-value').forEach(v => {
+    v.style.fontSize = '';
+    let size = 18;
+    while (v.scrollWidth > v.clientWidth && size > 12) { size -= 1; v.style.fontSize = size + 'px'; }
+  });
+}
 function eaFitDesc() {
   const d = document.getElementById('eaDesc');
   const pn = document.getElementById('detailPanel');
@@ -1994,7 +2013,7 @@ function updateCounts() {
   const order = [
     'gbc','gb','gba','nes','snes','n64','gamecube',
     'genesis','gamegear','mastersystem','saturn','dreamcast',
-    'atari2600','atari7800','msdos','jaguar','pcengine','supergrafx',
+    'atari2600','atari7800','msdos','jaguar','pcengine','supergrafx','wonderswan', // FIX_2026-11-07_WONDERSWAN
     'mame','mame2003','arcade','neogeo',
     'psx','ps2','psp','pspmini','ps3',
     'wii',
@@ -2084,7 +2103,7 @@ function _populateDetailFromGame(game) {
     const synopsis = ssSynopsis || 'Game description not available.';
     rows.push('<div id="eaDescWrap" style="grid-column:1/-1;padding:10px 0"><div class="meta-label" style="margin-bottom:6px">Description</div><div id="eaDesc" style="font-size:13px;font-weight:500;line-height:1.6;color:var(--text);">' + synopsis + '</div></div>'); // FIX_2026-11-03_MLT: ids for the length limit
     if (rows.length === 0)    rows.push('<div class="meta-item"><div class="meta-label">System</div><div class="meta-value">' + (systemNames[game.system]||game.system) + '</div></div>');
-    dm.innerHTML = rows.join(''); requestAnimationFrame(eaFitDesc); // FIX_2026-11-03_MLT
+    dm.innerHTML = rows.join(''); requestAnimationFrame(() => { eaFitMeta(); eaFitDesc(); }); // FIX_2026-11-03_MLT // FIX_2026-11-07_META_SIZE
   }
 }
 
@@ -3927,17 +3946,17 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   }
   window.__eaOnDolphinInfo = (info) => {
     clearTimeout(_unpackTimer);
-    const _name = info && _WII_PROFILE_NAMES[info.profile];
+    const _name = info && (info.remotes > 0 ? 'Wii Remote' : _WII_PROFILE_NAMES[info.profile]); // FIX_2026-11-07_WII_REMOTE
     // FIX_2026-10-31_WII_LAUNCH_SCREEN, part 4 of 4: the screen waits for the player (A start, B back)
     const _reply = (choice) => { if (info && info.id && window.easyarc.sendDolphinLaunchChoice) window.easyarc.sendDolphinLaunchChoice(info.id, choice); };
     const _launching = () => { if (_name) _showLaunchOverlay('Launching ' + game.title + ' — ' + _name); };
-    if (_name && info.id && wiiLsEnabled()) {
+    if (_name && info.id && wiiLsEnabled() && !(info.remotes > 0)) { // FIX_2026-11-07_WII_REMOTE: real remotes skip the button-map screen
       if (_launchOverlay) { _launchOverlay.remove(); _launchOverlay = null; }
       wiiLsShow({ game: game, profile: info.profile, profileName: _name, ctype: detectedControllerType,
         onChoice: (choice) => { if (choice === 'start') _launching(); _reply(choice); } });
     } else {
       _launching();
-      setTimeout(() => _reply('start'), 1000); // screen turned off: brief message, as before
+      setTimeout(() => _reply('start'), (info && info.remotes > 0) ? 3000 : 1000); // screen turned off: brief message, as before // FIX_2026-11-07_WII_REMOTE_EXIT: 3 s for the Wii Remote message
     }
   };
   let result;
@@ -5322,9 +5341,20 @@ function searchKbInput(gp) {
 
 // FIX_2026-11-01_WHATS_NEW: shown once per release to people updating (new installs skip it),
 // after the Controllers screen closes. Each release: change WN_ID and the pop-up text.
-const WN_ID = '1.0.0-beta.4';
+const WN_ID = '1.0.0-beta.5';
 const WN_EXISTING_USER = (() => { try { return !!localStorage.getItem('easyarc_setup_done'); } catch (e) { return false; } })();
 function whatsNewClose() { document.getElementById('whatsNewModal').classList.add('hidden'); }
+// FIX_2026-11-07_ABOUT: About window (Advanced Options). B or Close shuts it.
+async function aboutOpen() {
+  const v = document.getElementById('aboutVersion');
+  if (v && window.easyarc && window.easyarc.getVersion) {
+    try { const ver = await window.easyarc.getVersion(); if (typeof ver === 'string') v.textContent = 'Version ' + ver; } catch (e) {}
+  }
+  document.getElementById('aboutModal').classList.remove('hidden');
+}
+function aboutClose() { document.getElementById('aboutModal').classList.add('hidden'); }
+function aboutLink(which) { if (window.easyarc && window.easyarc.openAboutLink) window.easyarc.openAboutLink(which); }
+function aboutLicenses() { if (window.easyarc && window.easyarc.openLicenses) window.easyarc.openLicenses(); }
 (function whatsNewCheck() {
   let seen = null;
   try { seen = localStorage.getItem('ea_whatsnew_seen'); } catch (e) {}
@@ -5348,7 +5378,7 @@ function whatsNewClose() { document.getElementById('whatsNewModal').classList.ad
 // FIX_2026-11-01_CK_NAV: controller support for the Remove Games and scrape picker pop-ups.
 // Up/Down (or Left/Right) moves, A ticks a box or presses a button, B goes back/closes.
 function ckActiveModal() {
-  for (const id of ['whatsNewModal', 'scrapePickModal', 'removeGamesModal']) { // FIX_2026-11-01_WHATS_NEW
+  for (const id of ['aboutModal', 'whatsNewModal', 'scrapePickModal', 'removeGamesModal']) { // FIX_2026-11-01_WHATS_NEW // FIX_2026-11-07_ABOUT
     const m = document.getElementById(id);
     if (m && !m.classList.contains('hidden')) return m;
   }
@@ -5415,6 +5445,7 @@ function ckNavInput(modal) {
     if (modal.id === 'removeGamesModal' && window.__rgPending) showRemoveGamesModal();
     else if (modal.id === 'removeGamesModal') hideRemoveGamesModal();
     else if (modal.id === 'whatsNewModal') whatsNewClose(); // FIX_2026-11-01_WHATS_NEW
+    else if (modal.id === 'aboutModal') aboutClose(); // FIX_2026-11-07_ABOUT
     else scrapePickClose();
   }
 }
@@ -5658,6 +5689,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'atari7800',   name:'Atari 7800' },
   { id:'pcengine',    name:'TurboGrafx-16' }, // FIX_2026-10-17_PCENGINE
   { id:'supergrafx',  name:'SuperGrafx' },
+  { id:'wonderswan',  name:'WonderSwan' }, // FIX_2026-11-07_WONDERSWAN
   // { id:'saturn',      name:'Sega Saturn' }, // FIX_2026-10-31_SATURN_OFF: returns with Saturn BIOS support
   { id:'dreamcast',   name:'Sega Dreamcast' }, // FIX_2026-10-17_DREAMCAST
 ];
@@ -6239,7 +6271,7 @@ let scrapeResumeIndex = 0;      // saved position when paused by game launch
 let scrapeResumeCredentials = null; // saved credentials when paused
 let scrapePausedForGame = false; // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape is paused by a game launch
 let scrapeLoopActive = false;    // FIX_2026-10-17_SCRAPE_RESUME: true while a scrape loop is still running
-const SCRAPE_SYSTEMS = ['wiiu' /* FIX_2026-11-04_WIIU_PERSONAL */, 'dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'pcengine', 'supergrafx', 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
+const SCRAPE_SYSTEMS = ['wiiu' /* FIX_2026-11-04_WIIU_PERSONAL */, 'dreamcast', 'saturn', 'psx', 'ps2', 'gamecube', 'wii', 'n64', 'jaguar', 'gba', 'gbc', 'gb', 'ps3', 'genesis', 'nes', 'snes', 'gamegear', 'mastersystem', 'atari2600', 'atari7800', 'pcengine', 'supergrafx', 'wonderswan' /* FIX_2026-11-07_WONDERSWAN */, 'msdos', 'psp', 'pspmini', 'mame', 'mame2003', 'mame arcade', 'MAME ARCADE', 'arcade', 'neogeo'];
 
 // FIX_2026-10-10_SS_ANON_CAP: daily cap for scraping without a ScreenScraper login (uses the shared developer quota)
 const SS_ANON_DAILY_CAP = 400;
@@ -6713,24 +6745,59 @@ showView = function(name) {
     </div>
   </div>
 </div>
+<!-- FIX_2026-11-07_ABOUT: About window, opened from Advanced Options -->
+<div class="frw-overlay hidden" id="aboutModal">
+  <div class="frw-box" style="max-width:620px;max-height:92vh;overflow-y:auto;">
+    <div class="frw-title">ABOUT EASYARC</div>
+    <div style="text-align:center;color:#fff;font-size:16px;line-height:1.7;margin:8px 0 14px;">
+      <div id="aboutVersion" style="color:var(--cyan);font-weight:700;">Version</div>
+      <div>Created by Doug Herrington</div>
+    </div>
+    <div class="frw-btn-row" style="justify-content:center;flex-wrap:wrap;margin:0 0 18px;">
+      <button class="frw-btn ghost" onclick="aboutLink('site')">EASYARC.NET</button>
+      <button class="frw-btn ghost" onclick="aboutLink('facebook')">FACEBOOK GROUP</button>
+      <button class="frw-btn ghost" onclick="aboutLicenses()">LICENSES</button>
+    </div>
+    <div style="text-align:left;color:#fff;font-size:14px;line-height:1.6;">
+      <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">THANK YOU</div>
+      <div style="margin-bottom:8px;">EasyArc is built on the work of these open-source projects and services:</div>
+      <ul style="margin:0 0 0 20px;padding:0;">
+        <li><b>RetroArch</b> and its cores: Beetle Cygne, Beetle PCE Fast, Beetle SuperGrafx, FinalBurn Neo, Flycast, Gambatte, Genesis Plus GX, MAME 2003-Plus, Mesen, mGBA, Mupen64Plus-Next, ProSystem, Snes9x, Stella and Virtual Jaguar</li>
+        <li><b>Dolphin</b> (GameCube and Wii)</li>
+        <li><b>DuckStation</b> (PlayStation)</li>
+        <li><b>PCSX2</b> (PlayStation 2)</li>
+        <li><b>PPSSPP</b> (PlayStation Portable)</li>
+        <li><b>7-Zip</b></li>
+        <li><b>ScreenScraper</b>, for game art and information</li>
+      </ul>
+    </div>
+    <div class="frw-btn-row" style="justify-content:center;margin-top:18px;">
+      <button class="frw-btn" data-ckdefault onclick="aboutClose()">CLOSE</button>
+    </div>
+    <div style="text-align:center;color:#fff;font-style:italic;font-size:15px;margin-top:26px;padding-top:16px;border-top:1px solid var(--border);">
+      Dedicated to Shirley Herrington (1942 &ndash; 2026)
+    </div>
+  </div>
+</div>
 <!-- FIX_2026-11-01_WHATS_NEW: release notes and tips, shown once to people updating.
      Each release: change WN_ID in the script and the text below. -->
 <div class="frw-overlay hidden" id="whatsNewModal">
   <div class="frw-box" style="max-width:620px">
     <span class="frw-icon">&#x2728;</span>
-    <div class="frw-title">WHAT'S NEW IN BETA 4</div>
+    <div class="frw-title">WHAT'S NEW IN BETA 5</div>
     <div style="text-align:left;color:#fff;font-size:15px;line-height:1.7;margin:12px 0 4px;">
       <ul style="margin:0 0 14px 20px;padding:0;">
-        <li>Wii support: automatic controls for over 1,600 games, up to 4 players</li>
-        <li>Choose which systems to scrape in Get Game Art &amp; Info</li>
-        <li>Search with your controller: press LT and spell out a name</li>
-        <li>New Help button, the system name in the top bar, and the mouse cursor is back</li>
-        <li>Remove Games and RetroArch core downloads now work with your controller</li>
+        <li>Real Wii Remotes: plug in a DolphinBar and your Wii Remotes just work, alongside your other controllers</li>
+        <li>More Like This: press RT to find similar games across your whole collection</li>
+        <li>Hide Duplicates switch: show one copy of games you have in several versions</li>
+        <li>New system: WonderSwan and WonderSwan Color</li>
+        <li>Easier to read: bigger game details, larger messages, game count under the system name</li>
+        <li>Hold Select+Start to exit Wii and GameCube games with any controller</li>
       </ul>
       <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">TIPS</div>
       <ul style="margin:0 0 0 20px;padding:0;">
-        <li>Press LT to search your games by name.</li>
-        <li>Press Select to jump to the top menu.</li>
+        <li>Turn on your Wii Remote before launching a Wii game.</li>
+        <li>Version, credits and licenses are in Advanced Options &rarr; About.</li>
       </ul>
     </div>
     <div class="frw-btn-row" style="margin-top:16px;">

@@ -327,6 +327,19 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   // FIX_2026-10-31_HELP_BUTTON: Help button address (fixed). Change here to point at the FAQ page.
   handle('app:openHelp', () => require('electron').shell.openExternal('https://easyarc.net'));
 
+  // FIX_2026-11-07_ABOUT: About window - version number, fixed links, licenses folder
+  handle('app:getVersion', () => require('electron').app.getVersion());
+  handle('app:openAboutLink', (which) => {
+    const urls = { site: 'https://easyarc.net', facebook: 'https://www.facebook.com/share/g/1Fq7v4PVV9/' };
+    if (urls[which]) require('electron').shell.openExternal(urls[which]);
+  });
+  handle('app:openLicenses', () => {
+    const { app, shell } = require('electron');
+    const p = require('path');
+    const dir = app.isPackaged ? p.join(process.resourcesPath, 'win', 'licenses') : p.join(__dirname, '..', '..', 'resources', 'win', 'licenses');
+    return shell.openPath(dir);
+  });
+
   handle('app:openScreenScraperSignup', () => require('electron').shell.openExternal('https://www.screenscraper.fr/membreinscription.php#:~:text=Nickname%20between%204%20and%2025')); // FIX_2026-10-10_POLISH: jump to the form
 }
 

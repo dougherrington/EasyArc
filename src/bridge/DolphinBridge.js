@@ -15,6 +15,28 @@ const DOLPHIN_FILENAME = `dolphin-${DOLPHIN_VERSION}-x64.7z`;
 // SourceForge mirror — stable URLs, official mirror of dolphin-emu.org
 const DOLPHIN_URL = `https://dl.dolphin-emu.org/releases/${DOLPHIN_VERSION}/${DOLPHIN_FILENAME}`;
 
+// FIX_2026-11-07_WII_REMOTE_EXIT: same Select+Start exit watcher as Wii U and PS3 (exit-helper.js).
+// Used for Wii games with a real Wii Remote: Dolphin's own exit hotkey did not respond then, and
+// HOME > Wii Menu leaves Dolphin on a black screen. Holding Select+Start closes Dolphin.
+function startExitWatcher(onExit) {
+  try {
+    const { utilityProcess } = require('electron');
+    const hp = path.join(__dirname, '..', 'exit-helper.js').replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+    const w = utilityProcess.fork(hp, [], { serviceName: 'EasyArc exit watcher' });
+    w.on('message', (m) => {
+      if (m && m.type === 'exit') { console.log('[DOLPHIN] Select+Start held - closing Dolphin'); onExit(); }
+      else if (m && m.type === 'error') console.log('[DOLPHIN] exit watcher error:', m.error);
+    });
+    console.log('[DOLPHIN] exit watcher started');
+    return w;
+  } catch (e) { console.log('[DOLPHIN] exit watcher failed to start:', e.message); return null; }
+}
+function stopExitWatcher(w) {
+  if (!w) return;
+  try { w.postMessage({ type: 'shutdown' }); } catch (e) {}
+  setTimeout(() => { try { w.kill(); } catch (e) {} }, 1500);
+}
+
 class DolphinBridge {
   // Returns the directory where EasyArc manages its Dolphin install.
   getEasyArcDolphinDir() {
@@ -925,7 +947,58 @@ class DolphinBridge {
     return PROFILES[profile] || PROFILES.Nunchuk;
   }
 
-  writeWiimoteConfig(romPath, controllerType, controllerTypes) {
+  // FIX_2026-11-07_WII_REMOTE: count real Wii Remotes connected through a Mayflash DolphinBar
+  // (mode 4: vendor 057e, product 0306, four slots that exist even when empty). Each slot is
+  // sent a Wii Remote status request (report 0x15); a connected remote answers (report 0x20).
+  // Windows only. Any failure counts as 0, so Wii games fall back to regular controllers.
+  async _countDolphinBarRemotes() {
+    if (process.platform !== 'win32') return 0;
+    let HID;
+    try { HID = require('node-hid'); } catch (e) { console.log('[DOLPHIN] node-hid unavailable:', e.message); return 0; }
+    let paths = [];
+    try {
+      paths = [...new Set(HID.devices().filter(d => d.vendorId === 0x057e && d.productId === 0x0306).map(d => d.path))];
+    } catch (e) { console.log('[DOLPHIN] HID list failed:', e.message); return 0; }
+    if (!paths.length) return 0;
+    const results = await Promise.all(paths.map((p) => new Promise((resolve) => {
+      let dev;
+      try { dev = new HID.HID(p); } catch (e) { resolve({ ok: false, why: 'open failed' }); return; }
+      let done = false;
+      let timer = null;
+      const finish = (ok, why) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { dev.removeAllListeners('data'); dev.close(); } catch (e) {}
+        resolve({ ok, why });
+      };
+      dev.on('data', (buf) => {
+        if (buf && buf.length && (buf[0] === 0x20 || (buf[0] >= 0x30 && buf[0] <= 0x3f))) finish(true, 'answered 0x' + buf[0].toString(16));
+      });
+      dev.on('error', (e) => finish(false, 'error'));
+      timer = setTimeout(() => finish(false, 'no answer'), 600);
+      try { dev.write([0x15, 0x00]); } catch (e) { finish(false, 'write failed'); }
+    })));
+    const count = results.filter(r => r.ok).length;
+    console.log('[DOLPHIN] DolphinBar found:', paths.length, 'slots | Wii Remotes answering:', count, '|', results.map(r => r.why).join(', '));
+    return count;
+  }
+
+  // FIX_2026-11-07_WII_REMOTE: Dolphin keeps looking for real Wii Remotes only while one is in use.
+  _setContinuousScanning(on) {
+    try {
+      const cfgPath = path.join(this._getDolphinConfigDir(), 'Dolphin.ini');
+      let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
+      const line = 'WiimoteContinuousScanning = ' + (on ? 'True' : 'False');
+      if (/^WiimoteContinuousScanning\s*=.*$/m.test(cfg)) cfg = cfg.replace(/^WiimoteContinuousScanning\s*=.*$/m, line);
+      else if (/^\[Core\]\s*$/m.test(cfg)) cfg = cfg.replace(/^\[Core\]\s*$/m, '[Core]\n' + line);
+      else cfg += '\n[Core]\n' + line + '\n';
+      fs.writeFileSync(cfgPath, cfg);
+      console.log('[DOLPHIN] Wii Remote continuous scanning:', on ? 'on' : 'off');
+    } catch (e) { console.log('[DOLPHIN] Could not set continuous scanning:', e.message); }
+  }
+
+  writeWiimoteConfig(romPath, controllerType, controllerTypes, remotes) {
     const info = this._readWiiDiscInfo(romPath);
     if (!info.isWii) {
       console.log('[DOLPHIN] Not a Wii disc - WiimoteNew.ini left as is');
@@ -944,26 +1017,37 @@ class DolphinBridge {
     const count = { xbox: 0, ps: 0, pro: 0 };
     const out = [];
     const devices = []; // FIX_2026-10-28_WII_TUNE: logged below
+    // FIX_2026-11-07_WII_REMOTE: real Wii Remotes take the first player slots (Source 2),
+    // regular controllers follow with the automatic profile (Source 1), leftover slots are off.
+    const real = Math.max(0, Math.min(4, remotes || 0));
+    const players = []; // logged below
     for (let i = 1; i <= 4; i++) {
       out.push(`[Wiimote${i}]`);
-      if (i > types.length) {
+      if (i <= real) {
+        out.push('Device = DInput/0/Keyboard Mouse', 'Source = 2');
+        players.push('P' + i + ' Wii Remote');
+        continue;
+      }
+      const padIdx = i - real - 1;
+      if (padIdx >= types.length) {
         out.push('Device = DInput/0/Keyboard Mouse', 'Source = 0');
         continue;
       }
-      const t = types[i - 1];
+      const t = types[padIdx];
       let device;
       if (t === 'switch') device = `SDL/${count.pro++}/Nintendo Switch Pro Controller`;
       else if (t === 'ds4' || t === 'dualsense' || t === 'ds3') device = `SDL/${count.ps++}/PS4 Controller`;
       else device = `SDL/0/XInput Controller #${++count.xbox}`;
       out.push('Device = ' + device, ...(t === 'switch' ? this._swapWiiAB(body) : body), 'Source = 1'); // FIX_2026-10-31_PRO_AB_SWAP
       devices.push(device);
+      players.push('P' + i + ' ' + device); // FIX_2026-11-07_WII_REMOTE
     }
     out.push('[BalanceBoard]', 'Device = DInput/0/Keyboard Mouse', 'Source = 0');
 
     const cfgDir = this._getDolphinConfigDir();
     fs.mkdirSync(cfgDir, { recursive: true });
     fs.writeFileSync(path.join(cfgDir, 'WiimoteNew.ini'), out.join('\n') + '\n');
-    console.log('[DOLPHIN] Wrote WiimoteNew.ini:', profile, '| controllers:', JSON.stringify(types), '| devices:', devices.join(' ; '));
+    console.log('[DOLPHIN] Wrote WiimoteNew.ini:', profile, '| controllers:', JSON.stringify(types), '| devices:', devices.join(' ; '), '| players:', players.join(' ; ')); // FIX_2026-11-07_WII_REMOTE
     return profile;
   }
 
@@ -996,7 +1080,7 @@ class DolphinBridge {
     } catch (e) { console.log('[DOLPHIN] Could not turn GameCube ports off:', e.message); }
   }
 
-  _askWiiLaunchChoice(profile) {
+  _askWiiLaunchChoice(profile, remotes) {
     return new Promise((resolve) => {
       let electron;
       try { electron = require('electron'); } catch (e) { resolve('start'); return; }
@@ -1011,7 +1095,7 @@ class DolphinBridge {
       let sent = 0;
       try {
         for (const w of BrowserWindow.getAllWindows()) {
-          if (!w.isDestroyed()) { w.webContents.send('dolphin-launch-info', { profile, id }); sent++; }
+          if (!w.isDestroyed()) { w.webContents.send('dolphin-launch-info', { profile, id, remotes: remotes || 0 }); /* FIX_2026-11-07_WII_REMOTE */ sent++; }
         }
       } catch (e) { console.log('[DOLPHIN] launch-info send failed:', e.message); }
       if (!sent) { ipcMain.removeListener('dolphin-launch-choice', onChoice); resolve('start'); }
@@ -1136,8 +1220,18 @@ class DolphinBridge {
 
     // FIX_2026-10-27_WII_PROFILES: pick and write the Wii controller profile for this game.
     let wiiProfile = null;
+    let wiiRemotes = 0; // FIX_2026-11-07_WII_REMOTE
     try {
-      wiiProfile = this.writeWiimoteConfig(romPath, controllerType, controllerTypes);
+      if (this._readWiiDiscInfo(romPath).isWii) {
+        wiiRemotes = await this._countDolphinBarRemotes();
+        this._setContinuousScanning(wiiRemotes > 0);
+      }
+    } catch (err) {
+      console.log('[DOLPHIN] Wii Remote check failed (using regular controllers):', err.message);
+      wiiRemotes = 0;
+    }
+    try {
+      wiiProfile = this.writeWiimoteConfig(romPath, controllerType, controllerTypes, wiiRemotes);
     } catch (err) {
       console.log('[DOLPHIN] Wii profile step failed (launching anyway):', err.message);
     }
@@ -1147,7 +1241,7 @@ class DolphinBridge {
     // A starts the game; B goes back and Dolphin never starts.
     if (wiiProfile) {
       this._gcPortsOffForWii(); // FIX_2026-10-31_WII_GC_PORTS_OFF
-      const choice = await this._askWiiLaunchChoice(wiiProfile);
+      const choice = await this._askWiiLaunchChoice(wiiProfile, wiiRemotes); // FIX_2026-11-07_WII_REMOTE
       if (choice === 'cancel') {
         console.log('[DOLPHIN] Player went back from the Wii launch screen');
         return { success: false, cancelled: true };
@@ -1198,9 +1292,11 @@ class DolphinBridge {
       // Bulletproof exit: fire game-exited exactly once on any terminal outcome,
       // so the running-flag always clears and future launches are never blocked.
       let exited = false;
+      const watcher = startExitWatcher(() => { try { proc.kill(); } catch (e) {} }); // FIX_2026-11-07_WII_REMOTE_EXIT // FIX_2026-11-07_DOLPHIN_EXIT_ALL: every Wii and GameCube game
       const finishExit = (why) => {
         if (exited) return;
         exited = true;
+        stopExitWatcher(watcher); // FIX_2026-11-07_WII_REMOTE_EXIT
         console.log('[DOLPHIN] Dolphin ended (' + why + ') — re-enabling EasyArc nav');
         sendToRenderer('game-exited');
       };

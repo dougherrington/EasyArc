@@ -366,7 +366,7 @@ function _sendNintendoFullMode() {
   let HID;
   try { HID = require('node-hid'); } catch (e) { return { ok: false, step: 'require', error: String(e.message) }; }
   let all;
-  try { all = HID.devices().filter(d => d.vendorId === 0x057e); } catch (e) { return { ok: false, step: 'list', error: String(e.message) }; }
+  try { all = HID.devices().filter(d => d.vendorId === 0x057e && d.productId !== 0x0306 /* FIX_2026-11-07_WII_REMOTE: not the DolphinBar */); } catch (e) { return { ok: false, step: 'list', error: String(e.message) }; }
   if (!all.length) return { ok: false, step: 'find', error: 'no Nintendo (057e) HID device found' };
   const results = [], seen = new Set();
   for (const d of all) {

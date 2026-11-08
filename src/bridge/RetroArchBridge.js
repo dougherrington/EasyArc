@@ -62,6 +62,7 @@ const UNIQUE_EXTENSIONS = {
   atari7800:    ['.a78'],
   pcengine:     ['.pce'],        // FIX_2026-10-17_PCENGINE: TurboGrafx-16 / PC Engine
   supergrafx:   ['.sgx'],        // FIX_2026-10-17_PCENGINE: SuperGrafx
+  wonderswan:   ['.ws', '.wsc'], // FIX_2026-11-07_WONDERSWAN: WonderSwan and WonderSwan Color, one system
   dreamcast:    ['.gdi'],        // FIX_2026-10-17_DREAMCAST: .gdi (track .bin/.raw files stay hidden); .chd/.cdi/.cue/.iso via shared list
   // BETA_DEFER_MSDOS_2026: msdos is in BLOCKED_ALWAYS, so a unique-extension match
   // here would claim .iso before the shared-extension logic runs, and the file would
@@ -75,8 +76,8 @@ const UNIQUE_EXTENSIONS = {
 
 // Extensions shared by multiple systems — folder hint required to resolve
 const SHARED_EXTENSIONS = {
-  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'],
-  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','jaguar','msdos','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'], // FIX_2026-10-27_DOLPHIN_ZIP: + gamecube, wii
+  '.zip':  ['gbc','gb','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','wonderswan','jaguar','msdos','psp','pspmini','psx','gamecube','wii','mame','mame2003','arcade','neogeo'], // FIX_2026-11-07_WONDERSWAN
+  '.7z':   ['gbc','gba','snes','nes','n64','genesis','gamegear','mastersystem','atari2600','atari7800','pcengine','supergrafx','wonderswan' /* FIX_2026-11-07_WONDERSWAN */,'jaguar','msdos','psp','psx','gamecube','wii','mame','mame2003','arcade','neogeo'], // FIX_2026-10-27_DOLPHIN_ZIP: + gamecube, wii
   '.bin':  ['atari2600','atari7800','genesis','mastersystem','gamegear','saturn'],
   '.iso':  ['ps2','psp','pspmini','gamecube','wii','saturn','dreamcast','ps3'], // FIX_2026-11-05_PS3_PERSONAL: + ps3 (RPCS3 boots ISOs)
   '.rvz':  ['gamecube','wii'],
@@ -161,6 +162,7 @@ const FOLDER_HINTS = [
   // FIX_2026-10-17_PCENGINE: SuperGrafx listed before TurboGrafx so 'PC Engine SuperGrafx' folders go to SuperGrafx
   { hints: ['pc engine supergrafx','supergrafx','super grafx','sgx'],      system: 'supergrafx' },
   { hints: ['turbografx-16','turbografx 16','turbografx16','turbografx','turbo grafx','tg-16','tg16','pc engine','pc-engine','pcengine','pce'], system: 'pcengine' },
+  { hints: ['bandai wonderswan color','bandai wonderswan','wonderswan color','wonderswancolor','wonder swan color','wonderswan','wonder swan','wsc','ws'], system: 'wonderswan' }, // FIX_2026-11-07_WONDERSWAN // FIX_2026-11-07_WSC_FOLDER: + one-word 'wonderswancolor'
   { hints: ['dos','msdos','ms-dos','ms dos','dosbox','pc games','dos games','pc','msdos games','pc dos','ibm pc'], system: 'msdos' },
   { hints: ['atari jaguar','atarijaguar','jaguar'],                          system: 'jaguar' },
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
@@ -215,6 +217,7 @@ const CORE_REMAP_FOLDERS = {
   atari7800:   'ProSystem',
   pcengine:    'Beetle PCE Fast',     // FIX_2026-10-17_PCENGINE
   supergrafx:  'Beetle SuperGrafx',   // FIX_2026-10-17_PCENGINE
+  wonderswan:  'Beetle Cygne',        // FIX_2026-11-07_WONDERSWAN
   msdos:       'DOSBox-Pure',
 };
 
@@ -277,6 +280,7 @@ const SYSTEM_CORES = {
   atari7800:    'prosystem_libretro.dylib',
   pcengine:     'mednafen_pce_fast_libretro.dylib',     // FIX_2026-10-17_PCENGINE
   supergrafx:   'mednafen_supergrafx_libretro.dylib',   // FIX_2026-10-17_PCENGINE
+  wonderswan:   'mednafen_wswan_libretro.dylib',        // FIX_2026-11-07_WONDERSWAN: Beetle Cygne
   msdos:        'dosbox_pure_libretro.dylib',
   mame:         'mame_libretro.dylib',
   mame2003:     'mame2003_plus_libretro.dylib',
@@ -438,7 +442,7 @@ function readZipLargestFileBuffer(zipPath) {
           stream.on('end', () => {
             zipfile.close();
             const crcHex = crc.toString(16).toUpperCase().padStart(8, '0');
-            resolve({ crc: crcHex, sha1: sha1.digest('hex'), md5: md5.digest('hex'), size });
+            resolve({ crc: crcHex, sha1: sha1.digest('hex'), md5: md5.digest('hex'), size, name: largest.fileName }); // FIX_2026-11-07_WONDERSWAN: + name
           });
           stream.on('error', reject);
         });
@@ -2453,15 +2457,17 @@ Source = 0`;
 
   async _scrapeGameInner(game, ssUser, ssPassword) {
     const SS_IDS = {
-      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 16 /* FIX_2026-10-27_WII_SS_ID: was 38 */, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, wiiu: 18 /* FIX_2026-11-04_WIIU_PERSONAL */, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
+      gbc: 10, gb: 9, gba: 12, nes: 3, snes: 4, n64: 14, gamecube: 13, wii: 16 /* FIX_2026-10-27_WII_SS_ID: was 38 */, mame: 75, mame2003: 75, arcade: 75, atari2600: 26, atari7800: 41, pcengine: 31, supergrafx: 105, msdos: 135, neogeo: 142, wiiu: 18 /* FIX_2026-11-04_WIIU_PERSONAL */, wonderswan: 45 /* FIX_2026-11-07_WONDERSWAN: Color is 46, chosen below */, // FIX_2026-10-17_SS_IDS: 7800 is 41; Neo Geo was missing
       psx: 57, ps2: 58, switch: 203, dreamcast: 23, genesis: 1, jaguar: 27,
       gamegear: 21, mastersystem: 2, saturn: 22, psp: 61, pspmini: 61, ps3: 59 // FIX_2026-10-17_SS_IDS: PSP Minis use the PSP system (62 is PS Vita)
     };
-    const systemId = SS_IDS[game.system];
+    let systemId = SS_IDS[game.system];
     if (!systemId) {
       console.log('[Bridge] Unsupported system:', game.system);
       return { success: false, error: 'Unsupported system' };
     }
+    // FIX_2026-11-07_WONDERSWAN: ScreenScraper lists WonderSwan Color separately (46)
+    if (game.system === 'wonderswan' && /\.wsc$/i.test(game.path)) systemId = 46;
     const artPath = this.getArtworkPath(game);
     const metaPath = artPath.replace(/\.jpg$/i, '.json');
     if (fs.existsSync(artPath) && fs.existsSync(metaPath)) {
@@ -2523,7 +2529,9 @@ Source = 0`;
     }
     // Phase 1: CRC + hash lookup
     try {
-      const { crc, size } = await getRomCrc(game.path);
+      const _romInfo = await getRomCrc(game.path);
+      const { crc, size } = _romInfo;
+      if (game.system === 'wonderswan' && _romInfo.name) systemId = /\.wsc$/i.test(_romInfo.name) ? 46 : 45; // FIX_2026-11-07_WONDERSWAN: zipped games
       console.log('[Bridge] CRC:', crc, 'size:', size, '|', game.title);
       const hashResult = await screenScraperHashLookup(baseParams, systemId, game, crc, size);
       if (hashResult.ok) {

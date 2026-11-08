@@ -13,7 +13,7 @@ catch (e) {
 let inst = null;
 const openNintendo = () => {
   if (inst && !inst.closed) return;
-  const dev = sdl.controller.devices.find(d => d.vendor === 0x057e);
+  const dev = sdl.controller.devices.find(d => d.vendor === 0x057e && d.product !== 0x0306); // FIX_2026-11-07_WII_REMOTE: not the DolphinBar
   if (!dev) return;
   try {
     inst = sdl.controller.openDevice(dev);
