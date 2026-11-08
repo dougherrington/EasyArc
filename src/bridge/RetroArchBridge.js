@@ -136,29 +136,30 @@ function isSystemBlocked(system) {
 }
 
 const FOLDER_HINTS = [
-  { hints: ['playstation 3','playstation3','ps3'],                           system: 'ps3' },
-  { hints: ['playstation 2','playstation2','ps2'],                           system: 'ps2' },
-  { hints: ['playstation portable','psp'],                                   system: 'psp' },
+  // FIX_2026-11-08_FOLDER_NAMES: more names per system (Redump/No-Intro, RetroBat, Batocera, EmuDeck, LaunchBox, KinHank styles)
+  { hints: ['playstation 3','playstation3','sony playstation 3','ps3'],      system: 'ps3' },
+  { hints: ['playstation 2','playstation2','sony playstation 2','ps 2','ps2'], system: 'ps2' },
   { hints: ['psp mini','pspmini','psp-mini','psp_mini','psp minis','pspminis','psp-minis','psp_minis','mini psp','minipsp','mini-psp','playstation portable mini','playstation portable minis','ps portable mini','ps minis','playstation minis','minis','mini','pspgo'], system: 'pspmini' },
-  { hints: ['sony playstation','playstation 1','playstation1','psx','ps1'],  system: 'psx' },
-  { hints: ['sega dreamcast','dreamcast','dream cast'],                      system: 'dreamcast' },
+  { hints: ['playstation portable','sony psp','psp'],                        system: 'psp' }, // FIX_2026-11-08_FOLDER_NAMES: after PSP Minis, so 'PSP Minis' folders stay Minis
+  { hints: ['sony playstation','playstation 1','playstation1','playstation','psone','ps one','ps 1','psx','ps1'], system: 'psx' },
+  { hints: ['sega dreamcast','dreamcast','dream cast','dc'],                 system: 'dreamcast' },
   { hints: ['sega saturn','saturn'],                                         system: 'saturn' },
-  { hints: ['game boy color','gameboy color','gbc'],                         system: 'gbc' },
-  { hints: ['game boy advance','gameboy advance','gba'],                     system: 'gba' },
+  { hints: ['game boy color','gameboy color','gameboycolor','gbc'],          system: 'gbc' },
+  { hints: ['game boy advance','gameboy advance','gameboyadvance','gba'],    system: 'gba' },
   { hints: ['game boy','gameboy','gb'],                                      system: 'gb' },
-  { hints: ['super nintendo','super nes','superfamicom','snes'],             system: 'snes' },
+  { hints: ['super nintendo','super nes','superfamicom','super famicom','sfc','snes'], system: 'snes' },
   { hints: ['nintendo 64','nintendo64','n64'],                               system: 'n64' },
-  { hints: ['nintendo entertainment system','nintendo entertainment','nes'], system: 'nes' },
+  { hints: ['nintendo entertainment system','nintendo entertainment','famicom','nes'], system: 'nes' },
   { hints: ['nintendo wii u','wiiu','wii u'],                                system: 'wiiu' },
   { hints: ['nintendo wii','wii nintendo','wii games','wii'],                system: 'wii' },
   { hints: ['nintendo switch','switch','nx'],                                system: 'switch' },
   { hints: ['nintendo 3ds','3ds'],                                           system: '3ds' },
-  { hints: ['gamecube','game cube','nintendo gamecube','ngc','gc'],          system: 'gamecube' },
-  { hints: ['mega drive','megadrive','sega genesis','genesis'],              system: 'genesis' },
+  { hints: ['gamecube','game cube','nintendo gamecube','ngc','gcn','gc'],    system: 'gamecube' },
+  { hints: ['mega drive','megadrive','sega genesis','genesis','md'],         system: 'genesis' },
   { hints: ['game gear','gamegear','gg'],                                    system: 'gamegear' },
-  { hints: ['master system','mastersystem','sms'],                           system: 'mastersystem' },
-  { hints: ['atari 2600','atari2600'],                                       system: 'atari2600' },
-  { hints: ['atari 7800','atari7800'],                                       system: 'atari7800' },
+  { hints: ['master system','mastersystem','mark iii','sms'],                system: 'mastersystem' },
+  { hints: ['atari 2600','atari2600','atari vcs','a2600','2600'],            system: 'atari2600' },
+  { hints: ['atari 7800','atari7800','a7800','7800'],                        system: 'atari7800' },
   // FIX_2026-10-17_PCENGINE: SuperGrafx listed before TurboGrafx so 'PC Engine SuperGrafx' folders go to SuperGrafx
   { hints: ['pc engine supergrafx','supergrafx','super grafx','sgx'],      system: 'supergrafx' },
   { hints: ['turbografx-16','turbografx 16','turbografx16','turbografx','turbo grafx','tg-16','tg16','pc engine','pc-engine','pcengine','pce'], system: 'pcengine' },
@@ -168,7 +169,7 @@ const FOLDER_HINTS = [
   { hints: ['mame2003','mame 2003','mame2003plus'],                          system: 'mame2003' },
   { hints: ['mame'],                                                         system: 'mame' },
   { hints: ['neogeo','neo geo','neo-geo'],                                   system: 'neogeo' },
-  { hints: ['arcade','cps1','cps2','cps3','atomiswave','naomi'],             system: 'arcade' },
+  { hints: ['arcade','fbneo','fbn','fba','finalburn','final burn','fbalpha','fb alpha','cps1','cps2','cps3','atomiswave','naomi'], system: 'arcade' },
 ];
 
 // Folders to skip during scanning
@@ -823,19 +824,19 @@ class RetroArchBridge {
     });
   }
 
-  async scanRoms(folderPath) {
+  async scanRoms(folderPath, systemHint) { // FIX_2026-11-08_FOLDER_NAMES: + systemHint (the Add Games choice)
     if (!folderPath || !fs.existsSync(folderPath)) {
       return { success: false, error: 'Folder not found', roms: [] };
     }
     const roms = [];
-    this._scanDir(folderPath, roms, 0);
+    this._scanDir(folderPath, roms, 0, systemHint || null);
     // Deduplicate by path
     const seen = new Set();
     const unique = roms.filter(r => { if (seen.has(r.path)) return false; seen.add(r.path); return true; });
     return { success: true, roms: unique };
   }
 
-  _scanDir(dir, results, depth) {
+  _scanDir(dir, results, depth, systemHint) {
     if (depth > 10) return;
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch(e) { return; }
@@ -858,7 +859,7 @@ class RetroArchBridge {
           }
           continue;
         }
-        this._scanDir(fullPath, results, depth + 1);
+        this._scanDir(fullPath, results, depth + 1, systemHint);
       } else {
         const ext = path.extname(entry.name).toLowerCase();
         // Skip non-game files
@@ -866,7 +867,7 @@ class RetroArchBridge {
         if (['.xml','.txt','.png','.jpg','.jpeg','.gif','.srm','.rtc','.cfg','.sav','.state','.bak','.old','.dll','.dat'].includes(ext)) continue;
 
         if (ext === '.pkg' && process.platform === 'win32') continue; // FIX_2026-11-05_PS3_PERSONAL: install packages, not games
-        const system = this._detectSystem(fullPath, ext);
+        const system = this._detectSystem(fullPath, ext, systemHint);
         if (!system) continue;
         if (isSystemBlocked(system)) continue;
 
@@ -877,6 +878,37 @@ class RetroArchBridge {
   }
 
   _matchFolderHint(folderPath) {
+    // FIX_2026-11-08_FOLDER_NAMES: the folder nearest the game decides (deepest first, so a
+    // parent folder's name can't override it). Dashes, underscores and dots count as spaces
+    // ("Nintendo - Wii", "Wii_ISOs"). Short names like "wii" or "ps2" also match as a whole
+    // word inside a folder name ("Wii Games", "PS2 ISOs"). 'mini' and the names of systems
+    // EasyArc doesn't offer (pc, dos, nx) still need an exact folder name.
+    const norm = (s) => String(s).toLowerCase().replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const segs = String(folderPath).split(/[\/\\]/).filter(Boolean).map(norm).reverse();
+    const EXACT_ONLY = new Set(['mini', 'pc', 'dos', 'nx']);
+    for (const seg of segs) {
+      const words = seg.split(' ');
+      for (const hint of FOLDER_HINTS) {
+        const hit = hint.hints.some((raw) => {
+          const h = norm(raw);
+          if (EXACT_ONLY.has(h)) return seg === h;
+          if (h.length <= 3) return seg === h || words.includes(h);
+          let idx = seg.indexOf(h);
+          while (idx !== -1) {
+            const before = idx === 0 || !/[a-z0-9]/.test(seg[idx - 1]);
+            const after = idx + h.length >= seg.length || !/[a-z0-9]/.test(seg[idx + h.length]);
+            if (before && after) return true;
+            idx = seg.indexOf(h, idx + 1);
+          }
+          return false;
+        });
+        if (hit) return hint.system;
+      }
+    }
+    return null;
+  }
+
+  _matchFolderHintOld(folderPath) { // FIX_2026-11-08_FOLDER_NAMES: previous matcher, unused (kept for reference)
     // Shared word-boundary-safe hint matcher used by both _detectSystem and scanCollection
     // Check ALL path segments so games in subfolders are correctly identified
     const fullPath = folderPath.toLowerCase();
@@ -898,7 +930,7 @@ class RetroArchBridge {
     return null;
   }
 
-  _detectSystem(fullPath, ext) {
+  _detectSystem(fullPath, ext, systemHint) {
     // 1. Check unique extensions first — no ambiguity
     for (const [system, exts] of Object.entries(UNIQUE_EXTENSIONS)) {
       if (exts.includes(ext)) return system;
@@ -909,6 +941,8 @@ class RetroArchBridge {
       const folderName = path.dirname(fullPath).toLowerCase();
       const system = this._matchFolderHint(folderName);
       if (system && SHARED_EXTENSIONS[ext].includes(system)) return system;
+      // FIX_2026-11-08_FOLDER_NAMES: folder name not recognized - use the system chosen in Add Games
+      if (systemHint && SHARED_EXTENSIONS[ext].includes(systemHint)) return systemHint;
       // 3. If only one system uses this extension, use it directly
       if (SHARED_EXTENSIONS[ext].length === 1) return SHARED_EXTENSIONS[ext][0];
     }

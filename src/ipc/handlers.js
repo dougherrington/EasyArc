@@ -272,7 +272,7 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   handle('bridge:listCores',     () => bridge.listCores());
   handle('bridge:coreExists',    (system) => bridge.coreExists(system));
   handle('bridge:installCore',   (system) => bridge.installCore(system));
-  handle('bridge:scanRoms',      (folderPath) => bridge.scanRoms(folderPath));
+  handle('bridge:scanRoms',      (folderPath, systemHint) => bridge.scanRoms(folderPath, systemHint)); // FIX_2026-11-08_FOLDER_NAMES
   handle('bridge:launchGame',    (options) => bridge.launchGame(options));
   handle('bridge:killGame',        () => bridge.killGame());
   handle('bridge:listControllers', () => bridge.listControllers());

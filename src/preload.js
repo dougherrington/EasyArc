@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('easyarc', {
   installCore: (system) => ipcRenderer.invoke('bridge:installCore', system),
   pickRomFolder:    () => ipcRenderer.invoke('bridge:pickRomFolder'),
   pickParentFolder: (folderName) => ipcRenderer.invoke('bridge:pickParentFolder', folderName),
-  scanRoms: (folderPath) => ipcRenderer.invoke('bridge:scanRoms', folderPath),
+  scanRoms: (folderPath, systemHint) => ipcRenderer.invoke('bridge:scanRoms', folderPath, systemHint), // FIX_2026-11-08_FOLDER_NAMES
   launchGame: (options) => ipcRenderer.invoke('bridge:launchGame', options),
   killGame: () => ipcRenderer.invoke('bridge:killGame'),
   listControllers: () => ipcRenderer.invoke('bridge:listControllers'),

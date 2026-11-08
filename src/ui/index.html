@@ -1874,8 +1874,29 @@ function dupScore(tags) {
   if (tags.indexOf('[!]') >= 0) s -= 0.5;
   return s;
 }
+// FIX_2026-11-08_DUP_CACHE: the duplicate list is reused only while the library is unchanged.
+// It used to be reused while the game COUNT was unchanged, so after a rescan or import that kept
+// the same count it could keep hiding games that were no longer duplicates. The fingerprint covers
+// every game's system, path and title (a few milliseconds even for 20,000+ games).
+function dupFingerprint() {
+  let h = -2128831035;
+  const n = games.length;
+  for (let k = 0; k < n; k++) {
+    const g = games[k];
+    if (!g) { h = Math.imul(h ^ 1, 16777619); continue; }
+    const a = g.path || '', b = g.system || '', c = g.title || '';
+    for (let i = 0; i < a.length; i++) h = Math.imul(h ^ a.charCodeAt(i), 16777619);
+    h = Math.imul(h ^ 124, 16777619);
+    for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b.charCodeAt(i), 16777619);
+    h = Math.imul(h ^ 124, 16777619);
+    for (let i = 0; i < c.length; i++) h = Math.imul(h ^ c.charCodeAt(i), 16777619);
+    h = Math.imul(h ^ 10, 16777619);
+  }
+  return n + ':' + (h >>> 0);
+}
 function dupHiddenSet() {
-  if (dupCache.arr === games && dupCache.len === games.length) return dupCache.hidden;
+  const fp = dupFingerprint(); // FIX_2026-11-08_DUP_CACHE
+  if (dupCache.arr === games && dupCache.fp === fp) return dupCache.hidden;
   const groups = new Map();
   for (const g of games) {
     if (!g || DUP_SKIP_SYS.has(g.system)) continue;
@@ -1897,7 +1918,7 @@ function dupHiddenSet() {
     if (grp.all.length < 2) continue;
     for (const g of grp.all) if (g !== grp.keep) hidden.add(g);
   }
-  dupCache = { arr: games, len: games.length, hidden };
+  dupCache = { arr: games, len: games.length, fp, hidden }; // FIX_2026-11-08_DUP_CACHE
   return hidden;
 }
 function eaVisibleGames() {
@@ -2649,7 +2670,7 @@ async function rescanLibrary() {
   for (const folder of folders) {
     if (!window.easyarc) break;
     let result = null;
-    try { result = await window.easyarc.scanRoms(folder); }
+    try { result = await window.easyarc.scanRoms(folder, eaFolderSystem(folder)); } // FIX_2026-11-08_FOLDER_NAMES
     catch (err) { console.log('[Refresh] scan error for', folder, err && err.message); }
     const hadGames = games.some(g => inFolder(g.path, folder));
     const usable = result && result.success && Array.isArray(result.roms) &&
@@ -2872,7 +2893,7 @@ async function frwRunScan() {
     const ticker = setInterval(() => { fakeP = Math.min(fakeP+1,85); if(bar) bar.style.width=fakeP+'%'; }, 80);
     for (const folder of frwRomFolders) {
       if (status) status.innerHTML = '<span class="frw-spinner">&#8635;</span>&nbsp;Scanning ' + folder + '...';
-      const result = await window.easyarc.scanRoms(folder);
+      const result = await window.easyarc.scanRoms(folder, eaFolderSystem(folder)); // FIX_2026-11-08_FOLDER_NAMES
       if (result.success) roms = roms.concat(result.roms);
     }
     clearInterval(ticker);
@@ -2940,7 +2961,7 @@ if (window.easyarc) {
       const unavailable = [];
       for (let fi = 0; fi < savedFolders.length; fi++) {
         const folder = savedFolders[fi];
-        const result = await window.easyarc.scanRoms(folder);
+        const result = await window.easyarc.scanRoms(folder, eaFolderSystem(folder)); // FIX_2026-11-08_FOLDER_NAMES
         if (result.success) {
           // Clear from unavailable if it was previously missing
           result.roms.forEach((rom,i) => {
@@ -5658,6 +5679,15 @@ renderGrid = function() {
 let addGamesStep = 0;
 let addGamesHasFiles = null;
 let addGamesSystem = null;
+// FIX_2026-11-08_FOLDER_NAMES: the system chosen in Add Games, remembered per folder. Used only
+// for files whose folder name EasyArc doesn't recognize (recognized folders always win).
+function eaFolderSystem(folder) {
+  try { const m = JSON.parse(localStorage.getItem('easyarc_folder_systems') || '{}'); return m[folder] || null; } catch (e) { return null; }
+}
+function eaSetFolderSystem(folder, system) {
+  if (!folder || !system) return;
+  try { const m = JSON.parse(localStorage.getItem('easyarc_folder_systems') || '{}'); m[folder] = system; localStorage.setItem('easyarc_folder_systems', JSON.stringify(m)); } catch (e) {}
+}
 let addGamesFolder = null;
 
 // Keep in sync with BLOCKED_ALWAYS / BLOCKED_ON_WINDOWS in RetroArchBridge.js —
@@ -6162,8 +6192,9 @@ async function addGamesImportAll() {
     }
     // Scan for games
     if (window.easyarc) {
-      const result = await window.easyarc.scanRoms(r.folder);
+      const result = await window.easyarc.scanRoms(r.folder, r.selectedSystem || eaFolderSystem(r.folder)); // FIX_2026-11-08_FOLDER_NAMES // FIX_2026-11-08_COLLECTION_HINT: the system set for this folder
       if (result.success) {
+        eaSetFolderSystem(r.folder, r.selectedSystem); // FIX_2026-11-08_COLLECTION_HINT: remembered, so startup and Refresh keep these games
         // Clear any previously excluded paths from this folder so they reappear
         let excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
         const folderPaths = result.roms.map(rom => rom.path);
@@ -6225,8 +6256,9 @@ async function addGamesScanAndAdd() {
   // Scan for games
   let newCount = 0;
   if (window.easyarc) {
-    const result = await window.easyarc.scanRoms(addGamesFolder);
+    const result = await window.easyarc.scanRoms(addGamesFolder, addGamesSystem); // FIX_2026-11-08_FOLDER_NAMES: the chosen system places files the folder name doesn't
     if (result.success) {
+      eaSetFolderSystem(addGamesFolder, addGamesSystem); // FIX_2026-11-08_FOLDER_NAMES: remembered, so Refresh keeps these games
       // Clear any previously excluded paths from this folder so they reappear
       let excluded = JSON.parse(localStorage.getItem('easyarc_excluded_paths') || '[]');
       const folderPaths = result.roms.map(rom => rom.path);
@@ -6793,6 +6825,7 @@ showView = function(name) {
         <li>New system: WonderSwan and WonderSwan Color</li>
         <li>Easier to read: bigger game details, larger messages, game count under the system name</li>
         <li>Hold Select+Start to exit Wii and GameCube games with any controller</li>
+        <li>Better game detection: more folder names recognized, and your Add Games system choice is remembered</li>
       </ul>
       <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">TIPS</div>
       <ul style="margin:0 0 0 20px;padding:0;">
