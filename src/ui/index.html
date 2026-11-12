@@ -473,7 +473,7 @@ body::after {
 .setting-name { font-size:14px; font-weight:600; color:var(--text); margin-bottom:2px; font-family:'Rajdhani',sans-serif; }
 .setting-desc { font-size:11px; color:var(--muted); line-height:1.5; font-family:'Rajdhani',sans-serif; }
 .setting-control { margin-left:16px; }
-.toggle { position:relative; width:44px; height:24px; }
+.toggle { position:relative; display:inline-block; width:44px; height:24px; } /* EXP_2026-11-12_TOGGLE_FIX: inline labels ignore width, so the switch collapsed to a sliver */
 .toggle input { opacity:0; width:0; height:0; }
 .toggle-slider { position:absolute; inset:0; background:var(--bg3); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:all 0.2s; }
 .toggle-slider::before { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:all 0.2s; }
@@ -912,6 +912,37 @@ body::after {
           <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="playClick();aboutOpen()">About...</button></div>
         </div>
       </div>
+      <!-- EXP_2026-11-12_DOLPHIN_4K: experiment, top of the page, one toggle per system -->
+      <div class="settings-section">
+        <div class="settings-heading">EXPERIMENTAL — 4K UPSCALING</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-desc">Sharper picture. Needs a powerful PC: most computers will see stuttering or slowdown. Turn off if games run poorly.</div></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">4K: GameCube</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_gamecube" onchange="fourKSet('gamecube', this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">4K: Wii</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_wii" onchange="fourKSet('wii', this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">4K: PlayStation</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_psx" onchange="fourKSet('psx', this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">4K: PlayStation 2</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_ps2" onchange="fourKSet('ps2', this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+      </div>
+      <!-- FIX_2026-11-12_METRICS: Advanced order is About, 4K, Privacy, then the rest -->
+      <div class="settings-section">
+        <div class="settings-heading">PRIVACY</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Anonymous Usage Reporting</div><div class="setting-desc">Tells the developer how many people use EasyArc and which version. No personal information, such as names, IP addresses, personal files or the games you play, is collected or stored.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" id="metricsToggle" onchange="metricsSet(this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+      </div>
       <div class="settings-section">
         <div class="settings-heading">BOX ART — SCREENSCRAPER</div>
         <!-- FIX_2026-10-10_SS_SETUP: free account setup -->
@@ -1204,6 +1235,13 @@ function reconcileFavoritesAndRecent() {
   // hasn't loaded yet. Without this guard, reconciliation against empty games[]
   // nukes all favorites/recent entries as path-not-found orphans.
   if (!games || games.length === 0) return;
+  // FIX_2026-11-09_FAV_RACE: wait until the startup scan has finished. Running
+  // against a half-loaded library deleted favorites/recent from folders not yet
+  // scanned (seen after updates, when first launch is slower).
+  if (!window.__eaLibraryReady) return;
+  const _eaNorm = (p) => String(p || '').replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase();
+  const _eaOffline = (window.__eaUnavailableFolders || []).map(_eaNorm);
+  const _eaKeep = (p) => { const n = _eaNorm(p); return _eaOffline.some(f => n === f || n.startsWith(f + '/')); };
   if (!localStorage.getItem('easyarc_prefixc_backup')) {
     localStorage.setItem('easyarc_prefixc_backup', JSON.stringify({
       favorites: JSON.parse(localStorage.getItem('easyarc_favorites') || '[]'),
@@ -1220,6 +1258,7 @@ function reconcileFavoritesAndRecent() {
   for (const f of oldFavs) {
     const game = gamesByPath.get(f.path);
     if (game) newFavs.push({ id: game.id, title: game.title, system: game.system, path: game.path });
+    else if (_eaKeep(f.path)) newFavs.push(f); // FIX_2026-11-09_FAV_RACE: drive missing, keep it
   }
   const newFavsRaw = JSON.stringify(newFavs);
   if (newFavsRaw !== oldFavsRaw) localStorage.setItem('easyarc_favorites', newFavsRaw);
@@ -1230,6 +1269,7 @@ function reconcileFavoritesAndRecent() {
   for (const r of oldRecent) {
     const game = gamesByPath.get(r.path);
     if (game) newRecent.push({ id: game.id, title: game.title, system: game.system, path: game.path });
+    else if (_eaKeep(r.path)) newRecent.push(r); // FIX_2026-11-09_FAV_RACE: drive missing, keep it
   }
   const newRecentRaw = JSON.stringify(newRecent);
   if (newRecentRaw !== oldRecentRaw) localStorage.setItem('easyarc_recent', newRecentRaw);
@@ -2313,7 +2353,7 @@ async function launchGame(game) {
     const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
     const p1id = gps.length > 0 ? gps[0].id : '';
     const p1profile = ctrlGetProfile(p1id);
-    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id, controllerType: p1profile.type });
+    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id, controllerType: p1profile.type, fourK: fourKEnabled(g.system) }); // EXP_2026-11-12_DOLPHIN_4K
     showToast(result.success ? 'Launching ' + g.title + '...' : 'Error: ' + result.error);
   } else {
     showToast('Launching ' + g.title + '...');
@@ -2976,10 +3016,14 @@ if (window.easyarc) {
       if (unavailable.length > 0) {
         showToast(unavailable.length + ' folder' + (unavailable.length > 1 ? 's' : '') + ' not found — check your connected drives.');
       }
+      window.__eaUnavailableFolders = unavailable; // FIX_2026-11-09_FAV_RACE
+      window.__eaLibraryReady = true;              // FIX_2026-11-09_FAV_RACE
       updateCounts();
       renderGrid();
       loadArtworkCache();
     })();
+  } else {
+    window.__eaLibraryReady = true; // FIX_2026-11-09_FAV_RACE: no startup scan (first run)
   }
 } else {
   document.getElementById('statusText').textContent = 'Browser Preview';
@@ -3571,6 +3615,12 @@ async function ctestMaybeLaunch(game) {
     return;
   }
 
+  // FEAT_2026-11-12_SATURN: Saturn needs its System Files (BIOS) before the core download or launch.
+  if (game.system === 'saturn' && window.easyarc) {
+    const saturnReady = await saturnEnsureBios();
+    if (!saturnReady) return;
+  }
+
   // Step 1 — check if core is installed, offer download if not
   // Skip for systems that use standalone emulators
   // FIX_2026-05-22_DUCKSTATION_INSTALL: psx now uses DuckStation (standalone), not RetroArch
@@ -3685,6 +3735,30 @@ function wiiLsSyncToggle() {
 }
 document.addEventListener('DOMContentLoaded', wiiLsSyncToggle);
 setTimeout(wiiLsSyncToggle, 0);
+// EXP_2026-11-12_DOLPHIN_4K: one Advanced toggle per system, all off by default. Passed to the emulator at launch.
+const FOURK_SYSTEMS = ['gamecube', 'wii', 'psx', 'ps2'];
+function fourKEnabled(sys) {
+  try { return localStorage.getItem('ea_4k_' + sys) === '1'; } catch (e) { return false; }
+}
+function fourKSet(sys, on) {
+  try { if (on) localStorage.setItem('ea_4k_' + sys, '1'); else localStorage.removeItem('ea_4k_' + sys); } catch (e) {}
+  const t = document.getElementById('fourK_' + sys);
+  if (t) t.checked = !!on;
+}
+function fourKSyncToggles() {
+  FOURK_SYSTEMS.forEach(sys => { const t = document.getElementById('fourK_' + sys); if (t) t.checked = fourKEnabled(sys); });
+}
+document.addEventListener('DOMContentLoaded', fourKSyncToggles);
+setTimeout(fourKSyncToggles, 0);
+// FIX_2026-11-12_METRICS: Advanced toggle, on by default. The setting lives in the main process.
+async function metricsSyncToggle() {
+  try { const t = document.getElementById('metricsToggle'); if (t && window.easyarc.metricsGetEnabled) t.checked = !!(await window.easyarc.metricsGetEnabled()); } catch (e) {}
+}
+async function metricsSet(on) {
+  try { const r = await window.easyarc.metricsSetEnabled(!!on); const t = document.getElementById('metricsToggle'); if (t) t.checked = !!r; } catch (e) {}
+}
+document.addEventListener('DOMContentLoaded', metricsSyncToggle);
+setTimeout(metricsSyncToggle, 0);
 
 function wiiLsKind(type) {
   if (type === 'switch') return 'pro';
@@ -3982,7 +4056,7 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   };
   let result;
   try {
-    result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes);
+    result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes, fourKEnabled(game.system)); // EXP_2026-11-12_DOLPHIN_4K
   } catch (err) {
     result = { success: false, error: err && err.message };
   }
@@ -4048,6 +4122,70 @@ async function ps2EnsureBios() {
       const browseResult = await window.easyarc.browseForBiosFolder();
       if (!browseResult || browseResult.canceled) return;
       const cfg = await window.easyarc.configurePS2Bios(browseResult.directory);
+      if (cfg && cfg.success) {
+        modal.classList.add('hidden');
+        resolve(true);
+      } else {
+        status.textContent = 'Could not set up System Files: ' + ((cfg && cfg.error) || 'unknown');
+      }
+    });
+    cancelBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      resolve(false);
+    });
+
+    modal.classList.remove('hidden');
+    setTimeout(() => actionBtn.focus(), 50);
+  });
+}
+
+// FEAT_2026-11-12_SATURN: make sure Beetle Saturn has its System Files (BIOS). Silent when found
+// (any file name: EasyArc recognizes them by content); otherwise the same pop-up as PS2, with Browse.
+async function saturnEnsureBios() {
+  let scan = null;
+  try {
+    scan = await window.easyarc.scanForSaturnBios();
+  } catch (err) {
+    console.log('[SATURN-FLOW] scanForSaturnBios threw:', err.message);
+  }
+  console.log('[SATURN-FLOW] BIOS scan result:', JSON.stringify(scan));
+  if (scan && scan.found) {
+    try {
+      const cfg = await window.easyarc.configureSaturnBios(scan.directory);
+      console.log('[SATURN-FLOW] configureSaturnBios result:', JSON.stringify(cfg));
+      if (cfg && cfg.success) return true;
+    } catch (err) {
+      console.log('[SATURN-FLOW] configureSaturnBios threw:', err.message);
+    }
+  }
+
+  const modal = document.getElementById('psxSetupModal');
+  const title = document.getElementById('psxSetupTitle');
+  const status = document.getElementById('psxSetupStatus');
+  const progressWrap = document.getElementById('psxSetupProgressWrap');
+  const oldAction = document.getElementById('psxSetupActionBtn');
+  const oldCancel = document.getElementById('psxSetupCancelBtn');
+  if (!modal || !title || !status || !oldAction || !oldCancel) {
+    showToast('Sega Saturn System Files (BIOS) not found');
+    return false;
+  }
+
+  return await new Promise((resolve) => {
+    title.textContent = 'SYSTEM FILES NEEDED';
+    status.innerHTML = 'EasyArc could not find your Sega Saturn System Files (BIOS).<br><br>US and European games need <b>mpr-17933.bin</b>. Japanese games need <b>sega_101.bin</b>. Your files can have any name; EasyArc recognizes them.<br><br>If you have them, click <b>Browse</b> to point EasyArc at the folder.';
+    if (progressWrap) progressWrap.style.display = 'none';
+
+    const actionBtn = oldAction.cloneNode(true);
+    oldAction.parentNode.replaceChild(actionBtn, oldAction);
+    actionBtn.textContent = 'Browse...';
+    actionBtn.style.display = 'inline-block';
+    const cancelBtn = oldCancel.cloneNode(true);
+    oldCancel.parentNode.replaceChild(cancelBtn, oldCancel);
+
+    actionBtn.addEventListener('click', async () => {
+      const browseResult = await window.easyarc.browseForBiosFolder();
+      if (!browseResult || browseResult.canceled) return;
+      const cfg = await window.easyarc.configureSaturnBios(browseResult.directory);
       if (cfg && cfg.success) {
         modal.classList.add('hidden');
         resolve(true);
@@ -5720,7 +5858,7 @@ const ADD_GAMES_SYSTEMS = [
   { id:'pcengine',    name:'TurboGrafx-16' }, // FIX_2026-10-17_PCENGINE
   { id:'supergrafx',  name:'SuperGrafx' },
   { id:'wonderswan',  name:'WonderSwan' }, // FIX_2026-11-07_WONDERSWAN
-  // { id:'saturn',      name:'Sega Saturn' }, // FIX_2026-10-31_SATURN_OFF: returns with Saturn BIOS support
+  { id:'saturn',      name:'Sega Saturn' }, // FEAT_2026-11-12_SATURN
   { id:'dreamcast',   name:'Sega Dreamcast' }, // FIX_2026-10-17_DREAMCAST
 ];
 

@@ -291,6 +291,30 @@ class DolphinBridge {
     }
   }
 
+  // EXP_2026-11-12_DOLPHIN_4K: write GFX.ini [Settings] InternalResolution before launch.
+  // 6 = 6x native (about 4K), 1 = native. Changes only that line; the rest of the file is kept.
+  writeGfxConfig(fourK) {
+    const cfgDir = this._getDolphinConfigDir();
+    const cfgPath = path.join(cfgDir, 'GFX.ini');
+    const line = 'InternalResolution = ' + (fourK ? '6' : '1');
+    try {
+      fs.mkdirSync(cfgDir, { recursive: true });
+      let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
+      const header = '[Settings]';
+      if (!cfg.includes(header)) cfg += (cfg && !cfg.endsWith('\n') ? '\n' : '') + header + '\n';
+      const start = cfg.indexOf(header);
+      const next = cfg.indexOf('\n[', start + 1);
+      const block = next === -1 ? cfg.slice(start) : cfg.slice(start, next);
+      const re = /^InternalResolution\s*=.*$/m;
+      const newBlock = re.test(block) ? block.replace(re, line) : block.replace(header, header + '\n' + line);
+      cfg = cfg.slice(0, start) + newBlock + (next === -1 ? '' : cfg.slice(next));
+      fs.writeFileSync(cfgPath, cfg);
+      console.log('[DOLPHIN] Wrote GFX.ini:', line);
+    } catch (err) {
+      console.log('[DOLPHIN] Failed to write GFX.ini:', err.message);
+    }
+  }
+
   // STAGE_6: Write GCPadNew.ini before launch. The exact XInput-based config
   // that worked when manually configured through Dolphin's UI on Parallels.
   // controllerName and controllerType are accepted but unused for now.
@@ -1186,7 +1210,7 @@ class DolphinBridge {
   // and starts the game). Matches the Mac launch pattern in RetroArchBridge.launchGame.
   // FIX_2026-06-07_DOLPHIN_CONTROLLER_FAMILIES: accept controllerType from renderer
   // so we can write the correct GCPadNew.ini based on connected controller family.
-  async launchDolphin(romPath, controllerType, controllerTypes) {
+  async launchDolphin(romPath, controllerType, controllerTypes, dolphin4k) { // EXP_2026-11-12_DOLPHIN_4K
     console.log('[DOLPHIN] launchDolphin called with romPath:', romPath);
 
     // STAGE_6: Write config files before launching so Dolphin starts in fullscreen
@@ -1197,6 +1221,7 @@ class DolphinBridge {
     // exit back to EasyArc via a controller combo. Device string and exit binding are
     // per controller family (verbatim from working Dolphin UI configs). P1 only.
     this.writeHotkeyConfig(controllerType);
+    this.writeGfxConfig(!!dolphin4k); // EXP_2026-11-12_DOLPHIN_4K
 
     const binaryPath = this.getEasyArcDolphinBinary();
     console.log('[DOLPHIN] Binary path:', binaryPath);

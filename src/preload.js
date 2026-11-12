@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('easyarc', {
   scanForPSXBios: () => ipcRenderer.invoke('bridge:scanForPSXBios'),
   scanForPS2Bios: () => ipcRenderer.invoke('bridge:scanForPS2Bios'), // FIX_2026-10-19_PS2_WINDOWS
   configurePS2Bios: (dir) => ipcRenderer.invoke('bridge:configurePS2Bios', dir),
+  scanForSaturnBios: () => ipcRenderer.invoke('bridge:scanForSaturnBios'), // FEAT_2026-11-12_SATURN
+  configureSaturnBios: (dir) => ipcRenderer.invoke('bridge:configureSaturnBios', dir), // FEAT_2026-11-12_SATURN
   configureDuckStationBios: (biosDir) => ipcRenderer.invoke('bridge:configureDuckStationBios', biosDir),
   browseForBiosFolder: () => ipcRenderer.invoke('bridge:browseForBiosFolder'),
   onDuckStationDownloadProgress: (callback) => ipcRenderer.on('duckstation:downloadProgress', (_e, data) => callback(data)),
@@ -62,10 +64,12 @@ contextBridge.exposeInMainWorld('easyarc', {
   ensureDolphinReady: () => ipcRenderer.invoke('bridge:ensureDolphinReady'),
   launchDolphinBare: () => ipcRenderer.invoke('bridge:launchDolphinBare'),
   // FIX_2026-06-07_DOLPHIN_DETECTION_RESTORE: pass controllerType through IPC
-  launchDolphin: (romPath, controllerType, controllerTypes) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType, controllerTypes),
+  launchDolphin: (romPath, controllerType, controllerTypes, dolphin4k) => ipcRenderer.invoke('bridge:launchDolphin', romPath, controllerType, controllerTypes, dolphin4k), // EXP_2026-11-12_DOLPHIN_4K
   openScreenScraperSignup: () => ipcRenderer.invoke('app:openScreenScraperSignup'), // FIX_2026-10-10_SS_SETUP
   openHelp: () => ipcRenderer.invoke('app:openHelp'), // FIX_2026-10-31_HELP_BUTTON
   getVersion: () => ipcRenderer.invoke('app:getVersion'), // FIX_2026-11-07_ABOUT
+  metricsGetEnabled: () => ipcRenderer.invoke('metrics:getEnabled'), // FIX_2026-11-12_METRICS
+  metricsSetEnabled: (on) => ipcRenderer.invoke('metrics:setEnabled', on), // FIX_2026-11-12_METRICS
   openAboutLink: (which) => ipcRenderer.invoke('app:openAboutLink', which), // FIX_2026-11-07_ABOUT
   openLicenses: () => ipcRenderer.invoke('app:openLicenses'), // FIX_2026-11-07_ABOUT
 });

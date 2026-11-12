@@ -166,10 +166,10 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   });
 
   // STAGE_5: Launch Dolphin with a ROM. Used by gamecubeEnsureReadyAndLaunch.
-  handle('bridge:launchDolphin', (romPath, controllerType, controllerTypes) => {  // FIX_2026-06-08_DOLPHIN_HANDLER_FORWARD
+  handle('bridge:launchDolphin', (romPath, controllerType, controllerTypes, dolphin4k) => { // EXP_2026-11-12_DOLPHIN_4K  // FIX_2026-06-08_DOLPHIN_HANDLER_FORWARD
     const DolphinBridge = require('../bridge/DolphinBridge');
     const dolphinBridge = new DolphinBridge();
-    return dolphinBridge.launchDolphin(romPath, controllerType, controllerTypes);
+    return dolphinBridge.launchDolphin(romPath, controllerType, controllerTypes, dolphin4k);
   });
   handle('bridge:findDolphin',   () => bridge.findDolphin());
   // FIX_2026-06-18_PPSSPP_STAGEA: launch a PSP ROM via standalone PPSSPP.
@@ -211,6 +211,8 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
   // FIX_2026-10-19_PS2_WINDOWS
   handle('bridge:scanForPS2Bios', () => bridge.scanForPS2Bios());
   handle('bridge:configurePS2Bios', (biosDir) => bridge.copyPS2BiosToPortable(biosDir));
+  handle('bridge:scanForSaturnBios', () => bridge.scanForSaturnBios()); // FEAT_2026-11-12_SATURN
+  handle('bridge:configureSaturnBios', (biosDir) => bridge.copySaturnBiosToSystem(biosDir)); // FEAT_2026-11-12_SATURN
   handle('bridge:configureDuckStationBios', (biosDir) => {
     // Update DuckStation's settings.ini with EasyArc-required settings (Main + Pad sections)
     bridge.writeDuckStationConfig();
@@ -329,6 +331,9 @@ function registerIpcHandlers(ipcMain, bridge, dialog) {
 
   // FIX_2026-11-07_ABOUT: About window - version number, fixed links, licenses folder
   handle('app:getVersion', () => require('electron').app.getVersion());
+  // FIX_2026-11-12_METRICS: Advanced toggle for anonymous usage reporting
+  handle('metrics:getEnabled', () => require('../metrics').isEnabled());
+  handle('metrics:setEnabled', (on) => require('../metrics').setEnabled(require('electron').app, !!on));
   handle('app:openAboutLink', (which) => {
     const urls = { site: 'https://easyarc.net', facebook: 'https://www.facebook.com/share/g/1Fq7v4PVV9/' };
     if (urls[which]) require('electron').shell.openExternal(urls[which]);

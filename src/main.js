@@ -93,6 +93,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers(ipcMain, bridge, dialog);
   createWindow();
   setupAutoUpdater(); // FIX_2026-10-11_UPDATER
+  try { require('./metrics').launchPing(app); } catch (e) {} // FIX_2026-11-12_METRICS: background, never blocks startup
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

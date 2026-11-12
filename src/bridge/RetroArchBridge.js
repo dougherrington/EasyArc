@@ -96,7 +96,13 @@ const SHARED_EXTENSIONS = {
 // BLOCKED_ALWAYS — no support planned or untested; hidden on every platform.
 // BLOCKED_ON_WINDOWS — works on macOS only; hidden in the Windows build.
 // To restore a system, remove it from the relevant set.
-const BLOCKED_ALWAYS = new Set(['msdos','wiiu','3ds','saturn']); // FIX_2026-10-31_SATURN_OFF: blocked until Saturn BIOS support; // FIX_2026-10-31_SATURN_ON: saturn unblocked (Yabause core) // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
+const BLOCKED_ALWAYS = new Set(['msdos','wiiu','3ds']); // FEAT_2026-11-12_SATURN: saturn back on (Beetle Saturn + BIOS detection)
+// FEAT_2026-11-12_SATURN: Saturn BIOS dumps are all 512 KB and go by many names, so identify them by MD5.
+const SATURN_BIOS_MD5 = {
+  '3240872c70984b6cbfda1586cab68dbe': 'mpr-17933.bin', // US/Europe v1.00
+  '85ec9ca47d8f6807718151cbcca8b964': 'sega_101.bin',  // Japan v1.01
+};
+// // FIX_2026-10-31_SATURN_OFF: blocked until Saturn BIOS support; // FIX_2026-10-31_SATURN_ON: saturn unblocked (Yabause core) // FIX_2026-10-27_WII_ON: wii unblocked; // FIX_2026-10-17_DREAMCAST: Dreamcast enabled (RetroArch Flycast)
 const BLOCKED_ON_WINDOWS = new Set(['ps3','switch']); // FIX_2026-10-19_PS2_WINDOWS: ps2 unblocked
 // FIX_2026-11-04_WIIU_PERSONAL: Wii U turns on only where Cemu sits at this exact path (Doug's own machines).
 // Everyone else keeps Wii U blocked, with no setting to find.
@@ -207,7 +213,7 @@ const CORE_REMAP_FOLDERS = {
   psx:         'DuckStation',
   ps2:         'PCSX2',
   psp:         'PPSSPP',
-  saturn:      'Yabause', // FIX_2026-10-31_SATURN_ON
+  saturn:      'Beetle Saturn', // FEAT_2026-11-12_SATURN
   mame:        'MAME',
   mame2003:    'MAME 2003-Plus',
   arcade:      'FinalBurn Neo',
@@ -274,7 +280,7 @@ const SYSTEM_CORES = {
   psx:          'mednafen_psx_libretro.dylib',
   ps2:          'pcsx2_libretro.dylib',
   psp:          'ppsspp_libretro.dylib',
-  saturn:       'yabause_libretro.dylib', // FIX_2026-10-31_SATURN_ON: runs without a BIOS
+  saturn:       'mednafen_saturn_libretro.dylib', // FEAT_2026-11-12_SATURN: Beetle Saturn (needs a BIOS)
   dreamcast:    'flycast_libretro.dylib',
   gamecube:     'dolphin_libretro.dylib',
   atari2600:    'stella_libretro.dylib',
@@ -1169,7 +1175,7 @@ class RetroArchBridge {
           console.log('[Bridge] Using .bin instead of .cue:', romPath);
         }
       }
-      this.writePCSX2Config();
+      this.writePCSX2Config(!!options.fourK); // EXP_2026-11-12_DOLPHIN_4K
       console.log('[Bridge] Launching PS2 game via PCSX2:', romPath);
       try {
         this.retroarchProcess = spawn(pcsx2.path, ['-batch', '-nogui', '-fullscreen', romPath], { detached: false, stdio: 'ignore' });
@@ -1241,7 +1247,7 @@ class RetroArchBridge {
     if (options.system === 'psx') {
       console.log('[PSX-LAUNCH] Entered PSX launch branch. romPath:', options.romPath);
       console.log('[PSX-LAUNCH] Calling writeDuckStationConfig()');
-      this.writeDuckStationConfig();
+      this.writeDuckStationConfig(!!options.fourK); // EXP_2026-11-12_DOLPHIN_4K
       console.log('[PSX-LAUNCH] writeDuckStationConfig() returned');
       console.log('[PSX-LAUNCH] Calling findDuckStation()');
       const duckstation = await this.findDuckStation();
@@ -1603,7 +1609,7 @@ Device = Quartz/0/Keyboard & Mouse`;
     return path.join(process.env.APPDATA || os.homedir(), 'easyarc', 'pcsx2');
   }
 
-  writePCSX2Config() {
+  writePCSX2Config(fourK) {
     const isWin = process.platform === 'win32';
     const cfgPath = isWin
       ? path.join(this.getPCSX2Dir(), 'inis', 'PCSX2.ini')
@@ -1613,6 +1619,7 @@ Device = Quartz/0/Keyboard & Mouse`;
       let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
       cfg = cfg.replace(/\r\n/g, '\n');
       cfg = this.setIniValue(cfg, 'UI', 'ConfirmShutdown', 'false');
+      cfg = this.setIniValue(cfg, 'EmuCore/GS', 'upscale_multiplier', fourK ? '6' : '1'); // EXP_2026-11-12_DOLPHIN_4K: 6x = ~4K, 1 = native
       cfg = this.removeIniKeyOutside(cfg, 'UI', 'ConfirmShutdown');
       if (isWin) {
         // A brand-new file needs SettingsVersion, or PCSX2 resets it to defaults.
@@ -1707,6 +1714,86 @@ Device = Quartz/0/Keyboard & Mouse`;
     }
     const rest = lines.slice(s.end);
     return lines.slice(0, s.start).concat(block, [''], rest).join('\n');
+  }
+
+  // FEAT_2026-11-12_SATURN: Sega Saturn System Files (BIOS) for Beetle Saturn. Each 512 KB file is
+  // identified by MD5 and copied into RetroArch's system folder under the exact name Beetle Saturn
+  // looks for, whatever the user called it. Originals are left untouched.
+  getRetroArchSystemDir() {
+    return process.platform === 'win32'
+      ? path.join(RETROARCH_WIN_DIR, 'system')
+      : path.join(os.homedir(), 'Library/Application Support/RetroArch/system');
+  }
+
+  saturnBiosName(fullPath) {
+    try {
+      if (fs.statSync(fullPath).size !== 524288) return null;
+      const md5 = require('crypto').createHash('md5').update(fs.readFileSync(fullPath)).digest('hex');
+      return SATURN_BIOS_MD5[md5] || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Valid Saturn BIOS files in dir, as { file, target } (target = the name Beetle Saturn expects).
+  findSaturnBios(dir) {
+    const found = [];
+    try {
+      for (const name of fs.readdirSync(dir)) {
+        const target = this.saturnBiosName(path.join(dir, name));
+        if (target && !found.some(f => f.target === target)) found.push({ file: name, target });
+      }
+    } catch (e) {}
+    return found;
+  }
+
+  async scanForSaturnBios() {
+    const home = os.homedir();
+    const candidates = [
+      this.getRetroArchSystemDir(),
+      path.join(home, 'Downloads'),
+      path.join(home, 'Documents'),
+      home,
+      path.join(home, 'Desktop'),
+    ];
+    // Already set up = files in RetroArch's system folder. Still look elsewhere for a region it lacks
+    // (e.g. a US BIOS added later beside an existing Japanese one).
+    const have = this.findSaturnBios(candidates[0]).map(f => f.target);
+    for (const dir of candidates.slice(1)) {
+      const found = this.findSaturnBios(dir).filter(f => !have.includes(f.target));
+      if (found.length) {
+        console.log('[SATURN-BIOS] Found', found.map(f => f.file + ' = ' + f.target).join(', '), 'in', dir);
+        return { found: true, directory: dir, files: found.map(f => f.target) };
+      }
+    }
+    if (have.length) {
+      console.log('[SATURN-BIOS] Already in place:', have.join(', '));
+      return { found: true, directory: candidates[0], files: have };
+    }
+    console.log('[SATURN-BIOS] No Saturn BIOS found in', candidates);
+    return { found: false, directory: null };
+  }
+
+  copySaturnBiosToSystem(sourceDir) {
+    const targetDir = this.getRetroArchSystemDir();
+    const found = this.findSaturnBios(sourceDir);
+    if (!found.length) return { success: false, error: 'No Sega Saturn System Files found in that folder', copied: 0 };
+    let copied = 0;
+    try {
+      fs.mkdirSync(targetDir, { recursive: true });
+      for (const f of found) {
+        const src = path.join(sourceDir, f.file);
+        const dst = path.join(targetDir, f.target);
+        if (path.resolve(src) === path.resolve(dst)) continue;
+        fs.copyFileSync(src, dst);
+        console.log('[SATURN-BIOS] Copied', f.file, 'as', f.target);
+        copied++;
+      }
+    } catch (e) {
+      console.error('[SATURN-BIOS] Copy failed:', e.message);
+      return { success: false, error: e.message, copied };
+    }
+    return { success: true, copied, files: found.map(f => f.target) };
   }
 
   // PS2 System Files (BIOS): names vary by dumping tool, so match by size (exactly 4 MB) and .bin.
@@ -2119,7 +2206,7 @@ Device = Quartz/0/Keyboard & Mouse`;
     return { found: false, directory: null };
   }
 
-  writeDuckStationConfig() {
+  writeDuckStationConfig(fourK) {
     // FIX_2026-05-22_DUCKSTATION: enforce EasyArc-required settings in DuckStation's
     // settings.ini so the user experience is consistent across platforms and they
     // never have to touch DuckStation's own UI. Section-aware INI edit modeled on
@@ -2157,6 +2244,10 @@ Device = Quartz/0/Keyboard & Mouse`;
         },
         'AutoUpdater': {
           'CheckAtStartup': 'false',
+        },
+        // EXP_2026-11-12_DOLPHIN_4K: 9x = 4K (DuckStation's own label), 1 = native
+        'GPU': {
+          'ResolutionScale': fourK ? '9' : '1',
         },
         // FIX_2026-06-06_DUCKSTATION_PAD_BINDINGS: write [Pad1] and [Pad2] sections so
         // controllers work without user having to map them through DuckStation's own UI.
