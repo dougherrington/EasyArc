@@ -5500,7 +5500,7 @@ function searchKbInput(gp) {
 
 // FIX_2026-11-01_WHATS_NEW: shown once per release to people updating (new installs skip it),
 // after the Controllers screen closes. Each release: change WN_ID and the pop-up text.
-const WN_ID = '1.0.0-beta.5';
+const WN_ID = '1.0.0-beta.6';
 const WN_EXISTING_USER = (() => { try { return !!localStorage.getItem('easyarc_setup_done'); } catch (e) { return false; } })();
 function whatsNewClose() { document.getElementById('whatsNewModal').classList.add('hidden'); }
 // FIX_2026-11-07_ABOUT: About window (Advanced Options). B or Close shuts it.
@@ -6954,21 +6954,20 @@ showView = function(name) {
 <div class="frw-overlay hidden" id="whatsNewModal">
   <div class="frw-box" style="max-width:620px">
     <span class="frw-icon">&#x2728;</span>
-    <div class="frw-title">WHAT'S NEW IN BETA 5</div>
+    <div class="frw-title">WHAT'S NEW IN BETA 6</div>
     <div style="text-align:left;color:#fff;font-size:15px;line-height:1.7;margin:12px 0 4px;">
+      <!-- FIX_2026-11-12_WHATSNEW_B6 -->
       <ul style="margin:0 0 14px 20px;padding:0;">
-        <li>Real Wii Remotes: plug in a DolphinBar and your Wii Remotes just work, alongside your other controllers</li>
-        <li>More Like This: press RT to find similar games across your whole collection</li>
-        <li>Hide Duplicates switch: show one copy of games you have in several versions</li>
-        <li>New system: WonderSwan and WonderSwan Color</li>
-        <li>Easier to read: bigger game details, larger messages, game count under the system name</li>
-        <li>Hold Select+Start to exit Wii and GameCube games with any controller</li>
-        <li>Better game detection: more folder names recognized, and your Add Games system choice is remembered</li>
+        <li>New system: Sega Saturn. EasyArc finds your Saturn BIOS automatically</li>
+        <li>Favorites and Recently Played are now kept when you update</li>
+        <li>Experimental 4K upscaling for GameCube, Wii, PlayStation and PlayStation 2. Off by default, and it needs a powerful PC</li>
+        <li>Anonymous usage reporting helps show how many people use EasyArc. No personal information is collected, and you can turn it off in Advanced Options</li>
+        <li>Advanced Options reorganized, with About at the top</li>
       </ul>
       <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">TIPS</div>
       <ul style="margin:0 0 0 20px;padding:0;">
-        <li>Turn on your Wii Remote before launching a Wii game.</li>
-        <li>Version, credits and licenses are in Advanced Options &rarr; About.</li>
+        <li>Trying 4K? Turn it off in Advanced Options if games stutter or slow down.</li>
+        <li>Saturn needs a BIOS file in your games folder, like PlayStation.</li>
       </ul>
     </div>
     <div class="frw-btn-row" style="margin-top:16px;">

@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const https = require('https');
 
 // Set after the Cloudflare Worker is deployed. Until then no ping is sent.
-const ENDPOINT = 'https://easyarc-metrics.REPLACE_ME.workers.dev/ping';
+const ENDPOINT = 'https://easyarc-metrics.doug-herrington.workers.dev/ping';
 const CONFIG_FILE = 'metrics.json';
 const DEV_MARKER = 'easyarc-developer.txt';
 const TIMEOUT_MS = 5000;
