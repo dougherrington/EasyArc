@@ -746,13 +746,36 @@ body::after {
     if (!announced) { announced = true; console.log('[SDL-OVERLAY] active for', shell.id, 'at index', shell.index); }
     return arr;
   };
+  // FIX_2026-11-13_NINTENDO_RELEASE: when a Chromium disconnect is ignored below, remember it.
+  // Chromium sends that event only once, so if SDL reports the controller gone a moment later,
+  // nothing used to remove it and it stayed on screen until EasyArc restarted.
+  let pendingDrop = null, goneChecks = 0;
   window.addEventListener('gamepaddisconnected', function (e) {
     const st = api.sdlNintendoState();
     if (st && st.connected && e.gamepad && isNin(e.gamepad)) {
       e.stopImmediatePropagation();
+      pendingDrop = { id: e.gamepad.id, index: e.gamepad.index }; goneChecks = 0;
       console.log('[SDL-OVERLAY] ignored Chromium disconnect for Nintendo pad (SDL still connected)');
     }
   }, true);
+  window.addEventListener('gamepadconnected', function (e) {
+    if (pendingDrop && e.gamepad && isNin(e.gamepad)) { pendingDrop = null; goneChecks = 0; }
+  }, true);
+  setInterval(function () {
+    if (!pendingDrop) return;
+    try {
+      const st = api.sdlNintendoState();
+      const chromiumHasIt = Array.from(orig()).some(g => g && g.index === pendingDrop.index && isNin(g));
+      if ((st && st.connected) || chromiumHasIt) { goneChecks = 0; return; }   // still here: keep waiting
+      if (++goneChecks < 2) return;                                              // gone on two checks in a row
+      const gone = pendingDrop; pendingDrop = null; goneChecks = 0;
+      const entry = connectedControllers[gone.index];
+      if (entry && entry.gp && isNin(entry.gp)) {
+        console.log('[SDL-OVERLAY] SDL and Chromium both report the Nintendo pad gone - removing it');
+        ctrlHandleDisconnect(gone);
+      }
+    } catch (err) {}
+  }, 500);
 })();
 </script>
 </head>
@@ -3431,7 +3454,8 @@ function ctrlHandleConnect(gp) {
   const profile = ctrlGetProfile(gp.id) || { name: gp.id.split('(')[0].trim(), icon:'&#127918;', type:'generic' };
   // Always assign slots sequentially from 1 based on connection order
   // Never persist slot from previous session
-  const usedSlots = Object.values(connectedControllers).map(c => c.slot);
+  // FIX_2026-11-13_NINTENDO_RELEASE: ignore a leftover entry in this controller's own spot
+  const usedSlots = Object.keys(connectedControllers).filter(k => String(k) !== String(gp.index)).map(k => connectedControllers[k].slot);
   let slot = 1;
   while (usedSlots.includes(slot)) slot++;
   connectedControllers[gp.index] = { gp, profile, slot, isKnown: !!ctrlGetProfile(gp.id) };
@@ -3961,7 +3985,11 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   let detectedControllerType = null;
   let detectedControllerTypes = [];
   try {
-    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    // FIX_2026-11-13_DOLPHIN_PLAYER_ORDER: send controllers in EasyArc's on-screen player order
+    // (P1, P2...), not Chromium's listing order, so P1 on screen is player 1 in the game.
+    const gamepads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(g => g && g.id);
+    const slotOf = (g) => { const c = connectedControllers[g.index]; return (c && c.slot) ? c.slot : 100 + g.index; };
+    gamepads.sort((a, b) => slotOf(a) - slotOf(b));
     for (const gp of gamepads) {
       if (gp && gp.id) {
         const profile = ctrlGetProfile(gp.id);

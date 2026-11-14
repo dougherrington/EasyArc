@@ -313,6 +313,7 @@ if (process.platform === 'win32') {
       h.on('message', (msg) => {
         if (h !== helper || !msg) return;
         if (msg.type === 'state') {
+          if (!last || !!last.connected !== !!msg.connected) console.log('[SDL] Nintendo controller connected:', !!msg.connected); // FIX_2026-11-13_NINTENDO_RELEASE
           last = msg;
           if (restarting) {
             restarting = false; lastRestartMs = Date.now() - restartStartedAt; console.log('[SDL] helper restarted in', lastRestartMs, 'ms');
