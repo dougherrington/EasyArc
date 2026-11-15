@@ -296,7 +296,9 @@ class DolphinBridge {
   writeGfxConfig(fourK) {
     const cfgDir = this._getDolphinConfigDir();
     const cfgPath = path.join(cfgDir, 'GFX.ini');
-    const line = 'InternalResolution = ' + (fourK ? '6' : '1');
+    // EXP_2026-11-14_RES_BUTTONS: step name -> Dolphin multiplier (true = old 4K on)
+    const mult = ({ 'native': '1', '720': '2', '1080': '3', '1440': '4', '4k': '6' })[fourK === true ? '4k' : String(fourK || 'native')] || '1';
+    const line = 'InternalResolution = ' + mult;
     try {
       fs.mkdirSync(cfgDir, { recursive: true });
       let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
@@ -1221,7 +1223,7 @@ class DolphinBridge {
     // exit back to EasyArc via a controller combo. Device string and exit binding are
     // per controller family (verbatim from working Dolphin UI configs). P1 only.
     this.writeHotkeyConfig(controllerType);
-    this.writeGfxConfig(!!dolphin4k); // EXP_2026-11-12_DOLPHIN_4K
+    this.writeGfxConfig(dolphin4k); // EXP_2026-11-14_RES_BUTTONS
 
     const binaryPath = this.getEasyArcDolphinBinary();
     console.log('[DOLPHIN] Binary path:', binaryPath);

@@ -473,6 +473,12 @@ body::after {
 .setting-name { font-size:14px; font-weight:600; color:var(--text); margin-bottom:2px; font-family:'Rajdhani',sans-serif; }
 .setting-desc { font-size:11px; color:var(--muted); line-height:1.5; font-family:'Rajdhani',sans-serif; }
 .setting-control { margin-left:16px; }
+/* EXP_2026-11-14_RES_BUTTONS */
+.res-row { display:flex; gap:6px; }
+.res-btn { width:72px; padding:6px 0; background:none; border:1px solid var(--border); color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.15s; letter-spacing:0.5px; }
+.res-btn:hover:not(:disabled) { color:var(--cyan); border-color:var(--cyan); }
+.res-btn.res-on, .res-btn.res-on:hover:not(:disabled) { background:rgba(0,255,179,0.15); border-color:var(--green); color:var(--green); box-shadow:0 0 8px rgba(0,255,179,0.35); }
+.res-btn:disabled { opacity:0.28; cursor:not-allowed; }
 .toggle { position:relative; display:inline-block; width:44px; height:24px; } /* EXP_2026-11-12_TOGGLE_FIX: inline labels ignore width, so the switch collapsed to a sliver */
 .toggle input { opacity:0; width:0; height:0; }
 .toggle-slider { position:absolute; inset:0; background:var(--bg3); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:all 0.2s; }
@@ -935,27 +941,27 @@ body::after {
           <div class="setting-control"><button class="secondary-btn" style="min-width:160px;padding:8px 12px;font-size:12px;" onclick="playClick();aboutOpen()">About...</button></div>
         </div>
       </div>
-      <!-- EXP_2026-11-12_DOLPHIN_4K: experiment, top of the page, one toggle per system -->
+      <!-- EXP_2026-11-14_RES_BUTTONS: experiment, top of the page, five resolution buttons per system -->
       <div class="settings-section">
-        <div class="settings-heading">EXPERIMENTAL — 4K UPSCALING</div>
+        <div class="settings-heading">EXPERIMENTAL — RESOLUTION</div>
         <div class="setting-row">
-          <div class="setting-info"><div class="setting-desc">Sharper picture. Needs a powerful PC: most computers will see stuttering or slowdown. Turn off if games run poorly.</div></div>
+          <div class="setting-info"><div class="setting-desc">Sharper picture. Higher settings need a more powerful PC. Choose Native if games stutter or slow down. Settings above your screen's resolution are not available.</div></div>
         </div>
         <div class="setting-row">
-          <div class="setting-info"><div class="setting-name">4K: GameCube</div></div>
-          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_gamecube" onchange="fourKSet('gamecube', this.checked)"><span class="toggle-slider"></span></label></div>
+          <div class="setting-info"><div class="setting-name">GameCube</div></div>
+          <div class="setting-control"><div class="res-row" id="resRow_gamecube"><button class="res-btn" data-step="native" onclick="playClick();resSet('gamecube','native')">Native</button><button class="res-btn" data-step="720" onclick="playClick();resSet('gamecube','720')">720p</button><button class="res-btn" data-step="1080" onclick="playClick();resSet('gamecube','1080')">1080p</button><button class="res-btn" data-step="1440" onclick="playClick();resSet('gamecube','1440')">1440p</button><button class="res-btn" data-step="4k" onclick="playClick();resSet('gamecube','4k')">4K</button></div></div>
         </div>
         <div class="setting-row">
-          <div class="setting-info"><div class="setting-name">4K: Wii</div></div>
-          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_wii" onchange="fourKSet('wii', this.checked)"><span class="toggle-slider"></span></label></div>
+          <div class="setting-info"><div class="setting-name">Wii</div></div>
+          <div class="setting-control"><div class="res-row" id="resRow_wii"><button class="res-btn" data-step="native" onclick="playClick();resSet('wii','native')">Native</button><button class="res-btn" data-step="720" onclick="playClick();resSet('wii','720')">720p</button><button class="res-btn" data-step="1080" onclick="playClick();resSet('wii','1080')">1080p</button><button class="res-btn" data-step="1440" onclick="playClick();resSet('wii','1440')">1440p</button><button class="res-btn" data-step="4k" onclick="playClick();resSet('wii','4k')">4K</button></div></div>
         </div>
         <div class="setting-row">
-          <div class="setting-info"><div class="setting-name">4K: PlayStation</div></div>
-          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_psx" onchange="fourKSet('psx', this.checked)"><span class="toggle-slider"></span></label></div>
+          <div class="setting-info"><div class="setting-name">PlayStation</div></div>
+          <div class="setting-control"><div class="res-row" id="resRow_psx"><button class="res-btn" data-step="native" onclick="playClick();resSet('psx','native')">Native</button><button class="res-btn" data-step="720" onclick="playClick();resSet('psx','720')">720p</button><button class="res-btn" data-step="1080" onclick="playClick();resSet('psx','1080')">1080p</button><button class="res-btn" data-step="1440" onclick="playClick();resSet('psx','1440')">1440p</button><button class="res-btn" data-step="4k" onclick="playClick();resSet('psx','4k')">4K</button></div></div>
         </div>
         <div class="setting-row">
-          <div class="setting-info"><div class="setting-name">4K: PlayStation 2</div></div>
-          <div class="setting-control"><label class="toggle"><input type="checkbox" id="fourK_ps2" onchange="fourKSet('ps2', this.checked)"><span class="toggle-slider"></span></label></div>
+          <div class="setting-info"><div class="setting-name">PlayStation 2</div></div>
+          <div class="setting-control"><div class="res-row" id="resRow_ps2"><button class="res-btn" data-step="native" onclick="playClick();resSet('ps2','native')">Native</button><button class="res-btn" data-step="720" onclick="playClick();resSet('ps2','720')">720p</button><button class="res-btn" data-step="1080" onclick="playClick();resSet('ps2','1080')">1080p</button><button class="res-btn" data-step="1440" onclick="playClick();resSet('ps2','1440')">1440p</button><button class="res-btn" data-step="4k" onclick="playClick();resSet('ps2','4k')">4K</button></div></div>
         </div>
       </div>
       <!-- FIX_2026-11-12_METRICS: Advanced order is About, 4K, Privacy, then the rest -->
@@ -2376,7 +2382,7 @@ async function launchGame(game) {
     const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
     const p1id = gps.length > 0 ? gps[0].id : '';
     const p1profile = ctrlGetProfile(p1id);
-    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id, controllerType: p1profile.type, fourK: fourKEnabled(g.system) }); // EXP_2026-11-12_DOLPHIN_4K
+    const result = await window.easyarc.launchGame({ romPath: g.path, system: g.system, controllerName: p1id, controllerType: p1profile.type, fourK: resEffective(g.system) }); // EXP_2026-11-14_RES_BUTTONS: step name, not on/off
     showToast(result.success ? 'Launching ' + g.title + '...' : 'Error: ' + result.error);
   } else {
     showToast('Launching ' + g.title + '...');
@@ -3759,21 +3765,59 @@ function wiiLsSyncToggle() {
 }
 document.addEventListener('DOMContentLoaded', wiiLsSyncToggle);
 setTimeout(wiiLsSyncToggle, 0);
-// EXP_2026-11-12_DOLPHIN_4K: one Advanced toggle per system, all off by default. Passed to the emulator at launch.
-const FOURK_SYSTEMS = ['gamecube', 'wii', 'psx', 'ps2'];
-function fourKEnabled(sys) {
-  try { return localStorage.getItem('ea_4k_' + sys) === '1'; } catch (e) { return false; }
+// EXP_2026-11-14_RES_BUTTONS: five resolution steps per system, Native by default. The step is passed to the emulator at launch.
+// A step above the screen's own resolution is never used: greyed out here and capped again at every launch.
+const RES_SYSTEMS = ['gamecube', 'wii', 'psx', 'ps2'];
+const RES_STEPS = [['native', 0], ['720', 720], ['1080', 1080], ['1440', 1440], ['4k', 2160]];
+function resScreenHeight() {
+  // Real pixels of the screen EasyArc is on (Windows scaling undone). 0 = unknown.
+  try {
+    const d = window.devicePixelRatio || 1;
+    const v = Math.min(Math.round(window.screen.width * d), Math.round(window.screen.height * d));
+    return v > 0 ? v : 0;
+  } catch (e) { return 0; }
 }
-function fourKSet(sys, on) {
-  try { if (on) localStorage.setItem('ea_4k_' + sys, '1'); else localStorage.removeItem('ea_4k_' + sys); } catch (e) {}
-  const t = document.getElementById('fourK_' + sys);
-  if (t) t.checked = !!on;
+function resAllowed(step) {
+  const s = RES_STEPS.find(x => x[0] === step);
+  if (!s) return false;
+  if (s[1] === 0) return true;
+  const h = resScreenHeight();
+  if (!h) return true; // screen size unknown: do not block anything
+  return h + 16 >= s[1]; // 16 px slack for scaling round-off
 }
-function fourKSyncToggles() {
-  FOURK_SYSTEMS.forEach(sys => { const t = document.getElementById('fourK_' + sys); if (t) t.checked = fourKEnabled(sys); });
+function resSaved(sys) {
+  try {
+    let v = localStorage.getItem('ea_res_' + sys);
+    if (!v && localStorage.getItem('ea_4k_' + sys) === '1') v = '4k'; // old 4K toggle carries over
+    return RES_STEPS.some(x => x[0] === v) ? v : 'native';
+  } catch (e) { return 'native'; }
 }
-document.addEventListener('DOMContentLoaded', fourKSyncToggles);
-setTimeout(fourKSyncToggles, 0);
+function resEffective(sys) {
+  if (!RES_SYSTEMS.includes(sys)) return 'native';
+  let i = RES_STEPS.findIndex(x => x[0] === resSaved(sys));
+  while (i > 0 && !resAllowed(RES_STEPS[i][0])) i--;
+  return RES_STEPS[Math.max(0, i)][0];
+}
+function resSet(sys, step) {
+  if (!RES_SYSTEMS.includes(sys) || !resAllowed(step)) return;
+  try { localStorage.setItem('ea_res_' + sys, step); localStorage.removeItem('ea_4k_' + sys); } catch (e) {}
+  resSync();
+}
+function resSync() {
+  RES_SYSTEMS.forEach(sys => {
+    const row = document.getElementById('resRow_' + sys);
+    if (!row) return;
+    const eff = resEffective(sys);
+    row.querySelectorAll('.res-btn').forEach(b => {
+      b.disabled = !resAllowed(b.dataset.step);
+      b.classList.toggle('res-on', b.dataset.step === eff);
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', resSync);
+setTimeout(resSync, 0);
+window.addEventListener('focus', resSync);
+window.addEventListener('resize', resSync);
 // FIX_2026-11-12_METRICS: Advanced toggle, on by default. The setting lives in the main process.
 async function metricsSyncToggle() {
   try { const t = document.getElementById('metricsToggle'); if (t && window.easyarc.metricsGetEnabled) t.checked = !!(await window.easyarc.metricsGetEnabled()); } catch (e) {}
@@ -4084,7 +4128,7 @@ async function gamecubeEnsureReadyAndLaunch(game) {
   };
   let result;
   try {
-    result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes, fourKEnabled(game.system)); // EXP_2026-11-12_DOLPHIN_4K
+    result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes, resEffective(game.system)); // EXP_2026-11-14_RES_BUTTONS: step name, not on/off
   } catch (err) {
     result = { success: false, error: err && err.message };
   }

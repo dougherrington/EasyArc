@@ -1175,7 +1175,7 @@ class RetroArchBridge {
           console.log('[Bridge] Using .bin instead of .cue:', romPath);
         }
       }
-      this.writePCSX2Config(!!options.fourK); // EXP_2026-11-12_DOLPHIN_4K
+      this.writePCSX2Config(options.fourK); // EXP_2026-11-14_RES_BUTTONS
       console.log('[Bridge] Launching PS2 game via PCSX2:', romPath);
       try {
         this.retroarchProcess = spawn(pcsx2.path, ['-batch', '-nogui', '-fullscreen', romPath], { detached: false, stdio: 'ignore' });
@@ -1247,7 +1247,7 @@ class RetroArchBridge {
     if (options.system === 'psx') {
       console.log('[PSX-LAUNCH] Entered PSX launch branch. romPath:', options.romPath);
       console.log('[PSX-LAUNCH] Calling writeDuckStationConfig()');
-      this.writeDuckStationConfig(!!options.fourK); // EXP_2026-11-12_DOLPHIN_4K
+      this.writeDuckStationConfig(options.fourK); // EXP_2026-11-14_RES_BUTTONS
       console.log('[PSX-LAUNCH] writeDuckStationConfig() returned');
       console.log('[PSX-LAUNCH] Calling findDuckStation()');
       const duckstation = await this.findDuckStation();
@@ -1619,7 +1619,9 @@ Device = Quartz/0/Keyboard & Mouse`;
       let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
       cfg = cfg.replace(/\r\n/g, '\n');
       cfg = this.setIniValue(cfg, 'UI', 'ConfirmShutdown', 'false');
-      cfg = this.setIniValue(cfg, 'EmuCore/GS', 'upscale_multiplier', fourK ? '6' : '1'); // EXP_2026-11-12_DOLPHIN_4K: 6x = ~4K, 1 = native
+      // EXP_2026-11-14_RES_BUTTONS: step name -> PCSX2 multiplier (true = old 4K on)
+      const ps2Mult = ({ 'native': '1', '720': '2', '1080': '3', '1440': '4', '4k': '6' })[fourK === true ? '4k' : String(fourK || 'native')] || '1';
+      cfg = this.setIniValue(cfg, 'EmuCore/GS', 'upscale_multiplier', ps2Mult);
       cfg = this.removeIniKeyOutside(cfg, 'UI', 'ConfirmShutdown');
       if (isWin) {
         // A brand-new file needs SettingsVersion, or PCSX2 resets it to defaults.
@@ -2245,9 +2247,9 @@ Device = Quartz/0/Keyboard & Mouse`;
         'AutoUpdater': {
           'CheckAtStartup': 'false',
         },
-        // EXP_2026-11-12_DOLPHIN_4K: 9x = 4K (DuckStation's own label), 1 = native
+        // EXP_2026-11-14_RES_BUTTONS: step name -> DuckStation scale, by DuckStation's own labels (true = old 4K on)
         'GPU': {
-          'ResolutionScale': fourK ? '9' : '1',
+          'ResolutionScale': ({ 'native': '1', '720': '3', '1080': '5', '1440': '6', '4k': '9' })[fourK === true ? '4k' : String(fourK || 'native')] || '1',
         },
         // FIX_2026-06-06_DUCKSTATION_PAD_BINDINGS: write [Pad1] and [Pad2] sections so
         // controllers work without user having to map them through DuckStation's own UI.
