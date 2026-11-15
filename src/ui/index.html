@@ -5572,7 +5572,7 @@ function searchKbInput(gp) {
 
 // FIX_2026-11-01_WHATS_NEW: shown once per release to people updating (new installs skip it),
 // after the Controllers screen closes. Each release: change WN_ID and the pop-up text.
-const WN_ID = '1.0.0-beta.6';
+const WN_ID = '1.0.0-beta.6.1'; // FIX_2026-11-14_BETA_6_1
 const WN_EXISTING_USER = (() => { try { return !!localStorage.getItem('easyarc_setup_done'); } catch (e) { return false; } })();
 function whatsNewClose() { document.getElementById('whatsNewModal').classList.add('hidden'); }
 // FIX_2026-11-07_ABOUT: About window (Advanced Options). B or Close shuts it.
@@ -7026,20 +7026,19 @@ showView = function(name) {
 <div class="frw-overlay hidden" id="whatsNewModal">
   <div class="frw-box" style="max-width:620px">
     <span class="frw-icon">&#x2728;</span>
-    <div class="frw-title">WHAT'S NEW IN BETA 6</div>
+    <div class="frw-title">WHAT'S NEW IN BETA 6.1</div>
     <div style="text-align:left;color:#fff;font-size:15px;line-height:1.7;margin:12px 0 4px;">
-      <!-- FIX_2026-11-12_WHATSNEW_B6 -->
+      <!-- FIX_2026-11-14_BETA_6_1 -->
       <ul style="margin:0 0 14px 20px;padding:0;">
-        <li>New system: Sega Saturn. EasyArc finds your Saturn BIOS automatically</li>
-        <li>Favorites and Recently Played are now kept when you update</li>
-        <li>Experimental 4K upscaling for GameCube, Wii, PlayStation and PlayStation 2. Off by default, and it needs a powerful PC</li>
-        <li>Anonymous usage reporting helps show how many people use EasyArc. No personal information is collected, and you can turn it off in Advanced Options</li>
-        <li>Advanced Options reorganized, with About at the top</li>
+        <li>Experimental resolution settings for GameCube, Wii, PlayStation and PlayStation 2: Native, 720p, 1080p, 1440p or 4K. Settings above your screen's resolution are not offered</li>
+        <li>Nintendo controllers now disconnect properly when switched off</li>
+        <li>Player numbers in GameCube and Wii games now match the order shown in EasyArc</li>
+        <li>A controller that reconnects keeps its player number</li>
       </ul>
       <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">TIPS</div>
       <ul style="margin:0 0 0 20px;padding:0;">
-        <li>Trying 4K? Turn it off in Advanced Options if games stutter or slow down.</li>
-        <li>Saturn needs a BIOS file in your games folder, like PlayStation.</li>
+        <li>Games stuttering? Choose a lower resolution, or Native, in Advanced Options.</li>
+        <li>Mario Kart Wii multiplayer: press a button on the second controller before pressing + to add it.</li>
       </ul>
     </div>
     <div class="frw-btn-row" style="margin-top:16px;">
