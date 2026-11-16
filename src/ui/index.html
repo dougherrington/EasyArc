@@ -5572,7 +5572,7 @@ function searchKbInput(gp) {
 
 // FIX_2026-11-01_WHATS_NEW: shown once per release to people updating (new installs skip it),
 // after the Controllers screen closes. Each release: change WN_ID and the pop-up text.
-const WN_ID = '1.0.0-beta.6.1'; // FIX_2026-11-14_BETA_6_1
+const WN_ID = '1.0.0-beta.6.2'; // FIX_2026-11-16_BETA_6_2
 const WN_EXISTING_USER = (() => { try { return !!localStorage.getItem('easyarc_setup_done'); } catch (e) { return false; } })();
 function whatsNewClose() { document.getElementById('whatsNewModal').classList.add('hidden'); }
 // FIX_2026-11-07_ABOUT: About window (Advanced Options). B or Close shuts it.
@@ -7026,10 +7026,11 @@ showView = function(name) {
 <div class="frw-overlay hidden" id="whatsNewModal">
   <div class="frw-box" style="max-width:620px">
     <span class="frw-icon">&#x2728;</span>
-    <div class="frw-title">WHAT'S NEW IN BETA 6.1</div>
+    <div class="frw-title">WHAT'S NEW IN BETA 6.2</div>
     <div style="text-align:left;color:#fff;font-size:15px;line-height:1.7;margin:12px 0 4px;">
-      <!-- FIX_2026-11-14_BETA_6_1 -->
+      <!-- FIX_2026-11-16_BETA_6_2 -->
       <ul style="margin:0 0 14px 20px;padding:0;">
+        <li>Genuine Xbox One and Xbox 360 controllers, and look-alikes that identify as them, now work in Wii games</li>
         <li>Experimental resolution settings for GameCube, Wii, PlayStation and PlayStation 2: Native, 720p, 1080p, 1440p or 4K. Settings above your screen's resolution are not offered</li>
         <li>Nintendo controllers now disconnect properly when switched off</li>
         <li>Player numbers in GameCube and Wii games now match the order shown in EasyArc</li>
