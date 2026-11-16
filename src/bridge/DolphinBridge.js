@@ -1063,8 +1063,10 @@ class DolphinBridge {
       let device;
       if (t === 'switch') device = `SDL/${count.pro++}/Nintendo Switch Pro Controller`;
       else if (t === 'ds4' || t === 'dualsense' || t === 'ds3') device = `SDL/${count.ps++}/PS4 Controller`;
-      else device = `SDL/0/XInput Controller #${++count.xbox}`;
-      out.push('Device = ' + device, ...(t === 'switch' ? this._swapWiiAB(body) : body), 'Source = 1'); // FIX_2026-10-31_PRO_AB_SWAP
+      else device = `XInput/${count.xbox++}/Gamepad`; // FIX_2026-11-16_WII_XINPUT: same route as GameCube, works whatever the pad calls itself
+      const padBody = t === 'switch' ? this._swapWiiAB(body)
+        : (t === 'ds4' || t === 'dualsense' || t === 'ds3') ? body : this._wiiXInputNames(body); // FIX_2026-11-16_WII_XINPUT
+      out.push('Device = ' + device, ...padBody, 'Source = 1'); // FIX_2026-10-31_PRO_AB_SWAP
       devices.push(device);
       players.push('P' + i + ' ' + device); // FIX_2026-11-07_WII_REMOTE
     }
@@ -1075,6 +1077,15 @@ class DolphinBridge {
     fs.writeFileSync(path.join(cfgDir, 'WiimoteNew.ini'), out.join('\n') + '\n');
     console.log('[DOLPHIN] Wrote WiimoteNew.ini:', profile, '| controllers:', JSON.stringify(types), '| devices:', devices.join(' ; '), '| players:', players.join(' ; ')); // FIX_2026-11-07_WII_REMOTE
     return profile;
+  }
+
+  // FIX_2026-11-16_WII_XINPUT: Dolphin's XInput route names the face buttons by letter (Button A/B/X/Y)
+  // where SDL names them by position (Button S/E/W/N). Every other name used in the Wii
+  // profiles (Pad N/S/W/E, Back, Start, Guide, Shoulder L/R, Trigger L/R, Left/Right X/Y)
+  // is the same in both (checked against Dolphin 2603a XInput.cpp).
+  _wiiXInputNames(lines) {
+    const map = { 'Button S': 'Button A', 'Button E': 'Button B', 'Button W': 'Button X', 'Button N': 'Button Y' };
+    return lines.map((l) => l.replace(/`(Button [SEWN])`/g, (m, n) => '`' + map[n] + '`'));
   }
 
   // FIX_2026-10-31_PRO_AB_SWAP: on a Pro Controller, put Wii A and B on the buttons
