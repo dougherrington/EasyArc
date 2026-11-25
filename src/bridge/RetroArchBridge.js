@@ -2,6 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
+
+// FIX_2026-11-25_DOLPHINBAR_IGNORE: emulators other than Dolphin ignore the Mayflash DolphinBar
+// (Nintendo 057e:0306), so it can't take a player slot (it broke PS2 multiplayer). Added on top of
+// the normal environment. Dolphin never gets this, so Wii games keep the bar.
+const EA_DOLPHINBAR_ID = '0x057e/0x0306';
+function eaEmuEnv() {
+  const add = (cur) => (cur ? cur + ',' : '') + EA_DOLPHINBAR_ID;
+  return Object.assign({}, process.env, {
+    SDL_GAMECONTROLLER_IGNORE_DEVICES: add(process.env.SDL_GAMECONTROLLER_IGNORE_DEVICES),
+    SDL_JOYSTICK_BLACKLIST_DEVICES: add(process.env.SDL_JOYSTICK_BLACKLIST_DEVICES)
+  });
+}
 const https = require('https');
 
 // --- Scraper Subsystem ---
@@ -1178,7 +1190,7 @@ class RetroArchBridge {
       this.writePCSX2Config(options.fourK); // EXP_2026-11-14_RES_BUTTONS
       console.log('[Bridge] Launching PS2 game via PCSX2:', romPath);
       try {
-        this.retroarchProcess = spawn(pcsx2.path, ['-batch', '-nogui', '-fullscreen', romPath], { detached: false, stdio: 'ignore' });
+        this.retroarchProcess = spawn(pcsx2.path, ['-batch', '-nogui', '-fullscreen', romPath], { detached: false, stdio: 'ignore', env: eaEmuEnv() }); // FIX_2026-11-25_DOLPHINBAR_IGNORE
         // FIX_2026-10-21_HOTKEYS_PS2_BLEED: emit game-started / game-exited (same pattern as DuckStation)
         // so EasyArc stops reacting to the controller while a PS2 game runs (input bleed).
         const sendToRenderer = (channel) => {
@@ -1259,7 +1271,7 @@ class RetroArchBridge {
       console.log('[Bridge] Launching PSX game via DuckStation:', options.romPath);
       console.log('[PSX-LAUNCH] About to spawn:', duckstation.path, 'with args:', ['-batch', '--', options.romPath]);
       try {
-        this.retroarchProcess = spawn(duckstation.path, ['-batch', '--', options.romPath], { detached: false, stdio: 'inherit' });
+        this.retroarchProcess = spawn(duckstation.path, ['-batch', '--', options.romPath], { detached: false, stdio: 'inherit', env: eaEmuEnv() }); // FIX_2026-11-25_DOLPHINBAR_IGNORE
         console.log('[PSX-LAUNCH] spawn() returned. PID:', this.retroarchProcess && this.retroarchProcess.pid);
 
         // FIX_2026-06-30_DUCKSTATION_LIFECYCLE (Bug #7): emit game-started / game-exited
@@ -1524,7 +1536,7 @@ class RetroArchBridge {
     };
 
     try {
-      this.retroarchProcess = spawn(this.retroarchPath, args, { detached: false, stdio: 'ignore' });
+      this.retroarchProcess = spawn(this.retroarchPath, args, { detached: false, stdio: 'ignore', env: eaEmuEnv() }); // FIX_2026-11-25_DOLPHINBAR_IGNORE
 
       const onRetroArchExit = () => {
         if (!this.retroarchProcess) return;
@@ -1619,6 +1631,7 @@ Device = Quartz/0/Keyboard & Mouse`;
       let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
       cfg = cfg.replace(/\r\n/g, '\n');
       cfg = this.setIniValue(cfg, 'UI', 'ConfirmShutdown', 'false');
+      cfg = this.setIniValue(cfg, 'UI', 'HideMouseCursor', 'true'); // FIX_2026-11-25_MOUSE_SWITCH: no cursor over PS2 games
       // EXP_2026-11-14_RES_BUTTONS: step name -> PCSX2 multiplier (true = old 4K on)
       const ps2Mult = ({ 'native': '1', '720': '2', '1080': '3', '1440': '4', '4k': '6' })[fourK === true ? '4k' : String(fourK || 'native')] || '1';
       cfg = this.setIniValue(cfg, 'EmuCore/GS', 'upscale_multiplier', ps2Mult);

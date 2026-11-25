@@ -391,6 +391,14 @@ body::after {
 .sidebar, .sidebar *,
 .game-grid-wrap, .game-grid-wrap *,
 .detail-panel, .detail-panel * { cursor: default !important; } /* FIX_2026-10-24_MOUSE_VISIBLE */
+/* FIX_2026-11-25_MOUSE_SWITCH: with the mouse switched off (the default), the game library
+   (sidebar, games, details) shows no cursor and ignores clicks. Menus, pop-ups and Advanced keep it. */
+body.ea-mouse-off #mainBody { cursor: none; }
+body.ea-mouse-off .sidebar, body.ea-mouse-off .sidebar *,
+body.ea-mouse-off #library-view, body.ea-mouse-off #library-view *,
+body.ea-mouse-off .detail-panel, body.ea-mouse-off .detail-panel * { cursor: none !important; }
+body.ea-mouse-off .sidebar *, body.ea-mouse-off #library-view *, body.ea-mouse-off .detail-panel * { pointer-events: none !important; }
+body.ea-mouse-off #settings-view, body.ea-mouse-off #controller-view { cursor: default; }
 
 .detail-card {
   background:linear-gradient(145deg,rgba(4,14,34,0.96),rgba(2,8,20,0.98));
@@ -1062,6 +1070,11 @@ body::after {
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">Wii Controls Screen</div><div class="setting-desc">Show the button map before each Wii game starts.</div></div>
           <div class="setting-control"><label class="toggle"><input type="checkbox" checked id="wiiLaunchScreenToggle" onchange="wiiLsSetEnabled(this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+        <!-- FIX_2026-11-25_MOUSE_SWITCH -->
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Mouse in Game Library</div><div class="setting-desc">Show the mouse in the game library. Click a game to select it, double-click to launch it.</div></div>
+          <div class="setting-control"><label class="toggle"><input type="checkbox" id="mouseLibraryToggle" onchange="eaMouseSet(this.checked)"><span class="toggle-slider"></span></label></div>
         </div>
         <div class="setting-row">
           <div class="setting-info"><div class="setting-name">Default Player Count</div><div class="setting-desc">How many players to configure when launching a game.</div></div>
@@ -3841,6 +3854,55 @@ function wiiLsSyncToggle() {
 }
 document.addEventListener('DOMContentLoaded', wiiLsSyncToggle);
 setTimeout(wiiLsSyncToggle, 0);
+
+// FIX_2026-11-25_MOUSE_SWITCH: the mouse is off in the game library unless switched on in
+// Advanced Options. On: click a game to select it, double-click (or Launch Game) to launch it.
+const EA_MOUSE_KEY = 'ea_mouse_library_on';
+function eaMouseOn() {
+  try { return localStorage.getItem(EA_MOUSE_KEY) === '1'; } catch (e) { return false; }
+}
+function eaMouseApply() {
+  const on = eaMouseOn();
+  if (document.body) document.body.classList.toggle('ea-mouse-off', !on);
+  const t = document.getElementById('mouseLibraryToggle');
+  if (t) t.checked = on;
+}
+function eaMouseSet(on) {
+  try { if (on) localStorage.setItem(EA_MOUSE_KEY, '1'); else localStorage.removeItem(EA_MOUSE_KEY); } catch (e) {}
+  eaMouseApply();
+}
+function eaMouseCardIndex(e) {
+  const card = e.target && e.target.closest ? e.target.closest('#gameGrid .game-card') : null;
+  if (!card) return -1;
+  const i = parseInt(card.dataset.vsIndex, 10);
+  return (i >= 0 && i < vsFilteredList.length) ? i : -1;
+}
+function eaMouseSelect(i) {
+  if (typeof GP_NAV !== 'undefined') {
+    if (GP_NAV.inSidebar && typeof gpHighlightSys === 'function') gpHighlightSys(-1);
+    GP_NAV.active = true; GP_NAV.inSidebar = false; GP_NAV.inToolbar = false; GP_NAV.inTopNav = false;
+    GP_NAV.gridIdx = i;
+  }
+  selectGameByIndex(i);
+}
+document.addEventListener('click', (e) => {
+  if (!eaMouseOn() || window.__easyarcGameRunning) return;
+  const i = eaMouseCardIndex(e);
+  if (i >= 0) { eaMouseSelect(i); return; }
+  const lb = e.target && e.target.closest ? e.target.closest('#detailPanel .launch-btn:not(.mlt-btn)') : null;
+  if (lb && selectedGame) ctestMaybeLaunch(selectedGame);
+});
+document.addEventListener('dblclick', (e) => {
+  if (!eaMouseOn() || window.__easyarcGameRunning) return;
+  const i = eaMouseCardIndex(e);
+  if (i >= 0 && vsFilteredList[i]) ctestMaybeLaunch(vsFilteredList[i]);
+});
+document.addEventListener('wheel', (e) => {
+  if (eaMouseOn()) return;
+  if (e.target && e.target.closest && e.target.closest('#sidebar, #library-view, #detailPanel')) e.preventDefault();
+}, { passive: false });
+document.addEventListener('DOMContentLoaded', eaMouseApply);
+setTimeout(eaMouseApply, 0);
 // EXP_2026-11-14_RES_BUTTONS: five resolution steps per system, Native by default. The step is passed to the emulator at launch.
 // A step above the screen's own resolution is never used: greyed out here and capped again at every launch.
 const RES_SYSTEMS = ['gamecube', 'wii', 'psx', 'ps2'];
