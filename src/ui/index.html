@@ -1259,6 +1259,78 @@ function lookupGameById(id) {
 // Runs on every renderGrid. Walks favorites/recent, looks up each by path,
 // updates ID to current value, drops orphans. Idempotent. Skips localStorage
 // writes when nothing changed.
+// FIX_2026-11-23_STALE_FOLDERS: folder path without its drive (X:\ on Windows, /Volumes/Name on Mac).
+function eaFolderTail(p) {
+  const n = String(p || '').replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase();
+  let m = n.match(/^[a-z]:\/(.+)$/);
+  if (m) return m[1];
+  m = n.match(/^\/volumes\/[^\/]+\/(.+)$/);
+  if (m) return m[1];
+  return null;
+}
+
+// FIX_2026-11-23_STALE_FOLDERS: drop missing folders that have a twin among the saved folders
+// that scanned OK, and move favorites/recent from the old path to the twin. Returns the
+// folders still missing (no twin), which are kept for when their drive comes back.
+function eaDropStaleFolders(savedFolders, unavailable) {
+  try {
+    if (!unavailable || !unavailable.length) return unavailable || [];
+    const slash = (s) => String(s || '').replace(/[\\/]+/g, '/').replace(/\/$/, '');
+    const norm = (s) => slash(s).toLowerCase();
+    const unavailN = new Set(unavailable.map(norm));
+    const reachable = savedFolders.filter(f => !unavailN.has(norm(f)));
+    const keep = [];
+    const moves = [];
+    for (const u of unavailable) {
+      const tail = eaFolderTail(u);
+      const twin = tail ? reachable.find(r => eaFolderTail(r) === tail) : null;
+      if (twin) moves.push([u, twin]); else keep.push(u);
+    }
+    if (!moves.length) return unavailable;
+    const dropN = new Set(moves.map(mv => norm(mv[0])));
+    localStorage.setItem('easyarc_rom_folders', JSON.stringify(savedFolders.filter(f => !dropN.has(norm(f)))));
+    const movePath = (p) => {
+      const s = slash(p), n = s.toLowerCase();
+      for (const [oldF, newF] of moves) {
+        const o = norm(oldF);
+        if (n.startsWith(o + '/')) {
+          const base = String(newF).replace(/[\\/]+$/, '');
+          const sep = base.includes('\\') ? '\\' : '/';
+          return base + sep + s.slice(o.length + 1).split('/').join(sep);
+        }
+      }
+      return null;
+    };
+    for (const key of ['easyarc_favorites', 'easyarc_recent']) {
+      const list = JSON.parse(localStorage.getItem(key) || '[]');
+      const seen = new Set();
+      const out = [];
+      let changed = false;
+      for (const e of list) {
+        const np = e && movePath(e.path);
+        const item = np ? Object.assign({}, e, { path: np }) : e;
+        if (np) changed = true;
+        const k = norm(item && item.path);
+        if (seen.has(k)) { changed = true; continue; }
+        seen.add(k);
+        out.push(item);
+      }
+      if (changed) localStorage.setItem(key, JSON.stringify(out));
+    }
+    console.log('[Folders] dropped stale folders:', moves.map(mv => mv[0] + ' -> ' + mv[1]));
+    return keep;
+  } catch (e) {
+    console.log('[Folders] stale folder cleanup failed:', e && e.message);
+    return unavailable;
+  }
+}
+
+// FIX_2026-11-23_KEEP_FAVS: counts include only games currently in the library.
+function eaPresentCount(list) {
+  const paths = new Set(games.map(g => g.path));
+  return (list || []).filter(x => x && paths.has(x.path)).length;
+}
+
 function reconcileFavoritesAndRecent() {
   // FIX_C_GUARD_EMPTY_GAMES: don't drop entries as orphans when the library
   // hasn't loaded yet. Without this guard, reconciliation against empty games[]
@@ -1287,7 +1359,7 @@ function reconcileFavoritesAndRecent() {
   for (const f of oldFavs) {
     const game = gamesByPath.get(f.path);
     if (game) newFavs.push({ id: game.id, title: game.title, system: game.system, path: game.path });
-    else if (_eaKeep(f.path)) newFavs.push(f); // FIX_2026-11-09_FAV_RACE: drive missing, keep it
+    else newFavs.push(f); // FIX_2026-11-23_KEEP_FAVS: never dropped; hidden while the game isn't in the library
   }
   const newFavsRaw = JSON.stringify(newFavs);
   if (newFavsRaw !== oldFavsRaw) localStorage.setItem('easyarc_favorites', newFavsRaw);
@@ -1298,7 +1370,7 @@ function reconcileFavoritesAndRecent() {
   for (const r of oldRecent) {
     const game = gamesByPath.get(r.path);
     if (game) newRecent.push({ id: game.id, title: game.title, system: game.system, path: game.path });
-    else if (_eaKeep(r.path)) newRecent.push(r); // FIX_2026-11-09_FAV_RACE: drive missing, keep it
+    else newRecent.push(r); // FIX_2026-11-23_KEEP_FAVS: never dropped; hidden while the game isn't in the library
   }
   const newRecentRaw = JSON.stringify(newRecent);
   if (newRecentRaw !== oldRecentRaw) localStorage.setItem('easyarc_recent', newRecentRaw);
@@ -2077,10 +2149,10 @@ function updateCounts() {
   const recentEl = document.getElementById('count-recent');
   if (recentEl) {
     const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
-    recentEl.textContent = recent.length;
+    recentEl.textContent = eaPresentCount(recent); // FIX_2026-11-23_KEEP_FAVS
   }
   const favEl = document.getElementById('count-fav');
-  if (favEl) favEl.textContent = getFavorites().length;
+  if (favEl) favEl.textContent = eaPresentCount(getFavorites()); // FIX_2026-11-23_KEEP_FAVS
 
   // Build dynamic sidebar — only show systems that have games
   const systemList = document.getElementById('systemList');
@@ -2149,9 +2221,7 @@ function removeSystem(sys) {
   toRemove.forEach(g => { if (!excluded.includes(g.path)) excluded.push(g.path); });
   localStorage.setItem('easyarc_excluded_paths', JSON.stringify(excluded));
   games = games.filter(g => g.system !== sys);
-  // Remove any favorites from this system
-  const updatedFavs = getFavorites().filter(f => f.system !== sys);
-  localStorage.setItem('easyarc_favorites', JSON.stringify(updatedFavs));
+  // FIX_2026-11-23_KEEP_FAVS: favorites are kept (hidden) so they return if the games are added again
   if (currentSystem === sys) {
     currentSystem = 'all';
   }
@@ -2232,7 +2302,7 @@ function toggleFavorite(game) {
   }
   localStorage.setItem('easyarc_favorites', JSON.stringify(favs));
   const favEl = document.getElementById('count-fav');
-  if (favEl) favEl.textContent = favs.length;
+  if (favEl) favEl.textContent = eaPresentCount(favs); // FIX_2026-11-23_KEEP_FAVS
 }
 
 function isFavorite(game) {
@@ -2365,19 +2435,24 @@ async function coreDownloadAndLaunch(game) {
   }
 }
 
-async function launchGame(game) {
-  const g = game || selectedGame;
-  if (!g) return;
-  selectedGame = g;
-  // Track recently played
+// FIX_2026-11-23_RECENT_GC_WII: track recently played (all launch paths, GameCube/Wii included).
+function eaRecordRecent(g) {
+  if (!g || !g.path) return;
   const recent = JSON.parse(localStorage.getItem('easyarc_recent') || '[]');
   const existing = recent.findIndex(r => r.path === g.path);
   if (existing >= 0) recent.splice(existing, 1);
   recent.unshift({ id: g.id, title: g.title, system: g.system, path: g.path });
-  if (recent.length > 20) recent.pop();
+  while (recent.length > 20) recent.pop();
   localStorage.setItem('easyarc_recent', JSON.stringify(recent));
   const recentEl = document.getElementById('count-recent');
-  if (recentEl) recentEl.textContent = recent.length;
+  if (recentEl) recentEl.textContent = eaPresentCount(recent);
+}
+
+async function launchGame(game) {
+  const g = game || selectedGame;
+  if (!g) return;
+  selectedGame = g;
+  eaRecordRecent(g); // FIX_2026-11-23_RECENT_GC_WII: shared with the GameCube/Wii launch
   if (window.easyarc) {
     const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
     const p1id = gps.length > 0 ? gps[0].id : '';
@@ -3042,10 +3117,11 @@ if (window.easyarc) {
           unavailable.push(folder);
         }
       }
-      if (unavailable.length > 0) {
-        showToast(unavailable.length + ' folder' + (unavailable.length > 1 ? 's' : '') + ' not found — check your connected drives.');
-      }
-      window.__eaUnavailableFolders = unavailable; // FIX_2026-11-09_FAV_RACE
+      // FIX_2026-11-23_STALE_FOLDERS: no "folders not found" message. A missing folder whose
+      // same path is a saved folder on a connected drive (D:\Games\ps2 -> F:\Games\ps2) is
+      // dropped, and its favorites/recent move to that drive. Others are kept (unplugged drive).
+      const stillUnavailable = eaDropStaleFolders(savedFolders, unavailable);
+      window.__eaUnavailableFolders = stillUnavailable; // FIX_2026-11-09_FAV_RACE
       window.__eaLibraryReady = true;              // FIX_2026-11-09_FAV_RACE
       updateCounts();
       renderGrid();
@@ -4126,6 +4202,7 @@ async function gamecubeEnsureReadyAndLaunch(game) {
       setTimeout(() => _reply('start'), (info && info.remotes > 0) ? 3000 : 1000); // screen turned off: brief message, as before // FIX_2026-11-07_WII_REMOTE_EXIT: 3 s for the Wii Remote message
     }
   };
+  eaRecordRecent(game); // FIX_2026-11-23_RECENT_GC_WII
   let result;
   try {
     result = await window.easyarc.launchDolphin(game.path, detectedControllerType, detectedControllerTypes, resEffective(game.system)); // EXP_2026-11-14_RES_BUTTONS: step name, not on/off
@@ -5572,7 +5649,7 @@ function searchKbInput(gp) {
 
 // FIX_2026-11-01_WHATS_NEW: shown once per release to people updating (new installs skip it),
 // after the Controllers screen closes. Each release: change WN_ID and the pop-up text.
-const WN_ID = '1.0.0-beta.6.2'; // FIX_2026-11-16_BETA_6_2
+const WN_ID = '1.0.0-beta.6.3'; // FIX_2026-11-24_BETA_6_3
 const WN_EXISTING_USER = (() => { try { return !!localStorage.getItem('easyarc_setup_done'); } catch (e) { return false; } })();
 function whatsNewClose() { document.getElementById('whatsNewModal').classList.add('hidden'); }
 // FIX_2026-11-07_ABOUT: About window (Advanced Options). B or Close shuts it.
@@ -7026,15 +7103,15 @@ showView = function(name) {
 <div class="frw-overlay hidden" id="whatsNewModal">
   <div class="frw-box" style="max-width:620px">
     <span class="frw-icon">&#x2728;</span>
-    <div class="frw-title">WHAT'S NEW IN BETA 6.2</div>
+    <div class="frw-title">WHAT'S NEW IN BETA 6.3</div>
     <div style="text-align:left;color:#fff;font-size:15px;line-height:1.7;margin:12px 0 4px;">
-      <!-- FIX_2026-11-16_BETA_6_2 -->
+      <!-- FIX_2026-11-24_BETA_6_3 -->
       <ul style="margin:0 0 14px 20px;padding:0;">
-        <li>Genuine Xbox One and Xbox 360 controllers, and look-alikes that identify as them, now work in Wii games</li>
-        <li>Experimental resolution settings for GameCube, Wii, PlayStation and PlayStation 2: Native, 720p, 1080p, 1440p or 4K. Settings above your screen's resolution are not offered</li>
-        <li>Nintendo controllers now disconnect properly when switched off</li>
-        <li>Player numbers in GameCube and Wii games now match the order shown in EasyArc</li>
-        <li>A controller that reconnects keeps its player number</li>
+        <li>No more false "folders not found" warnings. Move your games to a new drive and EasyArc cleans up the old locations, carrying your Favorites and Recently Played with them</li>
+        <li>Favorites are kept when games are removed or a drive is unplugged, and come back with the games</li>
+        <li>GameCube and Wii games now appear in Recently Played</li>
+        <li>Uninstalling EasyArc now removes everything it added, including save games. Updates keep everything</li>
+        <li>Fresh installs now set up a component some emulators need</li>
       </ul>
       <div style="color:var(--cyan);font-weight:700;letter-spacing:1px;margin-bottom:4px;">TIPS</div>
       <ul style="margin:0 0 0 20px;padding:0;">
